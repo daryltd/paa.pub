@@ -1,0 +1,18 @@
+{
+  "name": "paa-pub",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Single-user Solid + ActivityPub server on Cloudflare Workers",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy"
+  },
+  "dependencies": {
+    "@s20e/kernel": "file:../s20e/packages/s20e-kernel",
+    "@s20e/host-core": "file:../s20e/packages/s20e-host-core",
+    "@s20e/adapters": "file:../s20e/packages/s20e-adapters"
+  },
+  "devDependencies": {
+    "wrangler": "^3.0.0"
+  }
+}

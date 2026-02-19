@@ -1,0 +1,20 @@
+name = "paa-pub"
+main = "src/index.js"
+compatibility_date = "2024-09-23"
+
+[vars]
+PAA_USERNAME = "admin"
+# PAA_PASSWORD set via `wrangler secret put PAA_PASSWORD`
+# PAA_DOMAIN set via `wrangler secret put PAA_DOMAIN` or vars
+
+[[kv_namespaces]]
+binding = "TRIPLESTORE"
+id = "triplestore-kv-id"
+
+[[kv_namespaces]]
+binding = "APPDATA"
+id = "appdata-kv-id"
+
+[[r2_buckets]]
+binding = "BLOBS"
+bucket_name = "paa-pub-blobs"
