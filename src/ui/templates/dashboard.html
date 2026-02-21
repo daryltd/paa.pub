@@ -1,0 +1,78 @@
+<h1>Dashboard</h1>
+
+<div class="card">
+  <h2>Profile</h2>
+  <table>
+    <tr><td>Username</td><td class="mono">{{username}}</td></tr>
+    <tr><td>WebID</td><td class="mono"><a href="/{{username}}/profile/card">{{webId}}</a></td></tr>
+    <tr><td>Actor</td><td class="mono"><a href="/{{username}}/profile/card">{{actorId}}</a></td></tr>
+    <tr><td>Domain</td><td class="mono">{{domain}}</td></tr>
+  </table>
+</div>
+
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem;">
+  <div class="card">
+    <div class="text-muted">Followers</div>
+    <div style="font-size: 2rem; font-weight: 700;">{{followerCount}}</div>
+  </div>
+  <div class="card">
+    <div class="text-muted">Following</div>
+    <div style="font-size: 2rem; font-weight: 700;">{{followingCount}}</div>
+  </div>
+  <div class="card">
+    <div class="text-muted">Posts</div>
+    <div style="font-size: 2rem; font-weight: 700;">{{postCount}}</div>
+  </div>
+  <div class="card">
+    <div class="text-muted">Storage Used</div>
+    <div style="font-size: 2rem; font-weight: 700;">{{{storageUsed}}}</div>
+  </div>
+</div>
+
+<div class="card">
+  <h2>Quick Links</h2>
+  <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+    <a href="/activity" class="btn">Activity Feed</a>
+    <a href="/storage/" class="btn btn-secondary">File Storage</a>
+    <a href="/.well-known/webfinger?resource=acct:{{{webfingerParam}}}" class="btn btn-secondary">WebFinger</a>
+  </div>
+</div>
+
+<div class="card">
+  <h2>Passkeys</h2>
+  {{#hasPasskeys}}
+  <table>
+    <thead>
+      <tr><th>Name</th><th>Created</th><th>Actions</th></tr>
+    </thead>
+    <tbody>
+      {{#passkeys}}
+      <tr>
+        <td>
+          <form method="POST" action="/webauthn/rename" style="display:inline-flex;gap:0.25rem;align-items:center;">
+            <input type="hidden" name="credId" value="{{id}}">
+            <input type="text" name="name" value="{{name}}" style="width:14ch;">
+            <button type="submit" class="btn btn-secondary" style="padding:0.15rem 0.4rem;font-size:0.85rem;">Rename</button>
+          </form>
+        </td>
+        <td class="text-muted">{{createdAt}}</td>
+        <td>
+          <form method="POST" action="/webauthn/delete" onsubmit="return confirm('Delete this passkey?');">
+            <input type="hidden" name="credId" value="{{id}}">
+            <button type="submit" class="btn btn-secondary" style="padding:0.15rem 0.4rem;font-size:0.85rem;">Delete</button>
+          </form>
+        </td>
+      </tr>
+      {{/passkeys}}
+    </tbody>
+  </table>
+  {{/hasPasskeys}}
+  {{^hasPasskeys}}
+  <p class="text-muted">No passkeys registered.</p>
+  {{/hasPasskeys}}
+  <div id="passkey-section" style="margin-top:0.75rem;">
+    <button class="btn btn-secondary" onclick="beginRegisterPasskey()">Register Passkey</button>
+    <div id="passkey-status" style="margin-top: 0.5rem;"></div>
+  </div>
+  <script>{{{clientScript}}}</script>
+</div>

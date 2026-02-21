@@ -274,6 +274,56 @@ export async function handleWebAuthnLoginComplete(reqCtx) {
   });
 }
 
+/**
+ * POST /webauthn/rename
+ * Rename a passkey.
+ */
+export async function handleWebAuthnRename(reqCtx) {
+  const { request, env, user } = reqCtx;
+  if (!user) return new Response('Unauthorized', { status: 401 });
+
+  const form = await request.formData();
+  const credId = form.get('credId');
+  const name = form.get('name');
+  if (!credId || !name) return new Response('Missing fields', { status: 400 });
+
+  const key = `webauthn_cred:${user}:${credId}`;
+  const data = await env.APPDATA.get(key);
+  if (!data) return new Response('Credential not found', { status: 404 });
+
+  const cred = JSON.parse(data);
+  cred.name = name;
+  await env.APPDATA.put(key, JSON.stringify(cred));
+
+  return new Response(null, { status: 302, headers: { 'Location': '/dashboard' } });
+}
+
+/**
+ * POST /webauthn/delete
+ * Delete a passkey.
+ */
+export async function handleWebAuthnDelete(reqCtx) {
+  const { request, env, user } = reqCtx;
+  if (!user) return new Response('Unauthorized', { status: 401 });
+
+  const form = await request.formData();
+  const credId = form.get('credId');
+  if (!credId) return new Response('Missing credId', { status: 400 });
+
+  // Delete credential data
+  await env.APPDATA.delete(`webauthn_cred:${user}:${credId}`);
+
+  // Remove from credential list
+  const listKey = `webauthn_creds:${user}`;
+  const existing = await env.APPDATA.get(listKey);
+  if (existing) {
+    const credIds = JSON.parse(existing).filter(id => id !== credId);
+    await env.APPDATA.put(listKey, JSON.stringify(credIds));
+  }
+
+  return new Response(null, { status: 302, headers: { 'Location': '/dashboard' } });
+}
+
 // --- Helpers ---
 
 function parseAuthenticatorData(data) {

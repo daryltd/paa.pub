@@ -19,11 +19,17 @@ export async function handleActor(reqCtx) {
 
   const accept = request.headers.get('Accept') || '';
 
+  // Prefer Solid profile if the client accepts Turtle or N-Triples
+  const lower = accept.toLowerCase();
+  if (lower.includes('text/turtle') || lower.includes('application/n-triples')) {
+    return profileRdf(reqCtx);
+  }
+
   if (wantsActivityPub(accept)) {
     return actorJson(reqCtx);
   }
 
-  // Fall through to Solid WebID profile via LDP
+  // Default to Solid WebID profile
   return profileRdf(reqCtx);
 }
 
@@ -66,18 +72,24 @@ async function profileRdf(reqCtx) {
   const profileIri = `${config.baseUrl}/${config.username}/profile/card`;
   const webId = config.webId;
 
-  const ntData = await storage.get(`doc:${profileIri}:${webId}`);
-  if (!ntData) {
+  // Read all subjects from the profile document index
+  const idx = await storage.get(`idx:${profileIri}`);
+  if (!idx) {
     return new Response('Not Found', { status: 404 });
   }
-
-  const triples = parseNTriples(ntData);
+  const { subjects } = JSON.parse(idx);
+  const triples = [];
+  for (const subj of subjects) {
+    const nt = await storage.get(`doc:${profileIri}:${subj}`);
+    if (nt) triples.push(...parseNTriples(nt));
+  }
   const accept = request.headers.get('Accept') || 'text/turtle';
   const contentType = negotiateType(accept);
   const body = serializeRdf(triples, contentType, ['foaf', 'solid', 'ldp', 'space', 'rdf']);
 
   const headers = solidHeaders(profileIri, false);
   headers.set('Content-Type', contentType);
+  headers.set('Vary', 'Accept, Authorization, Origin');
   // Tell Solid apps whether the profile is writable
   if (user === config.username) {
     headers.set('WAC-Allow', buildWacAllow({

@@ -9,7 +9,7 @@ import { solidHeaders, buildWacAllow } from './headers.js';
 import { parseTurtle } from '../rdf/turtle-parser.js';
 import { parseNTriples, serializeNQuads, iri } from '../rdf/ntriples.js';
 import { isContainer, slugToName, addContainment, containerTypeQuads, parentContainer } from './containers.js';
-import { handleAclGet, handleAclPut, handleAclDelete, defaultAclNTriples } from './acl.js';
+import { handleAclGet, handleAclPut, handleAclPatch, handleAclDelete, defaultAclNTriples } from './acl.js';
 import { checkAcpAccess } from '../ui/pages/acl-editor.js';
 import { PREFIXES } from '../rdf/prefixes.js';
 
@@ -44,6 +44,7 @@ export async function handleLDP(reqCtx) {
     switch (request.method) {
       case 'GET': case 'HEAD': return handleAclGet(reqCtx, baseIri);
       case 'PUT': return handleAclPut(reqCtx, baseIri);
+      case 'PATCH': return handleAclPatch(reqCtx, baseIri);
       case 'DELETE': return handleAclDelete(reqCtx, baseIri);
       default: return new Response('Method Not Allowed', { status: 405 });
     }
@@ -273,22 +274,9 @@ async function handlePut(reqCtx, resourceIri) {
   }
   await storage.put(`idx:${resourceIri}`, JSON.stringify({ subjects: [...bySubject.keys()] }));
 
-  // For new resources, add containment to parent
+  // For new resources, ensure parent containers exist and add containment
   if (!existingIdx) {
-    const parent = parentContainer(resourceIri);
-    if (parent) {
-      const { appendContainment } = await import('../ui/pages/storage.js');
-      // Not available — inline it
-      const containNt = `<${parent}> <${PREFIXES.ldp}contains> <${resourceIri}> .`;
-      const parentDoc = await storage.get(`doc:${parent}:${parent}`);
-      if (parentDoc) {
-        if (!parentDoc.includes(`<${resourceIri}>`)) {
-          await storage.put(`doc:${parent}:${parent}`, parentDoc + '\n' + containNt);
-        }
-      } else {
-        await storage.put(`doc:${parent}:${parent}`, containNt);
-      }
-    }
+    await ensureParentContainers(storage, resourceIri);
   }
 
   const status = existingIdx ? 204 : 201;
@@ -399,7 +387,13 @@ async function handlePatch(reqCtx, resourceIri) {
 
   // Write back
   await writeTriplesToKV(storage, resourceIri, allTriples);
-  return new Response(null, { status: 204 });
+
+  // If this created a new resource, ensure parent containers exist and add containment
+  if (!idx) {
+    await ensureParentContainers(storage, resourceIri);
+  }
+
+  return new Response(null, { status: idx ? 204 : 201 });
 }
 
 async function handleDelete(reqCtx, resourceIri) {
@@ -519,7 +513,7 @@ function termToNT(term) {
   return null;
 }
 
-function parseSparqlUpdate(body, baseIri) {
+export function parseSparqlUpdate(body, baseIri) {
   const deleteTriples = [];
   const insertTriples = [];
 
@@ -601,6 +595,46 @@ async function writeTriplesToKV(storage, resourceIri, triples) {
   }
 
   await storage.put(`idx:${resourceIri}`, JSON.stringify({ subjects: [...bySubject.keys()] }));
+}
+
+/**
+ * Ensure all parent containers exist up to the storage root.
+ * Creates missing intermediate containers and adds containment triples.
+ */
+async function ensureParentContainers(storage, resourceIri) {
+  let childIri = resourceIri;
+  let parent = parentContainer(childIri);
+
+  while (parent) {
+    // Add containment triple
+    await appendContainment(storage, parent, childIri);
+
+    // If parent container doesn't have an idx entry, create it as a container
+    const parentIdx = await storage.get(`idx:${parent}`);
+    if (!parentIdx) {
+      const containerNt = [
+        `<${parent}> <${PREFIXES.rdf}type> <${PREFIXES.ldp}BasicContainer> .`,
+        `<${parent}> <${PREFIXES.rdf}type> <${PREFIXES.ldp}Container> .`,
+      ].join('\n');
+      const existingDoc = await storage.get(`doc:${parent}:${parent}`);
+      if (existingDoc) {
+        // Doc exists (containment was just added) but no idx — add container types
+        if (!existingDoc.includes('BasicContainer')) {
+          await storage.put(`doc:${parent}:${parent}`, existingDoc + '\n' + containerNt);
+        }
+      } else {
+        await storage.put(`doc:${parent}:${parent}`, containerNt);
+      }
+      await storage.put(`idx:${parent}`, JSON.stringify({ subjects: [parent] }));
+
+      // Continue up the chain
+      childIri = parent;
+      parent = parentContainer(parent);
+    } else {
+      // Parent exists — just needed containment (already added above)
+      break;
+    }
+  }
 }
 
 /**

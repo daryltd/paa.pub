@@ -28,8 +28,10 @@ export function negotiateType(accept) {
 export function wantsActivityPub(accept) {
   if (!accept) return false;
   const lower = accept.toLowerCase();
-  return lower.includes('application/activity+json') ||
-    lower.includes('application/ld+json');
+  // Only match the AP-specific media type, or JSON-LD with the ActivityStreams profile
+  if (lower.includes('application/activity+json')) return true;
+  if (lower.includes('application/ld+json') && lower.includes('activitystreams')) return true;
+  return false;
 }
 
 /**

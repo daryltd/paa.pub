@@ -11,7 +11,9 @@
  * The owner always has full access (enforced by session/token auth).
  * ACP policies are stored as JSON in APPDATA KV at key `acp:{resourceIri}`.
  */
-import { htmlPage, htmlResponse, escapeHtml } from '../shell.js';
+import { renderPage } from '../shell.js';
+import template from '../templates/acl-editor.html';
+import aclToggleScript from '../client/acl-toggle.js';
 import { requireAuth } from '../../auth/middleware.js';
 
 /**
@@ -31,103 +33,31 @@ export async function renderAclEditor(reqCtx) {
   const policy = await loadPolicy(env.APPDATA, resourceIri);
   const friends = await loadFriends(env.APPDATA, username);
 
-  const body = `
-    <h1>Access Policy</h1>
+  const modeOptions = [
+    { value: 'public', label: 'Public', description: 'Anyone can discover and read this resource.' },
+    { value: 'unlisted', label: 'Public (unlisted)', description: 'Anyone with the direct link can read, but not listed in container indexes.' },
+    { value: 'friends', label: 'Friends', description: 'Only people in your friends list can read.' },
+    { value: 'private', label: 'Private', description: 'Only you can access this resource.' },
+    { value: 'custom', label: 'Custom', description: 'Grant read access to specific WebIDs.' },
+  ].map(opt => ({
+    ...opt,
+    checked: policy.mode === opt.value ? 'checked' : '',
+    bgColor: policy.mode === opt.value ? '#f0f0ff' : 'transparent',
+  }));
 
-    <div class="card">
-      <div class="text-muted" style="margin-bottom: 0.25rem;">
-        Resource: <span class="mono">${escapeHtml(resourceIri)}</span>
-      </div>
-      ${isDir ? '<div class="text-muted" style="font-size: 0.8rem;">This policy applies to the container and its contents (unless overridden).</div>' : ''}
-    </div>
-
-    <div class="card">
-      <h2>Access Level</h2>
-      <form method="POST" action="/acp/${escapeHtml(path)}">
-        <input type="hidden" name="action" value="save_policy">
-
-        <div style="display: flex; flex-direction: column; gap: 0.75rem; margin-bottom: 1rem;">
-          ${radioOption('public', 'Public', 'Anyone can discover and read this resource.', policy.mode)}
-          ${radioOption('unlisted', 'Public (unlisted)', 'Anyone with the direct link can read, but not listed in container indexes.', policy.mode)}
-          ${radioOption('friends', 'Friends', 'Only people in your friends list can read.', policy.mode)}
-          ${radioOption('private', 'Private', 'Only you can access this resource.', policy.mode)}
-          ${radioOption('custom', 'Custom', 'Grant read access to specific WebIDs.', policy.mode)}
-        </div>
-
-        <div id="custom-agents" style="display: ${policy.mode === 'custom' ? 'block' : 'none'}; margin-bottom: 1rem;">
-          <div class="form-group">
-            <label for="agents">Allowed WebIDs (one per line)</label>
-            <textarea id="agents" name="agents" rows="4" class="mono"
-              style="font-size: 0.85rem;" placeholder="https://alice.example/profile/card#me">${escapeHtml((policy.agents || []).join('\n'))}</textarea>
-          </div>
-        </div>
-
-        ${isDir ? `
-          <div class="form-group">
-            <label>
-              <input type="checkbox" name="inherit" value="1" ${policy.inherit !== false ? 'checked' : ''}>
-              Apply to all contents (children inherit this policy)
-            </label>
-          </div>
-        ` : ''}
-
-        <div style="display: flex; gap: 0.5rem;">
-          <button type="submit" class="btn">Save Policy</button>
-          <a href="/storage/${escapeHtml(path)}" class="btn btn-secondary">Back</a>
-        </div>
-      </form>
-
-      <script>
-        document.querySelectorAll('input[name="mode"]').forEach(r => {
-          r.addEventListener('change', () => {
-            document.getElementById('custom-agents').style.display =
-              r.value === 'custom' ? 'block' : 'none';
-          });
-        });
-      </script>
-    </div>
-
-    <div class="card">
-      <h2>Friends List</h2>
-      <p class="text-muted" style="margin-bottom: 0.75rem;">
-        WebIDs listed here are granted read access when a resource is set to "Friends" mode.
-      </p>
-      ${friends.length > 0 ? `
-        <table style="margin-bottom: 0.75rem;">
-          ${friends.map(f => `
-            <tr>
-              <td class="mono" style="font-size: 0.85rem;">${escapeHtml(f)}</td>
-              <td style="width: 3rem;">
-                <form method="POST" action="/acp/${escapeHtml(path)}" class="inline">
-                  <input type="hidden" name="action" value="remove_friend">
-                  <input type="hidden" name="webid" value="${escapeHtml(f)}">
-                  <button type="submit" class="text-muted"
-                    style="background:none;border:none;cursor:pointer;font-size:0.8rem;color:#dc3545;padding:0;">remove</button>
-                </form>
-              </td>
-            </tr>
-          `).join('')}
-        </table>
-      ` : '<div class="text-muted" style="margin-bottom: 0.75rem;">No friends added yet.</div>'}
-
-      <form method="POST" action="/acp/${escapeHtml(path)}">
-        <input type="hidden" name="action" value="add_friend">
-        <div style="display: flex; gap: 0.5rem;">
-          <input type="url" name="webid" placeholder="https://alice.example/profile/card#me" required style="flex: 1;">
-          <button type="submit" class="btn">Add Friend</button>
-        </div>
-      </form>
-    </div>
-
-    <div class="card">
-      <h2>ACP Details</h2>
-      <details>
-        <summary class="text-muted" style="cursor: pointer; font-size: 0.85rem;">View raw Access Control Policy (Turtle)</summary>
-        <pre class="mono" style="font-size: 0.8rem; background: #f8f8f8; padding: 0.75rem; border-radius: 4px; margin-top: 0.5rem; overflow-x: auto; white-space: pre-wrap;">${escapeHtml(policyToTurtle(policy, resourceIri, config.webId, friends))}</pre>
-      </details>
-    </div>`;
-
-  return htmlResponse(htmlPage('Access Policy', body, { user: username, nav: 'storage' }));
+  return renderPage('Access Policy', template, {
+    resourceIri,
+    isDir,
+    path,
+    modeOptions,
+    customDisplay: policy.mode === 'custom' ? 'block' : 'none',
+    agentsText: (policy.agents || []).join('\n'),
+    inheritChecked: policy.inherit !== false ? 'checked' : '',
+    friends,
+    hasFriends: friends.length > 0,
+    turtlePolicy: policyToTurtle(policy, resourceIri, config.webId, friends),
+    clientScript: aclToggleScript,
+  }, { user: username, nav: 'storage' });
 }
 
 /**
@@ -320,16 +250,4 @@ function policyToTurtle(policy, resourceIri, ownerWebId, friends) {
   }
 
   return lines.join('\n');
-}
-
-function radioOption(value, label, description, currentMode) {
-  const checked = currentMode === value ? 'checked' : '';
-  return `
-    <label style="display: flex; gap: 0.75rem; align-items: flex-start; cursor: pointer; padding: 0.5rem; border-radius: 4px; background: ${currentMode === value ? '#f0f0ff' : 'transparent'};">
-      <input type="radio" name="mode" value="${value}" ${checked} style="margin-top: 0.25rem;">
-      <div>
-        <div style="font-weight: 500;">${escapeHtml(label)}</div>
-        <div class="text-muted" style="font-size: 0.8rem;">${escapeHtml(description)}</div>
-      </div>
-    </label>`;
 }

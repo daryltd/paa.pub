@@ -40,6 +40,7 @@ export async function handleDiscovery(reqCtx) {
     code_challenge_methods_supported: ['S256'],
     dpop_signing_alg_values_supported: ['ES256', 'RS256'],
     claims_supported: ['sub', 'webid', 'iss', 'aud', 'exp', 'iat', 'azp', 'at_hash'],
+    authorization_response_iss_parameter_supported: true,
     solid_oidc_supported: 'https://solidproject.org/TR/solid-oidc',
   });
 }
@@ -97,18 +98,26 @@ export async function handleAuthorize(reqCtx) {
     const nonce = url.searchParams.get('nonce') || '';
     const prompt = url.searchParams.get('prompt') || '';
 
-    // If already logged in and not prompt=login, auto-approve
-    if (user && prompt !== 'login') {
+    // Check if this client has been previously approved (remembered)
+    const isRemembered = user && await isClientRemembered(reqCtx.env.APPDATA, config.username, clientId);
+
+    // Auto-approve if logged in, not prompt=login/consent, and client is remembered
+    if (user && prompt !== 'login' && prompt !== 'consent' && isRemembered) {
       return issueCode(reqCtx, {
         clientId, redirectUri, scope, state, codeChallenge, codeChallengeMethod, nonce,
       });
     }
 
+    // Fetch client metadata to display app name
+    const clientName = await fetchClientName(clientId);
+
     const body = `
       <div class="card" style="max-width: 450px; margin: 4rem auto;">
         <h1>Authorize</h1>
+        ${clientName ? `<p style="font-size: 1.1rem; font-weight: 600; margin-bottom: 0.25rem;">${escapeHtml(clientName)}</p>` : ''}
+        <p class="mono text-muted" style="margin-bottom: 1rem; font-size: 0.8rem; word-break: break-all;">${escapeHtml(clientId)}</p>
         <p class="text-muted" style="margin-bottom: 1rem;">
-          <strong>${escapeHtml(clientId)}</strong> wants to access your Solid pod.
+          This application wants to access your Solid pod.
         </p>
         <form method="POST" action="/authorize">
           <input type="hidden" name="client_id" value="${escapeHtml(clientId)}">
@@ -125,6 +134,12 @@ export async function handleAuthorize(reqCtx) {
               <input type="password" id="password" name="password" required autofocus>
             </div>
           ` : ''}
+          <div class="form-group" style="margin-top: 0.75rem;">
+            <label style="font-weight: normal; font-size: 0.85rem; display: flex; align-items: center; gap: 0.5rem;">
+              <input type="checkbox" name="remember" value="1">
+              Remember this app (skip consent next time)
+            </label>
+          </div>
           <div style="display: flex; gap: 0.5rem;">
             <button type="submit" name="approve" value="yes" class="btn">Approve</button>
             <button type="submit" name="approve" value="no" class="btn btn-secondary">Deny</button>
@@ -146,6 +161,24 @@ export async function handleAuthorize(reqCtx) {
     return Response.redirect(`${redirectUri}${sep}error=access_denied&state=${encodeURIComponent(state)}`, 302);
   }
 
+  const clientId = form.get('client_id') || '';
+  const remember = form.get('remember') === '1';
+
+  // Save remembered client if requested
+  if (remember && clientId) {
+    await rememberClient(reqCtx.env.APPDATA, config.username, clientId);
+  }
+
+  const codeParams = {
+    clientId,
+    redirectUri,
+    scope: form.get('scope') || 'openid webid',
+    state,
+    codeChallenge: form.get('code_challenge') || '',
+    codeChallengeMethod: form.get('code_challenge_method') || 'S256',
+    nonce: form.get('nonce') || '',
+  };
+
   // Verify password if not already logged in
   if (!user) {
     const password = form.get('password') || '';
@@ -159,30 +192,14 @@ export async function handleAuthorize(reqCtx) {
     }
     // Set session cookie so future authorizations auto-approve
     const token = await createSession(reqCtx.env.APPDATA, config.username);
-    const codeResponse = await issueCode(reqCtx, {
-      clientId: form.get('client_id') || '',
-      redirectUri,
-      scope: form.get('scope') || 'openid webid',
-      state,
-      codeChallenge: form.get('code_challenge') || '',
-      codeChallengeMethod: form.get('code_challenge_method') || 'S256',
-      nonce: form.get('nonce') || '',
-    });
+    const codeResponse = await issueCode(reqCtx, codeParams);
     // Add session cookie to the redirect response
     const headers = new Headers(codeResponse.headers);
     headers.append('Set-Cookie', `session=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=86400${config.protocol === 'https' ? '; Secure' : ''}`);
     return new Response(codeResponse.body, { status: codeResponse.status, headers });
   }
 
-  return issueCode(reqCtx, {
-    clientId: form.get('client_id') || '',
-    redirectUri,
-    scope: form.get('scope') || 'openid webid',
-    state,
-    codeChallenge: form.get('code_challenge') || '',
-    codeChallengeMethod: form.get('code_challenge_method') || 'S256',
-    nonce: form.get('nonce') || '',
-  });
+  return issueCode(reqCtx, codeParams);
 }
 
 async function issueCode(reqCtx, params) {
@@ -201,7 +218,7 @@ async function issueCode(reqCtx, params) {
   }), { expirationTtl: CODE_TTL });
 
   const sep = params.redirectUri.includes('?') ? '&' : '?';
-  const location = `${params.redirectUri}${sep}code=${encodeURIComponent(code)}&state=${encodeURIComponent(params.state)}`;
+  const location = `${params.redirectUri}${sep}code=${encodeURIComponent(code)}&state=${encodeURIComponent(params.state)}&iss=${encodeURIComponent(config.baseUrl)}`;
   return Response.redirect(location, 302);
 }
 
@@ -210,50 +227,71 @@ async function issueCode(reqCtx, params) {
 export async function handleToken(reqCtx) {
   const { request, env, config } = reqCtx;
 
-  let grantType, code, redirectUri, codeVerifier, clientId;
-
+  let params;
   const contentType = request.headers.get('Content-Type') || '';
   if (contentType.includes('application/json')) {
-    const body = await request.json();
-    grantType = body.grant_type;
-    code = body.code;
-    redirectUri = body.redirect_uri;
-    codeVerifier = body.code_verifier;
-    clientId = body.client_id;
+    params = await request.json();
   } else {
     const form = await request.formData();
-    grantType = form.get('grant_type');
-    code = form.get('code');
-    redirectUri = form.get('redirect_uri');
-    codeVerifier = form.get('code_verifier');
-    clientId = form.get('client_id');
+    params = Object.fromEntries(form.entries());
   }
 
+  const grantType = params.grant_type;
+
+  if (grantType === 'refresh_token') {
+    return handleRefreshToken(reqCtx, params);
+  }
   if (grantType !== 'authorization_code') {
     return jsonResponse({ error: 'unsupported_grant_type' }, 400);
   }
 
   // Look up authorization code
-  const codeData = await env.APPDATA.get(`oidc_code:${code}`);
+  const codeData = await env.APPDATA.get(`oidc_code:${params.code}`);
   if (!codeData) {
     return jsonResponse({ error: 'invalid_grant', error_description: 'Code expired or invalid' }, 400);
   }
   const grant = JSON.parse(codeData);
-  await env.APPDATA.delete(`oidc_code:${code}`);
+  await env.APPDATA.delete(`oidc_code:${params.code}`);
 
   // Verify redirect_uri matches
-  if (redirectUri && grant.redirectUri && redirectUri !== grant.redirectUri) {
+  if (params.redirect_uri && grant.redirectUri && params.redirect_uri !== grant.redirectUri) {
     return jsonResponse({ error: 'invalid_grant', error_description: 'redirect_uri mismatch' }, 400);
   }
 
   // Verify PKCE code_verifier
-  if (grant.codeChallenge && codeVerifier) {
-    const challengeHash = await sha256(codeVerifier);
+  if (grant.codeChallenge && params.code_verifier) {
+    const challengeHash = await sha256(params.code_verifier);
     const computed = bufferToBase64url(new Uint8Array(challengeHash));
     if (computed !== grant.codeChallenge) {
       return jsonResponse({ error: 'invalid_grant', error_description: 'PKCE verification failed' }, 400);
     }
   }
+
+  const resolvedClientId = grant.clientId || params.client_id;
+  return issueTokens(reqCtx, resolvedClientId, grant.scope, grant.nonce);
+}
+
+async function handleRefreshToken(reqCtx, params) {
+  const { env, config } = reqCtx;
+  const refreshData = await env.APPDATA.get(`oidc_refresh:${params.refresh_token}`);
+  if (!refreshData) {
+    return jsonResponse({ error: 'invalid_grant', error_description: 'Refresh token expired or invalid' }, 400);
+  }
+  const stored = JSON.parse(refreshData);
+  await env.APPDATA.delete(`oidc_refresh:${params.refresh_token}`);
+
+  // Verify client_id matches
+  if (params.client_id && stored.clientId && params.client_id !== stored.clientId) {
+    return jsonResponse({ error: 'invalid_grant', error_description: 'client_id mismatch' }, 400);
+  }
+
+  return issueTokens(reqCtx, stored.clientId, stored.scope, undefined);
+}
+
+const REFRESH_TTL = 30 * 24 * 3600; // 30 days
+
+async function issueTokens(reqCtx, clientId, scope, nonce) {
+  const { request, env, config } = reqCtx;
 
   // Extract DPoP key thumbprint if DPoP header present
   let dpopJkt = null;
@@ -269,12 +307,12 @@ export async function handleToken(reqCtx) {
   const idToken = await signJwt(privatePem, {
     iss: config.baseUrl,
     sub: config.webId,
-    aud: grant.clientId || clientId,
+    aud: clientId,
     exp: now + ACCESS_TTL,
     iat: now,
-    nonce: grant.nonce || undefined,
+    nonce: nonce || undefined,
     webid: config.webId,
-    azp: grant.clientId || clientId,
+    azp: clientId,
   });
 
   const accessPayload = {
@@ -283,23 +321,34 @@ export async function handleToken(reqCtx) {
     aud: 'solid',
     exp: now + ACCESS_TTL,
     iat: now,
-    client_id: grant.clientId || clientId,
+    client_id: clientId,
     webid: config.webId,
-    scope: grant.scope,
+    scope,
   };
   if (dpopJkt) {
     accessPayload.cnf = { jkt: dpopJkt };
   }
   const accessToken = await signJwt(privatePem, accessPayload);
-
   const tokenType = dpopJkt ? 'DPoP' : 'Bearer';
+
+  // Issue refresh token if offline_access scope was granted
+  let refreshToken = undefined;
+  if (scope && scope.includes('offline_access')) {
+    refreshToken = crypto.randomUUID();
+    await env.APPDATA.put(`oidc_refresh:${refreshToken}`, JSON.stringify({
+      clientId,
+      scope,
+      dpopJkt,
+    }), { expirationTtl: REFRESH_TTL });
+  }
 
   return jsonResponse({
     access_token: accessToken,
     token_type: tokenType,
     expires_in: ACCESS_TTL,
     id_token: idToken,
-    scope: grant.scope,
+    scope,
+    ...(refreshToken ? { refresh_token: refreshToken } : {}),
   });
 }
 
@@ -428,4 +477,47 @@ function jsonResponse(data, status = 200) {
     status,
     headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
   });
+}
+
+// ── Client consent helpers ──────────────────────────
+
+/**
+ * Fetch the client name from the client_id URL (Solid client identifier document).
+ * Returns null if the fetch fails or no name is found.
+ */
+async function fetchClientName(clientId) {
+  if (!clientId || !clientId.startsWith('http')) return null;
+  try {
+    const res = await fetch(clientId, {
+      headers: { 'Accept': 'application/ld+json, application/json' },
+      signal: AbortSignal.timeout(5000),
+    });
+    if (!res.ok) return null;
+    const doc = await res.json();
+    return doc.client_name || doc.name || null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Check if a client has been previously approved by the user.
+ */
+async function isClientRemembered(kv, username, clientId) {
+  const data = await kv.get(`oidc_trusted_clients:${username}`);
+  if (!data) return false;
+  const trusted = JSON.parse(data);
+  return trusted.includes(clientId);
+}
+
+/**
+ * Save a client as trusted (remembered) for future auto-approval.
+ */
+async function rememberClient(kv, username, clientId) {
+  const data = await kv.get(`oidc_trusted_clients:${username}`);
+  const trusted = data ? JSON.parse(data) : [];
+  if (!trusted.includes(clientId)) {
+    trusted.push(clientId);
+    await kv.put(`oidc_trusted_clients:${username}`, JSON.stringify(trusted));
+  }
 }

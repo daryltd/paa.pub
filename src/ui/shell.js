@@ -1,87 +1,60 @@
 /**
- * HTML page shell with styles.
+ * HTML page shell with Mustache template rendering.
  */
+import Mustache from 'mustache';
+import layoutTemplate from './templates/layout.html';
+import navPartial from './templates/partials/nav.html';
+import baseStyles from './styles/base.css';
+
+function renderNav(user, active) {
+  return Mustache.render(navPartial, {
+    user,
+    items: [
+      { href: '/dashboard', label: 'Dashboard', id: 'dashboard' },
+      { href: '/activity', label: 'Activity', id: 'activity' },
+      { href: '/storage/', label: 'Storage', id: 'storage' },
+    ].map(i => ({ ...i, activeClass: active === i.id ? 'active' : '' })),
+  });
+}
 
 /**
- * Wrap content in a full HTML page.
- * @param {string} title
- * @param {string} body - HTML content
+ * Render a full HTML page using Mustache templates.
+ * @param {string} title - page title
+ * @param {string} bodyTemplate - Mustache template string for the body
+ * @param {object} data - data passed to the body template
  * @param {object} [opts]
- * @param {string} [opts.user] - logged-in username
- * @param {string} [opts.nav] - active nav item
+ * @param {string} [opts.user] - logged-in username (shows nav if set)
+ * @param {string} [opts.nav] - active nav item id
+ * @returns {Response}
+ */
+export function renderPage(title, bodyTemplate, data, opts = {}) {
+  const nav = opts.user ? renderNav(opts.user, opts.nav) : '';
+  const body = Mustache.render(bodyTemplate, data);
+  const html = Mustache.render(layoutTemplate, { title, styles: baseStyles, nav, body });
+  return htmlResponse(html);
+}
+
+/**
+ * Render a partial template with data.
+ * @param {string} template - Mustache template string
+ * @param {object} data
+ * @returns {string}
+ */
+export function renderPartial(template, data) {
+  return Mustache.render(template, data);
+}
+
+/**
+ * Wrap pre-built body HTML in the layout shell.
+ * Used by oidc.js which builds its body with template literals.
+ * @param {string} title
+ * @param {string} body - pre-rendered HTML body content
+ * @param {object} [opts]
  * @returns {string}
  */
 export function htmlPage(title, body, opts = {}) {
-  const nav = opts.user ? navBar(opts.user, opts.nav) : '';
-  return `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>${escapeHtml(title)} — paa.pub</title>
-  <style>${baseStyles()}</style>
-</head>
-<body>
-  ${nav}
-  <main>${body}</main>
-</body>
-</html>`;
-}
-
-function navBar(user, active) {
-  const items = [
-    { href: '/dashboard', label: 'Dashboard', id: 'dashboard' },
-    { href: '/activity', label: 'Activity', id: 'activity' },
-    { href: '/storage/', label: 'Storage', id: 'storage' },
-  ];
-  const links = items.map(i =>
-    `<a href="${i.href}" class="${active === i.id ? 'active' : ''}">${i.label}</a>`
-  ).join('');
-  return `<nav class="paa-nav">
-    <a href="/dashboard" class="brand">Kaiāulu Pa'a</a>
-    ${links}
-    <span class="spacer"></span>
-    <span class="user">${escapeHtml(user)}</span>
-    <form method="POST" action="/logout" class="inline"><button type="submit">Logout</button></form>
-  </nav>`;
-}
-
-function baseStyles() {
-  return `
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; line-height: 1.6; color: #1a1a2e; background: #f5f5f7; }
-    main { max-width: 800px; margin: 2rem auto; padding: 0 1rem; }
-    .paa-nav { display: flex; align-items: center; gap: 1rem; padding: 0.75rem 1.5rem; background: #1a1a2e; color: #fff; }
-    .paa-nav a { color: #ccc; text-decoration: none; font-size: 0.9rem; }
-    .paa-nav a.active, .paa-nav a:hover { color: #fff; }
-    .paa-nav .brand { font-weight: 700; font-size: 1.1rem; color: #fff; margin-right: 1rem; }
-    .paa-nav .spacer { flex: 1; }
-    .paa-nav .user { font-size: 0.85rem; color: #aaa; }
-    .paa-nav .inline { display: inline; }
-    .paa-nav button { background: none; border: 1px solid #555; color: #ccc; padding: 0.25rem 0.75rem; border-radius: 4px; cursor: pointer; font-size: 0.85rem; }
-    .paa-nav button:hover { border-color: #fff; color: #fff; }
-    .card { background: #fff; border-radius: 8px; padding: 1.5rem; margin-bottom: 1rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
-    .btn { display: inline-block; padding: 0.5rem 1rem; background: #1a1a2e; color: #fff; border: none; border-radius: 4px; cursor: pointer; font-size: 0.9rem; text-decoration: none; }
-    .btn:hover { background: #2d2d4e; }
-    .btn-secondary { background: #e0e0e0; color: #333; }
-    .btn-secondary:hover { background: #ccc; }
-    .btn-danger { background: #dc3545; }
-    .btn-danger:hover { background: #c82333; }
-    input[type="text"], input[type="password"], input[type="url"], textarea, select { width: 100%; padding: 0.5rem; border: 1px solid #ddd; border-radius: 4px; font-size: 0.9rem; font-family: inherit; }
-    textarea { resize: vertical; min-height: 80px; }
-    label { display: block; margin-bottom: 0.25rem; font-weight: 500; font-size: 0.9rem; }
-    .form-group { margin-bottom: 1rem; }
-    .error { color: #dc3545; background: #f8d7da; padding: 0.75rem; border-radius: 4px; margin-bottom: 1rem; }
-    .success { color: #155724; background: #d4edda; padding: 0.75rem; border-radius: 4px; margin-bottom: 1rem; }
-    h1 { font-size: 1.5rem; margin-bottom: 1rem; }
-    h2 { font-size: 1.2rem; margin-bottom: 0.75rem; }
-    table { width: 100%; border-collapse: collapse; }
-    th, td { text-align: left; padding: 0.5rem; border-bottom: 1px solid #eee; }
-    th { font-weight: 600; font-size: 0.85rem; color: #666; }
-    a { color: #1a1a2e; }
-    .mono { font-family: "SF Mono", Monaco, "Cascadia Code", monospace; font-size: 0.85rem; }
-    .text-muted { color: #666; font-size: 0.85rem; }
-  `;
+  const nav = opts.user ? renderNav(opts.user, opts.nav) : '';
+  return Mustache.render(layoutTemplate, { title, styles: baseStyles, nav, body });
 }
 
 export function escapeHtml(str) {

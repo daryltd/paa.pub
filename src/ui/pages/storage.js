@@ -2,7 +2,10 @@
  * Storage browser page: file listing, upload, container creation,
  * resource editing, metadata management, and deletion.
  */
-import { htmlPage, htmlResponse, escapeHtml } from '../shell.js';
+import { renderPage, renderPartial } from '../shell.js';
+import containerTemplate from '../templates/storage-container.html';
+import resourceTemplate from '../templates/storage-resource.html';
+import breadcrumbsPartial from '../templates/partials/breadcrumbs.html';
 import { requireAuth } from '../../auth/middleware.js';
 import { parseNTriples, unwrapIri, serializeNTriples, iri, literal, typedLiteral } from '../../rdf/ntriples.js';
 import { PREFIXES } from '../../rdf/prefixes.js';
@@ -53,64 +56,20 @@ export async function renderStoragePage(reqCtx) {
 
 async function renderContainerPage(reqCtx, path, resourceIri, username) {
   const { config, storage } = reqCtx;
-  const listing = await renderContainerListing(resourceIri, config, storage);
+  const items = (await loadContainerItems(resourceIri, config, storage))
+    .map(item => ({ ...item, icon: item.isDir ? '📁' : '📄' }));
   const isRoot = path === `${username}/`;
+  const crumbs = buildBreadcrumbs(path);
+  const breadcrumbs = renderPartial(breadcrumbsPartial, { crumbs });
 
-  const body = `
-    <h1>Storage</h1>
-    <div class="card">
-      <div class="text-muted" style="margin-bottom: 0.5rem;">Path: <span class="mono">${escapeHtml('/' + path)}</span></div>
-      ${renderBreadcrumbs(path)}
-    </div>
-    <div class="card">
-      <h2>Upload File</h2>
-      <form method="POST" action="/storage/${escapeHtml(path)}" enctype="multipart/form-data">
-        <input type="hidden" name="action" value="upload">
-        <div class="form-group"><input type="file" name="file" required></div>
-        <div class="form-group"><input type="text" name="slug" placeholder="Filename (optional, uses original name if empty)"></div>
-        <button type="submit" class="btn">Upload</button>
-      </form>
-    </div>
-    <div class="card">
-      <h2>Create Container</h2>
-      <form method="POST" action="/storage/${escapeHtml(path)}">
-        <input type="hidden" name="action" value="mkdir">
-        <div style="display:flex;gap:0.5rem;">
-          <input type="text" name="name" placeholder="Container name" required style="flex:1;">
-          <button type="submit" class="btn">Create</button>
-        </div>
-      </form>
-    </div>
-    <div class="card">
-      <h2>Create Resource</h2>
-      <form method="POST" action="/storage/${escapeHtml(path)}">
-        <input type="hidden" name="action" value="create">
-        <div class="form-group">
-          <label for="create-name">Filename</label>
-          <input type="text" id="create-name" name="name" placeholder="e.g. notes.txt, data.ttl, page.html" required>
-        </div>
-        <div class="form-group">
-          <label for="create-content">Content</label>
-          <textarea id="create-content" name="content" rows="8" class="mono" style="font-size:0.85rem;tab-size:2;" placeholder="Enter content..."></textarea>
-        </div>
-        <button type="submit" class="btn">Create</button>
-      </form>
-    </div>
-    <div class="card">
-      <h2>Contents</h2>
-      ${listing}
-      <div style="margin-top:0.75rem;display:flex;gap:0.5rem;">
-        <a href="/acp/${escapeHtml(path)}" class="btn btn-secondary" style="font-size:0.8rem;">Access Policy</a>
-        ${!isRoot ? `
-          <form method="POST" action="/storage/${escapeHtml(path)}" class="inline">
-            <input type="hidden" name="action" value="delete">
-            <button type="submit" class="btn btn-danger" style="font-size:0.8rem;"
-              onclick="return confirm('Delete this container and all its contents?')">Delete Container</button>
-          </form>
-        ` : ''}
-      </div>
-    </div>`;
-  return htmlResponse(htmlPage('Storage', body, { user: username, nav: 'storage' }));
+  return renderPage('Storage', containerTemplate, {
+    path,
+    displayPath: '/' + path,
+    breadcrumbs,
+    items,
+    hasItems: items.length > 0,
+    isRoot,
+  }, { user: username, nav: 'storage' });
 }
 
 // ── Resource page ────────────────────────────────────
@@ -120,6 +79,9 @@ async function renderResourcePage(reqCtx, path, resourceIri, username, editMode,
   const { content, contentType, isBinary, size } = await loadResource(resourceIri, storage);
   const canEdit = isTextResource(path);
   const resourceUrl = `/${path}`;
+  const fileName = path.split('/').pop();
+  const crumbs = buildBreadcrumbs(path);
+  const breadcrumbs = renderPartial(breadcrumbsPartial, { crumbs });
 
   // Metadata
   const metaTriples = await loadMetadata(resourceIri, storage);
@@ -127,100 +89,46 @@ async function renderResourcePage(reqCtx, path, resourceIri, username, editMode,
     ? metaTriples.map(t => `${t.subject} ${t.predicate} ${t.object} .`).join('\n')
     : '';
 
-  // Content section
-  let contentSection;
-  if (editMode && canEdit) {
-    contentSection = `
-      <form method="POST" action="/storage/${escapeHtml(path)}">
-        <input type="hidden" name="action" value="save">
-        <div class="form-group"><label for="content">Content</label>
-          <textarea id="content" name="content" rows="20" class="mono" style="font-size:0.85rem;tab-size:2;">${escapeHtml(content || '')}</textarea>
-        </div>
-        <div style="display:flex;gap:0.5rem;">
-          <button type="submit" class="btn">Save</button>
-          <a href="/storage/${escapeHtml(path)}" class="btn btn-secondary">Cancel</a>
-        </div>
-      </form>`;
-  } else if (isBinary && isImageType(contentType)) {
-    contentSection = `
-      <div style="margin-bottom:0.75rem;">
-        <img src="${escapeHtml(resourceUrl)}" alt="${escapeHtml(path.split('/').pop())}" style="max-width:100%;border-radius:4px;">
-      </div>
-      <div class="text-muted">${escapeHtml(contentType)} &middot; ${formatBytes(size)}</div>
-      <div style="margin-top:0.5rem;"><a href="${escapeHtml(resourceUrl)}" class="mono text-muted" target="_blank">${escapeHtml(config.baseUrl + resourceUrl)}</a></div>`;
-  } else if (isBinary) {
-    contentSection = `
-      <div class="text-muted">${escapeHtml(contentType)} &middot; ${formatBytes(size)}</div>
-      <div style="margin-top:0.5rem;"><a href="${escapeHtml(resourceUrl)}" class="btn btn-secondary" target="_blank">Download File</a></div>
-      <div style="margin-top:0.5rem;"><a href="${escapeHtml(resourceUrl)}" class="mono text-muted" target="_blank">${escapeHtml(config.baseUrl + resourceUrl)}</a></div>`;
-  } else if (content !== null) {
-    contentSection = `
-      <pre class="mono" style="font-size:0.85rem;background:#f8f8f8;padding:1rem;border-radius:4px;overflow-x:auto;white-space:pre-wrap;">${escapeHtml(content)}</pre>`;
-  } else {
-    contentSection = `<div class="text-muted">Resource exists but has no content.</div>`;
-  }
+  // Pre-process metadata for display
+  const processedMeta = metaTriples.map(t => {
+    const predLabel = unwrapIri(t.predicate).split(/[#/]/).pop();
+    let value = t.object;
+    if (value.startsWith('"')) value = value.match(/^"([^"]*)"/)?.[1] || value;
+    else if (value.startsWith('<')) value = unwrapIri(value);
+    return { predLabel, value };
+  });
 
-  // Metadata section
-  let metaSection;
-  if (editMeta) {
-    metaSection = `
-      <form method="POST" action="/storage/${escapeHtml(path)}">
-        <input type="hidden" name="action" value="save_meta">
-        <div class="form-group"><label for="metadata">Linked Metadata (N-Triples)</label>
-          <textarea id="metadata" name="metadata" rows="8" class="mono" style="font-size:0.85rem;">${escapeHtml(metaTurtle)}</textarea>
-        </div>
-        <div class="text-muted" style="font-size:0.8rem;margin-bottom:0.75rem;">
-          Subject should be <code class="mono">&lt;${escapeHtml(resourceIri)}&gt;</code>.
-          Common predicates: <code class="mono">dcterms:title</code>, <code class="mono">dcterms:description</code>, <code class="mono">dcterms:creator</code>, <code class="mono">schema:keywords</code>.
-        </div>
-        <div style="display:flex;gap:0.5rem;">
-          <button type="submit" class="btn">Save Metadata</button>
-          <a href="/storage/${escapeHtml(path)}" class="btn btn-secondary">Cancel</a>
-        </div>
-      </form>`;
-  } else {
-    const metaDisplay = metaTriples.length > 0
-      ? `<table style="font-size:0.85rem;">${metaTriples.map(t => {
-          const pred = unwrapIri(t.predicate).split(/[#/]/).pop();
-          let val = t.object;
-          if (val.startsWith('"')) val = val.match(/^"([^"]*)"/)?.[1] || val;
-          else if (val.startsWith('<')) val = unwrapIri(val);
-          return `<tr><td class="text-muted">${escapeHtml(pred)}</td><td class="mono">${escapeHtml(val)}</td></tr>`;
-        }).join('')}</table>`
-      : '<div class="text-muted">No metadata.</div>';
-    metaSection = `
-      ${metaDisplay}
-      <div style="margin-top:0.5rem;">
-        <a href="/storage/${escapeHtml(path)}?meta=1" class="btn btn-secondary" style="font-size:0.8rem;">Edit Metadata</a>
-      </div>`;
-  }
+  // Pre-compute mutually exclusive display flags for Mustache
+  const isImage = isImageType(contentType);
+  const showEditor = editMode && canEdit;
+  const showImage = !showEditor && isBinary && isImage;
+  const showBinaryDownload = !showEditor && isBinary && !isImage;
+  const showContent = !showEditor && !isBinary && content !== null;
+  const showEmpty = !showEditor && !showImage && !showBinaryDownload && !showContent;
 
-  const body = `
-    <h1>Storage</h1>
-    <div class="card">
-      <div class="text-muted" style="margin-bottom:0.5rem;">Path: <span class="mono">${escapeHtml('/' + path)}</span></div>
-      ${renderBreadcrumbs(path)}
-    </div>
-    <div class="card">
-      <h2>Resource</h2>
-      ${contentSection}
-      <div style="margin-top:0.75rem;display:flex;gap:0.5rem;flex-wrap:wrap;">
-        <a href="${escapeHtml(resourceUrl)}" class="btn btn-secondary" style="font-size:0.8rem;" target="_blank">View Raw</a>
-        ${canEdit && !editMode ? `<a href="/storage/${escapeHtml(path)}?edit=1" class="btn" style="font-size:0.8rem;">Edit</a>` : ''}
-        <a href="/acp/${escapeHtml(path)}" class="btn btn-secondary" style="font-size:0.8rem;">Access Policy</a>
-        <form method="POST" action="/storage/${escapeHtml(path)}" class="inline">
-          <input type="hidden" name="action" value="delete">
-          <button type="submit" class="btn btn-danger" style="font-size:0.8rem;"
-            onclick="return confirm('Delete this resource?')">Delete</button>
-        </form>
-      </div>
-    </div>
-    <div class="card">
-      <h2>Metadata</h2>
-      ${metaSection}
-    </div>`;
-
-  return htmlResponse(htmlPage('Storage', body, { user: username, nav: 'storage' }));
+  return renderPage('Storage', resourceTemplate, {
+    path,
+    displayPath: '/' + path,
+    breadcrumbs,
+    resourceUrl,
+    fullResourceUrl: config.baseUrl + resourceUrl,
+    fileName,
+    content,
+    contentType,
+    sizeFormatted: formatBytes(size),
+    showEditor,
+    showImage,
+    showBinaryDownload,
+    showContent,
+    showEmpty,
+    showEditButton: canEdit && !editMode,
+    showMetaEditor: editMeta,
+    hasMetaTriples: !editMeta && processedMeta.length > 0,
+    showNoMeta: !editMeta && processedMeta.length === 0,
+    resourceIri,
+    metaTriples: processedMeta,
+    metaTurtle,
+  }, { user: username, nav: 'storage' });
 }
 
 // ── POST /storage/** ─────────────────────────────────
@@ -364,11 +272,11 @@ async function handleUpload(form, containerIri, path, config, storage, env) {
   return redirect(`/storage/${path}`);
 }
 
-// ── Container listing ────────────────────────────────
+// ── Container listing data ───────────────────────────
 
-async function renderContainerListing(containerIri, config, storage) {
+async function loadContainerItems(containerIri, config, storage) {
   const ntData = await storage.get(`doc:${containerIri}:${containerIri}`);
-  if (!ntData) return '<div class="text-muted">Empty container.</div>';
+  if (!ntData) return [];
 
   const triples = parseNTriples(ntData);
   const ldpContains = PREFIXES.ldp + 'contains';
@@ -376,32 +284,19 @@ async function renderContainerListing(containerIri, config, storage) {
   for (const t of triples) {
     if (unwrapIri(t.predicate) === ldpContains) contained.push(unwrapIri(t.object));
   }
-  if (contained.length === 0) return '<div class="text-muted">Empty container.</div>';
+  if (contained.length === 0) return [];
 
   contained.sort((a, b) => {
     const ad = a.endsWith('/') ? 0 : 1, bd = b.endsWith('/') ? 0 : 1;
     return ad !== bd ? ad - bd : a.localeCompare(b);
   });
 
-  const rows = contained.map(uri => {
+  return contained.map(uri => {
     const name = uri.replace(containerIri, '');
     const isDir = uri.endsWith('/');
-    const sp = uri.replace(config.baseUrl + '/', '');
-    return `<tr>
-      <td style="width:1.5rem;">${isDir ? '📁' : '📄'}</td>
-      <td><a href="/storage/${escapeHtml(sp)}" class="mono">${escapeHtml(name)}</a></td>
-      <td style="white-space:nowrap;">
-        <a href="/${escapeHtml(sp)}" class="text-muted" target="_blank" style="font-size:0.8rem;">raw</a>
-        <form method="POST" action="/storage/${escapeHtml(sp)}" class="inline" style="margin-left:0.5rem;">
-          <input type="hidden" name="action" value="delete">
-          <button type="submit" class="text-muted" style="background:none;border:none;cursor:pointer;font-size:0.8rem;color:#dc3545;padding:0;"
-            onclick="return confirm('Delete ${escapeHtml(name)}?')">delete</button>
-        </form>
-      </td>
-    </tr>`;
-  }).join('');
-
-  return `<table>${rows}</table>`;
+    const storagePath = uri.replace(config.baseUrl + '/', '');
+    return { name, isDir, storagePath, rawPath: storagePath };
+  });
 }
 
 // ── Resource loading ─────────────────────────────────
@@ -544,15 +439,14 @@ function computeParent(resourceIri) {
   return last <= 0 ? null : `${u.origin}${trimmed.slice(0, last + 1)}`;
 }
 
-function renderBreadcrumbs(path) {
+function buildBreadcrumbs(path) {
   const parts = path.split('/').filter(Boolean);
   let current = '';
-  const crumbs = parts.map((part, i) => {
+  return parts.map((part, i) => {
     current += part + '/';
     if (i === parts.length - 1 && !path.endsWith('/')) current = current.slice(0, -1);
-    return `<a href="/storage/${escapeHtml(current)}">${escapeHtml(part)}</a>`;
+    return { href: current, label: part, notFirst: i > 0 };
   });
-  return `<div style="font-size:0.85rem;">/ ${crumbs.join(' / ')}</div>`;
 }
 
 function formatBytes(bytes) {

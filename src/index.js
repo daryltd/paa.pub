@@ -7,7 +7,7 @@ import { getConfig } from './config.js';
 import { ensureBootstrapped } from './bootstrap.js';
 import { extractUser } from './auth/middleware.js';
 import { handleLogin, handleLogout } from './auth/session.js';
-import { handleWebAuthnRegisterBegin, handleWebAuthnRegisterComplete, handleWebAuthnLoginBegin, handleWebAuthnLoginComplete } from './auth/webauthn.js';
+import { handleWebAuthnRegisterBegin, handleWebAuthnRegisterComplete, handleWebAuthnLoginBegin, handleWebAuthnLoginComplete, handleWebAuthnRename, handleWebAuthnDelete } from './auth/webauthn.js';
 import { handleWebFinger } from './activitypub/webfinger.js';
 import { handleActor } from './activitypub/actor.js';
 import { handleInbox } from './activitypub/inbox.js';
@@ -46,6 +46,8 @@ function buildRouter() {
   router.post('/webauthn/register/complete', handleWebAuthnRegisterComplete);
   router.post('/webauthn/login/begin', handleWebAuthnLoginBegin);
   router.post('/webauthn/login/complete', handleWebAuthnLoginComplete);
+  router.post('/webauthn/rename', handleWebAuthnRename);
+  router.post('/webauthn/delete', handleWebAuthnDelete);
 
   // Authenticated UI routes
   router.get('/dashboard', renderDashboard);

@@ -8,6 +8,7 @@ import { serializeTurtle } from '../rdf/turtle-serializer.js';
 import { parseNTriples, serializeNTriples } from '../rdf/ntriples.js';
 import { solidHeaders } from './headers.js';
 import { negotiateType, serializeRdf } from './conneg.js';
+import { parseSparqlUpdate } from './ldp.js';
 
 /**
  * Handle GET for .acl resources.
@@ -66,6 +67,49 @@ export async function handleAclPut(reqCtx, resourceIri) {
   await storage.put(`acl:${resourceIri}`, ntriples);
 
   return new Response(null, { status: 205 });
+}
+
+/**
+ * Handle PATCH for .acl resources (SPARQL Update).
+ * @param {object} reqCtx
+ * @param {string} resourceIri
+ * @returns {Promise<Response>}
+ */
+export async function handleAclPatch(reqCtx, resourceIri) {
+  const { request, storage, config } = reqCtx;
+
+  if (reqCtx.user !== config.username) {
+    return new Response('Forbidden', { status: 403 });
+  }
+
+  const contentType = request.headers.get('Content-Type') || '';
+  if (!contentType.includes('application/sparql-update')) {
+    return new Response('Unsupported Media Type. Use application/sparql-update', { status: 415 });
+  }
+
+  const aclIri = resourceIri + '.acl';
+  const body = await request.text();
+
+  // Parse SPARQL Update
+  const { deleteTriples, insertTriples } = parseSparqlUpdate(body, aclIri);
+
+  // Read existing ACL triples
+  const aclData = await storage.get(`acl:${resourceIri}`);
+  let allTriples = aclData ? parseNTriples(aclData) : [];
+
+  // Apply deletes
+  if (deleteTriples.length > 0) {
+    const delSet = new Set(deleteTriples.map(t => `${t.subject} ${t.predicate} ${t.object}`));
+    allTriples = allTriples.filter(t => !delSet.has(`${t.subject} ${t.predicate} ${t.object}`));
+  }
+
+  // Apply inserts
+  for (const t of insertTriples) {
+    allTriples.push(t);
+  }
+
+  await storage.put(`acl:${resourceIri}`, serializeNTriples(allTriples));
+  return new Response(null, { status: aclData ? 204 : 201 });
 }
 
 /**

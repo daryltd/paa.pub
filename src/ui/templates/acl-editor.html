@@ -1,0 +1,96 @@
+<h1>Access Policy</h1>
+
+<div class="card">
+  <div class="text-muted" style="margin-bottom: 0.25rem;">
+    Resource: <span class="mono">{{resourceIri}}</span>
+  </div>
+  {{#isDir}}
+  <div class="text-muted" style="font-size: 0.8rem;">This policy applies to the container and its contents (unless overridden).</div>
+  {{/isDir}}
+</div>
+
+<div class="card">
+  <h2>Access Level</h2>
+  <form method="POST" action="/acp/{{{path}}}">
+    <input type="hidden" name="action" value="save_policy">
+
+    <div style="display: flex; flex-direction: column; gap: 0.75rem; margin-bottom: 1rem;">
+      {{#modeOptions}}
+      <label style="display: flex; gap: 0.75rem; align-items: flex-start; cursor: pointer; padding: 0.5rem; border-radius: 4px; background: {{{bgColor}}};">
+        <input type="radio" name="mode" value="{{value}}" {{{checked}}} style="margin-top: 0.25rem;">
+        <div>
+          <div style="font-weight: 500;">{{label}}</div>
+          <div class="text-muted" style="font-size: 0.8rem;">{{description}}</div>
+        </div>
+      </label>
+      {{/modeOptions}}
+    </div>
+
+    <div id="custom-agents" style="display: {{customDisplay}}; margin-bottom: 1rem;">
+      <div class="form-group">
+        <label for="agents">Allowed WebIDs (one per line)</label>
+        <textarea id="agents" name="agents" rows="4" class="mono"
+          style="font-size: 0.85rem;" placeholder="https://alice.example/profile/card#me">{{agentsText}}</textarea>
+      </div>
+    </div>
+
+    {{#isDir}}
+    <div class="form-group">
+      <label>
+        <input type="checkbox" name="inherit" value="1" {{{inheritChecked}}}>
+        Apply to all contents (children inherit this policy)
+      </label>
+    </div>
+    {{/isDir}}
+
+    <div style="display: flex; gap: 0.5rem;">
+      <button type="submit" class="btn">Save Policy</button>
+      <a href="/storage/{{{path}}}" class="btn btn-secondary">Back</a>
+    </div>
+  </form>
+
+  <script>{{{clientScript}}}</script>
+</div>
+
+<div class="card">
+  <h2>Friends List</h2>
+  <p class="text-muted" style="margin-bottom: 0.75rem;">
+    WebIDs listed here are granted read access when a resource is set to "Friends" mode.
+  </p>
+  {{#hasFriends}}
+  <table style="margin-bottom: 0.75rem;">
+    {{#friends}}
+    <tr>
+      <td class="mono" style="font-size: 0.85rem;">{{.}}</td>
+      <td style="width: 3rem;">
+        <form method="POST" action="/acp/{{{path}}}" class="inline">
+          <input type="hidden" name="action" value="remove_friend">
+          <input type="hidden" name="webid" value="{{.}}">
+          <button type="submit" class="text-muted"
+            style="background:none;border:none;cursor:pointer;font-size:0.8rem;color:#dc3545;padding:0;">remove</button>
+        </form>
+      </td>
+    </tr>
+    {{/friends}}
+  </table>
+  {{/hasFriends}}
+  {{^hasFriends}}
+  <div class="text-muted" style="margin-bottom: 0.75rem;">No friends added yet.</div>
+  {{/hasFriends}}
+
+  <form method="POST" action="/acp/{{{path}}}">
+    <input type="hidden" name="action" value="add_friend">
+    <div style="display: flex; gap: 0.5rem;">
+      <input type="url" name="webid" placeholder="https://alice.example/profile/card#me" required style="flex: 1;">
+      <button type="submit" class="btn">Add Friend</button>
+    </div>
+  </form>
+</div>
+
+<div class="card">
+  <h2>ACP Details</h2>
+  <details>
+    <summary class="text-muted" style="cursor: pointer; font-size: 0.85rem;">View raw Access Control Policy (Turtle)</summary>
+    <pre class="mono" style="font-size: 0.8rem; background: #f8f8f8; padding: 0.75rem; border-radius: 4px; margin-top: 0.5rem; overflow-x: auto; white-space: pre-wrap;">{{turtlePolicy}}</pre>
+  </details>
+</div>

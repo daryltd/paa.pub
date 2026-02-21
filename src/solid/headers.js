@@ -45,12 +45,13 @@ export function buildWacAllow(access) {
 export function solidHeaders(resourceIri, isContainer) {
   const headers = new Headers();
   headers.set('Link', buildLinkHeaders(resourceIri, isContainer));
-  headers.set('Accept-Patch', 'application/sparql-update');
+  headers.set('Accept-Patch', 'text/n3, application/sparql-update');
+  headers.set('Accept-Put', '*/*');
   headers.set('Accept-Post', 'text/turtle, application/ld+json, application/n-triples, application/octet-stream');
   const methods = isContainer
-    ? 'GET, HEAD, POST, PUT, PATCH, DELETE, OPTIONS'
-    : 'GET, HEAD, PUT, PATCH, DELETE, OPTIONS';
+    ? 'OPTIONS, HEAD, GET, POST, PUT, PATCH, DELETE'
+    : 'OPTIONS, HEAD, GET, PUT, PATCH, DELETE';
   headers.set('Allow', methods);
-  headers.set('MS-Author-Via', 'SPARQL');
+  headers.set('Vary', 'Accept, Authorization, Origin');
   return headers;
 }

@@ -1,6 +1,7 @@
 name = "paa-pub"
 main = "src/index.js"
 compatibility_date = "2024-09-23"
+compatibility_flags = ["nodejs_compat"]
 
 [alias]
 "@s20e/host-core" = "../s20e/packages/s20e-host-core/src/index.ts"
@@ -23,3 +24,8 @@ id = "appdata-kv-id"
 [[r2_buckets]]
 binding = "BLOBS"
 bucket_name = "paa-pub-blobs"
+
+[[rules]]
+type = "Text"
+globs = ["**/*.html", "**/*.css", "**/client/*.js"]
+fallthrough = true

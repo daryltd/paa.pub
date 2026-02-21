@@ -1,0 +1,17 @@
+<div class="card" style="max-width: 400px; margin: 4rem auto;">
+  <h1>Login</h1>
+  {{#error}}
+  <div class="error">{{error}}</div>
+  {{/error}}
+  <form method="POST" action="/login">
+    <div class="form-group">
+      <label for="password">Password</label>
+      <input type="password" id="password" name="password" required autofocus>
+    </div>
+    <button type="submit" class="btn">Sign In</button>
+  </form>
+  <div id="passkey-login" style="margin-top: 1rem;">
+    <button type="button" class="btn btn-secondary" onclick="passkeyLogin()" id="passkey-btn" style="display:none;">Sign in with Passkey</button>
+  </div>
+  <script>{{{clientScript}}}</script>
+</div>

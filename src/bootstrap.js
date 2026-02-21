@@ -30,6 +30,8 @@ export async function ensureBootstrapped(env, config, storage) {
     }
     // Ensure ACP policies exist (migration for pre-ACP installs)
     await ensureAcpPolicies(env, config);
+    // Ensure TypeIndex exists (migration for pre-TypeIndex installs)
+    await ensureTypeIndex(env, config, storage);
     bootstrapped = true;
     return;
   }
@@ -87,6 +89,7 @@ async function bootstrap(env, config, storage) {
   const ldp = PREFIXES.ldp;
   const acl = PREFIXES.acl;
   const foaf = PREFIXES.foaf;
+  const solid = PREFIXES.solid;
 
   for (const containerIri of containers) {
     // Write container type triple
@@ -111,7 +114,15 @@ async function bootstrap(env, config, storage) {
   const profileIri = `${baseUrl}/${username}/profile/card`;
   const profileNt = buildProfileNTriples(profileIri, webId, username, baseUrl, publicPem);
   await storage.put(`doc:${profileIri}:${webId}`, profileNt);
-  await storage.put(`idx:${profileIri}`, JSON.stringify({ subjects: [webId] }));
+
+  // Document-level triples (foaf:PersonalProfileDocument)
+  const profileDocNt = [
+    `${iri(profileIri)} ${iri(rdf + 'type')} ${iri(foaf + 'PersonalProfileDocument')} .`,
+    `${iri(profileIri)} ${iri(foaf + 'maker')} ${iri(webId)} .`,
+    `${iri(profileIri)} ${iri(foaf + 'primaryTopic')} ${iri(webId)} .`,
+  ].join('\n');
+  await storage.put(`doc:${profileIri}:${profileIri}`, profileDocNt);
+  await storage.put(`idx:${profileIri}`, JSON.stringify({ subjects: [webId, profileIri] }));
 
   // ACL + ACP for profile: public read
   const profileAcl = buildContainerAcl(profileIri, webId, true, acl, foaf);
@@ -126,6 +137,34 @@ async function bootstrap(env, config, storage) {
   const existingDoc = await storage.get(`doc:${profileContainerIri}:${profileContainerIri}`);
   await storage.put(`doc:${profileContainerIri}:${profileContainerIri}`,
     (existingDoc || '') + '\n' + containsNt);
+
+  // 6b. Create TypeIndex documents in settings/
+  const settingsIri = `${baseUrl}/${username}/settings/`;
+  const privateTypeIndexIri = `${settingsIri}privateTypeIndex`;
+  const publicTypeIndexIri = `${settingsIri}publicTypeIndex`;
+
+  const privateTypeIndexNt = [
+    `${iri(privateTypeIndexIri)} ${iri(rdf + 'type')} ${iri(solid + 'TypeIndex')} .`,
+    `${iri(privateTypeIndexIri)} ${iri(rdf + 'type')} ${iri(solid + 'UnlistedDocument')} .`,
+  ].join('\n');
+  await storage.put(`doc:${privateTypeIndexIri}:${privateTypeIndexIri}`, privateTypeIndexNt);
+  await storage.put(`idx:${privateTypeIndexIri}`, JSON.stringify({ subjects: [privateTypeIndexIri] }));
+
+  const publicTypeIndexNt = [
+    `${iri(publicTypeIndexIri)} ${iri(rdf + 'type')} ${iri(solid + 'TypeIndex')} .`,
+    `${iri(publicTypeIndexIri)} ${iri(rdf + 'type')} ${iri(solid + 'ListedDocument')} .`,
+  ].join('\n');
+  await storage.put(`doc:${publicTypeIndexIri}:${publicTypeIndexIri}`, publicTypeIndexNt);
+  await storage.put(`idx:${publicTypeIndexIri}`, JSON.stringify({ subjects: [publicTypeIndexIri] }));
+
+  // Add TypeIndex documents to settings/ container
+  const settingsContainsNt = [
+    `${iri(settingsIri)} ${iri(ldp + 'contains')} ${iri(privateTypeIndexIri)} .`,
+    `${iri(settingsIri)} ${iri(ldp + 'contains')} ${iri(publicTypeIndexIri)} .`,
+  ].join('\n');
+  const existingSettings = await storage.get(`doc:${settingsIri}:${settingsIri}`);
+  await storage.put(`doc:${settingsIri}:${settingsIri}`,
+    (existingSettings || '') + '\n' + settingsContainsNt);
 
   // 7. Mark as initialized and store the domain used
   await env.APPDATA.put('user_initialized', 'true');
@@ -183,6 +222,87 @@ async function ensureAcpPolicies(env, config) {
   }
 }
 
+/**
+ * Ensure TypeIndex documents and profile references exist (migration for pre-TypeIndex installs).
+ */
+async function ensureTypeIndex(env, config, storage) {
+  const { username, baseUrl } = config;
+  const solid = PREFIXES.solid;
+  const rdf = PREFIXES.rdf;
+  const ldp = PREFIXES.ldp;
+  const webId = `${baseUrl}/${username}/profile/card#me`;
+  const profileIri = `${baseUrl}/${username}/profile/card`;
+  const settingsIri = `${baseUrl}/${username}/settings/`;
+  const privateTypeIndexIri = `${settingsIri}privateTypeIndex`;
+  const publicTypeIndexIri = `${settingsIri}publicTypeIndex`;
+
+  // Check if TypeIndex documents exist
+  const privateIdx = await storage.get(`idx:${privateTypeIndexIri}`);
+  if (!privateIdx) {
+    const privateTypeIndexNt = [
+      `${iri(privateTypeIndexIri)} ${iri(rdf + 'type')} ${iri(solid + 'TypeIndex')} .`,
+      `${iri(privateTypeIndexIri)} ${iri(rdf + 'type')} ${iri(solid + 'UnlistedDocument')} .`,
+    ].join('\n');
+    await storage.put(`doc:${privateTypeIndexIri}:${privateTypeIndexIri}`, privateTypeIndexNt);
+    await storage.put(`idx:${privateTypeIndexIri}`, JSON.stringify({ subjects: [privateTypeIndexIri] }));
+
+    // Add to settings container
+    const containNt = `${iri(settingsIri)} ${iri(ldp + 'contains')} ${iri(privateTypeIndexIri)} .`;
+    const existingSettings = await storage.get(`doc:${settingsIri}:${settingsIri}`);
+    if (existingSettings && !existingSettings.includes(privateTypeIndexIri)) {
+      await storage.put(`doc:${settingsIri}:${settingsIri}`, existingSettings + '\n' + containNt);
+    }
+  }
+
+  const publicIdx = await storage.get(`idx:${publicTypeIndexIri}`);
+  if (!publicIdx) {
+    const publicTypeIndexNt = [
+      `${iri(publicTypeIndexIri)} ${iri(rdf + 'type')} ${iri(solid + 'TypeIndex')} .`,
+      `${iri(publicTypeIndexIri)} ${iri(rdf + 'type')} ${iri(solid + 'ListedDocument')} .`,
+    ].join('\n');
+    await storage.put(`doc:${publicTypeIndexIri}:${publicTypeIndexIri}`, publicTypeIndexNt);
+    await storage.put(`idx:${publicTypeIndexIri}`, JSON.stringify({ subjects: [publicTypeIndexIri] }));
+
+    // Add to settings container
+    const containNt = `${iri(settingsIri)} ${iri(ldp + 'contains')} ${iri(publicTypeIndexIri)} .`;
+    const existingSettings = await storage.get(`doc:${settingsIri}:${settingsIri}`);
+    if (existingSettings && !existingSettings.includes(publicTypeIndexIri)) {
+      await storage.put(`doc:${settingsIri}:${settingsIri}`, existingSettings + '\n' + containNt);
+    }
+  }
+
+  // Ensure profile has TypeIndex references
+  const profileDoc = await storage.get(`doc:${profileIri}:${webId}`);
+  if (profileDoc && !profileDoc.includes('privateTypeIndex')) {
+    const typeIndexTriples = [
+      `${iri(webId)} ${iri(solid + 'privateTypeIndex')} ${iri(privateTypeIndexIri)} .`,
+      `${iri(webId)} ${iri(solid + 'publicTypeIndex')} ${iri(publicTypeIndexIri)} .`,
+    ].join('\n');
+    await storage.put(`doc:${profileIri}:${webId}`, profileDoc + '\n' + typeIndexTriples);
+  }
+
+  // Ensure profile has document-level triples (PersonalProfileDocument)
+  const foaf = PREFIXES.foaf;
+  const profileDocTriples = await storage.get(`doc:${profileIri}:${profileIri}`);
+  if (!profileDocTriples) {
+    const docNt = [
+      `${iri(profileIri)} ${iri(rdf + 'type')} ${iri(foaf + 'PersonalProfileDocument')} .`,
+      `${iri(profileIri)} ${iri(foaf + 'maker')} ${iri(webId)} .`,
+      `${iri(profileIri)} ${iri(foaf + 'primaryTopic')} ${iri(webId)} .`,
+    ].join('\n');
+    await storage.put(`doc:${profileIri}:${profileIri}`, docNt);
+    // Update idx to include both subjects
+    const idx = await storage.get(`idx:${profileIri}`);
+    if (idx) {
+      const parsed = JSON.parse(idx);
+      if (!parsed.subjects.includes(profileIri)) {
+        parsed.subjects.push(profileIri);
+        await storage.put(`idx:${profileIri}`, JSON.stringify(parsed));
+      }
+    }
+  }
+}
+
 function buildProfileNTriples(profileIri, webId, username, baseUrl, publicPem) {
   const rdf = PREFIXES.rdf;
   const foaf = PREFIXES.foaf;
@@ -198,6 +318,8 @@ function buildProfileNTriples(profileIri, webId, username, baseUrl, publicPem) {
     `${iri(webId)} ${iri(solid + 'oidcIssuer')} ${iri(baseUrl)} .`,
     `${iri(webId)} ${iri(space + 'storage')} ${iri(baseUrl + '/' + username + '/')} .`,
     `${iri(webId)} ${iri(ldp + 'inbox')} ${iri(baseUrl + '/' + username + '/inbox')} .`,
+    `${iri(webId)} ${iri(solid + 'privateTypeIndex')} ${iri(baseUrl + '/' + username + '/settings/privateTypeIndex')} .`,
+    `${iri(webId)} ${iri(solid + 'publicTypeIndex')} ${iri(baseUrl + '/' + username + '/settings/publicTypeIndex')} .`,
     // Security key for ActivityPub
     `${iri(keyId)} ${iri(rdf + 'type')} ${iri('https://w3id.org/security#Key')} .`,
     `${iri(keyId)} ${iri('https://w3id.org/security#owner')} ${iri(webId)} .`,

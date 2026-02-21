@@ -4,7 +4,7 @@
 
 const ALLOWED_METHODS = 'GET, HEAD, POST, PUT, PATCH, DELETE, OPTIONS';
 const ALLOWED_HEADERS = 'Authorization, Content-Type, Accept, Origin, Slug, Link, If-Match, If-None-Match, Prefer, DPoP';
-const EXPOSED_HEADERS = 'Location, Link, WAC-Allow, Accept-Patch, Accept-Post, Updates-Via, MS-Author-Via';
+const EXPOSED_HEADERS = 'Accept-Patch, Accept-Post, Accept-Put, Allow, Content-Range, ETag, Last-Modified, Link, Location, Updates-Via, WAC-Allow, WWW-Authenticate';
 
 /**
  * Apply CORS headers to a response.
