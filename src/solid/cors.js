@@ -3,7 +3,7 @@
  */
 
 const ALLOWED_METHODS = 'GET, HEAD, POST, PUT, PATCH, DELETE, OPTIONS';
-const ALLOWED_HEADERS = 'Authorization, Content-Type, Accept, Origin, Slug, Link, If-Match, If-None-Match, Prefer';
+const ALLOWED_HEADERS = 'Authorization, Content-Type, Accept, Origin, Slug, Link, If-Match, If-None-Match, Prefer, DPoP';
 const EXPOSED_HEADERS = 'Location, Link, WAC-Allow, Accept-Patch, Accept-Post, Updates-Via, MS-Author-Via';
 
 /**

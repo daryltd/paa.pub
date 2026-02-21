@@ -80,6 +80,11 @@ export async function renderDashboard(reqCtx) {
             const options = await beginRes.json();
             options.challenge = base64ToBuffer(options.challenge);
             options.user.id = base64ToBuffer(options.user.id);
+            if (options.excludeCredentials) {
+              options.excludeCredentials = options.excludeCredentials.map(c => ({
+                ...c, id: base64ToBuffer(c.id)
+              }));
+            }
             const cred = await navigator.credentials.create({ publicKey: options });
             const body = JSON.stringify({
               id: cred.id,

@@ -2,7 +2,7 @@
  * PBKDF2 password hashing via Web Crypto API.
  */
 
-const ITERATIONS = 600000;
+const ITERATIONS = 100000;
 const HASH = 'SHA-256';
 const KEY_LENGTH = 32;
 

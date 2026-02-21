@@ -229,19 +229,27 @@ export async function handleWebAuthnLoginComplete(reqCtx) {
   signedData.set(new Uint8Array(authenticatorData), 0);
   signedData.set(new Uint8Array(clientDataHash), authenticatorData.byteLength);
 
-  const signature = base64urlToBuffer(credResponse.signature);
+  let signature = base64urlToBuffer(credResponse.signature);
+
+  const isEC = cred.publicKeyJwk.kty === 'EC';
+
+  // WebAuthn returns ECDSA signatures in DER/ASN.1 format,
+  // but Web Crypto expects raw r||s format
+  if (isEC) {
+    signature = derToRaw(new Uint8Array(signature), cred.publicKeyJwk.crv);
+  }
 
   const publicKey = await crypto.subtle.importKey(
     'jwk',
     cred.publicKeyJwk,
-    cred.publicKeyJwk.kty === 'EC'
+    isEC
       ? { name: 'ECDSA', namedCurve: cred.publicKeyJwk.crv }
       : { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' },
     false,
     ['verify'],
   );
 
-  const algo = cred.publicKeyJwk.kty === 'EC'
+  const algo = isEC
     ? { name: 'ECDSA', hash: 'SHA-256' }
     : 'RSASSA-PKCS1-v1_5';
 
@@ -344,4 +352,42 @@ function base64urlToBuffer(b64) {
   const bytes = new Uint8Array(binary.length);
   for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
   return bytes.buffer;
+}
+
+/**
+ * Convert a DER-encoded ECDSA signature to raw r||s format.
+ * WebAuthn returns DER, Web Crypto expects raw.
+ * @param {Uint8Array} der
+ * @param {string} crv - curve name (P-256 → 32 bytes, P-384 → 48, P-521 → 66)
+ * @returns {ArrayBuffer}
+ */
+function derToRaw(der, crv) {
+  const componentLength = crv === 'P-256' ? 32 : crv === 'P-384' ? 48 : 66;
+
+  // DER: 0x30 <len> 0x02 <rLen> <r> 0x02 <sLen> <s>
+  let offset = 2; // skip SEQUENCE tag and length
+  if (der[1] & 0x80) offset += (der[1] & 0x7f); // long form length
+
+  // Read r
+  if (der[offset] !== 0x02) throw new Error('Expected INTEGER tag for r');
+  offset++;
+  const rLen = der[offset++];
+  let r = der.slice(offset, offset + rLen);
+  offset += rLen;
+
+  // Read s
+  if (der[offset] !== 0x02) throw new Error('Expected INTEGER tag for s');
+  offset++;
+  const sLen = der[offset++];
+  let s = der.slice(offset, offset + sLen);
+
+  // Strip leading zero padding (DER uses signed integers)
+  if (r.length > componentLength) r = r.slice(r.length - componentLength);
+  if (s.length > componentLength) s = s.slice(s.length - componentLength);
+
+  // Pad to fixed length
+  const raw = new Uint8Array(componentLength * 2);
+  raw.set(r, componentLength - r.length);
+  raw.set(s, componentLength * 2 - s.length);
+  return raw.buffer;
 }

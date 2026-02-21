@@ -7,6 +7,7 @@ export const PREFIXES = {
   xsd: 'http://www.w3.org/2001/XMLSchema#',
   ldp: 'http://www.w3.org/ns/ldp#',
   acl: 'http://www.w3.org/ns/auth/acl#',
+  acp: 'http://www.w3.org/ns/solid/acp#',
   foaf: 'http://xmlns.com/foaf/0.1/',
   solid: 'http://www.w3.org/ns/solid/terms#',
   dcterms: 'http://purl.org/dc/terms/',

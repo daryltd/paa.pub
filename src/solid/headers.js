@@ -13,6 +13,7 @@ export function buildLinkHeaders(resourceIri, isContainer) {
   const links = [
     `<${PREFIXES.ldp}Resource>; rel="type"`,
     `<${resourceIri}.acl>; rel="acl"`,
+    `<${resourceIri}.acr>; rel="http://www.w3.org/ns/solid/acp#accessControl"`,
     `<${resourceIri}.meta>; rel="describedby"`,
   ];
   if (isContainer) {

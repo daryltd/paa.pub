@@ -22,12 +22,13 @@ export class Router {
       })
       .replace(/\*\*/g, () => {
         keys.push('wild');
-        return '(.*)';
+        return '\x00WILD\x00';
       })
       .replace(/\*/g, () => {
         keys.push('wild');
-        return '(.*)';
-      });
+        return '\x00WILD\x00';
+      })
+      .replace(/\x00WILD\x00/g, '(.*)');
     this.routes.push({
       method: method.toUpperCase(),
       pattern: new RegExp(`^${regexStr}$`),

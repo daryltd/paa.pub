@@ -1,13 +1,23 @@
 /**
  * Read configuration from Cloudflare Worker environment bindings.
  * @param {object} env - Cloudflare Worker env object
+ * @param {Request} [request] - incoming request (used to auto-detect domain)
  * @returns {object} config
  */
-export function getConfig(env) {
+export function getConfig(env, request) {
   const username = env.PAA_USERNAME || 'admin';
   const password = env.PAA_PASSWORD || '';
-  const domain = env.PAA_DOMAIN || 'localhost:8787';
-  const protocol = domain.startsWith('localhost') ? 'http' : 'https';
+
+  let domain = env.PAA_DOMAIN || '';
+  let protocol;
+  if (!domain && request) {
+    const url = new URL(request.url);
+    domain = url.host;
+    protocol = url.protocol.replace(':', '');
+  } else {
+    domain = domain || 'localhost:8787';
+    protocol = domain.startsWith('localhost') ? 'http' : 'https';
+  }
   const baseUrl = `${protocol}://${domain}`;
 
   return {

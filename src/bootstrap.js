@@ -22,6 +22,14 @@ export async function ensureBootstrapped(env, config, storage) {
 
   const flag = await env.APPDATA.get('user_initialized');
   if (flag === 'true') {
+    // Check if domain changed since last bootstrap (or was never recorded)
+    const storedDomain = await env.APPDATA.get('bootstrap_domain');
+    if (storedDomain !== config.domain) {
+      console.log(`Bootstrap domain mismatch: stored=${storedDomain} current=${config.domain}, re-bootstrapping`);
+      await bootstrap(env, config, storage);
+    }
+    // Ensure ACP policies exist (migration for pre-ACP installs)
+    await ensureAcpPolicies(env, config);
     bootstrapped = true;
     return;
   }
@@ -37,21 +45,33 @@ export async function ensureBootstrapped(env, config, storage) {
 async function bootstrap(env, config, storage) {
   const { username, baseUrl } = config;
 
-  // 1. Hash password and create user record
-  const passwordHash = await hashPassword(config.password);
-  await env.APPDATA.put(`user:${username}`, passwordHash);
+  // 1. Hash password and create user record (skip if already exists)
+  const existingUser = await env.APPDATA.get(`user:${username}`);
+  if (!existingUser) {
+    const passwordHash = await hashPassword(config.password);
+    await env.APPDATA.put(`user:${username}`, passwordHash);
+  }
 
-  // 2. Generate RSA keypair for ActivityPub
-  const { privatePem, publicPem } = await generateRSAKeyPair();
-  await env.APPDATA.put(`ap_private_key:${username}`, privatePem);
-  await env.APPDATA.put(`ap_public_key:${username}`, publicPem);
+  // 2. Generate RSA keypair for ActivityPub (skip if already exists)
+  let publicPem = await env.APPDATA.get(`ap_public_key:${username}`);
+  if (!publicPem) {
+    const keyPair = await generateRSAKeyPair();
+    await env.APPDATA.put(`ap_private_key:${username}`, keyPair.privatePem);
+    await env.APPDATA.put(`ap_public_key:${username}`, keyPair.publicPem);
+    publicPem = keyPair.publicPem;
+  }
 
-  // 3. Initialize empty AP collections
-  await env.APPDATA.put(`ap_followers:${username}`, '[]');
-  await env.APPDATA.put(`ap_following:${username}`, '[]');
-  await env.APPDATA.put(`ap_outbox_index:${username}`, '[]');
-  await env.APPDATA.put(`ap_inbox_index:${username}`, '[]');
-  await env.APPDATA.put(`quota:${username}`, JSON.stringify({ usedBytes: 0 }));
+  // 3. Initialize empty AP collections and friends list (skip if already exists)
+  if (!await env.APPDATA.get(`ap_followers:${username}`)) {
+    await env.APPDATA.put(`ap_followers:${username}`, '[]');
+    await env.APPDATA.put(`ap_following:${username}`, '[]');
+    await env.APPDATA.put(`ap_outbox_index:${username}`, '[]');
+    await env.APPDATA.put(`ap_inbox_index:${username}`, '[]');
+    await env.APPDATA.put(`quota:${username}`, JSON.stringify({ usedBytes: 0 }));
+  }
+  if (!await env.APPDATA.get(`friends:${username}`)) {
+    await env.APPDATA.put(`friends:${username}`, '[]');
+  }
 
   // 4. Create containers and their ACLs
   const containers = [
@@ -74,11 +94,17 @@ async function bootstrap(env, config, storage) {
     await storage.put(`doc:${containerIri}:${containerIri}`, containerNt);
     await storage.put(`idx:${containerIri}`, JSON.stringify({ subjects: [containerIri] }));
 
-    // Write ACL: owner has full control, public read on public container
+    // Write WAC ACL (for kernel compatibility)
     const isPublic = containerIri.endsWith('/public/');
     const isRoot = containerIri === `${baseUrl}/${username}/`;
     const aclNt = buildContainerAcl(containerIri, webId, isPublic || isRoot, acl, foaf);
     await storage.put(`acl:${containerIri}`, aclNt);
+
+    // Write ACP policy — root defaults to private, public/ is public
+    const acpMode = isPublic ? 'public' : 'private';
+    await env.APPDATA.put(`acp:${containerIri}`, JSON.stringify({
+      mode: acpMode, agents: [], inherit: true,
+    }));
   }
 
   // 5. Create WebID profile document
@@ -87,9 +113,12 @@ async function bootstrap(env, config, storage) {
   await storage.put(`doc:${profileIri}:${webId}`, profileNt);
   await storage.put(`idx:${profileIri}`, JSON.stringify({ subjects: [webId] }));
 
-  // ACL for profile: owner control, public read
+  // ACL + ACP for profile: public read
   const profileAcl = buildContainerAcl(profileIri, webId, true, acl, foaf);
   await storage.put(`acl:${profileIri}`, profileAcl);
+  await env.APPDATA.put(`acp:${profileIri}`, JSON.stringify({
+    mode: 'public', agents: [], inherit: false,
+  }));
 
   // 6. Add profile/card to profile/ container
   const profileContainerIri = `${baseUrl}/${username}/profile/`;
@@ -98,8 +127,9 @@ async function bootstrap(env, config, storage) {
   await storage.put(`doc:${profileContainerIri}:${profileContainerIri}`,
     (existingDoc || '') + '\n' + containsNt);
 
-  // 7. Mark as initialized
+  // 7. Mark as initialized and store the domain used
   await env.APPDATA.put('user_initialized', 'true');
+  await env.APPDATA.put('bootstrap_domain', config.domain);
 }
 
 function buildContainerAcl(resourceIri, webId, publicRead, acl, foaf) {
@@ -124,6 +154,33 @@ function buildContainerAcl(resourceIri, webId, publicRead, acl, foaf) {
   }
 
   return lines.join('\n');
+}
+
+/**
+ * Ensure ACP policies exist for core containers (migration for pre-ACP installs).
+ */
+async function ensureAcpPolicies(env, config) {
+  const { username, baseUrl } = config;
+  const policies = [
+    // Root container: private by default (safer default)
+    [`acp:${baseUrl}/${username}/`, { mode: 'private', agents: [], inherit: true }],
+    // Profile: public (WebID must be readable)
+    [`acp:${baseUrl}/${username}/profile/`, { mode: 'public', agents: [], inherit: true }],
+    [`acp:${baseUrl}/${username}/profile/card`, { mode: 'public', agents: [], inherit: false }],
+    // Public container: public
+    [`acp:${baseUrl}/${username}/public/`, { mode: 'public', agents: [], inherit: true }],
+    // Private container: private
+    [`acp:${baseUrl}/${username}/private/`, { mode: 'private', agents: [], inherit: true }],
+    // Settings: private
+    [`acp:${baseUrl}/${username}/settings/`, { mode: 'private', agents: [], inherit: true }],
+  ];
+
+  for (const [key, policy] of policies) {
+    const existing = await env.APPDATA.get(key);
+    if (!existing) {
+      await env.APPDATA.put(key, JSON.stringify(policy));
+    }
+  }
 }
 
 function buildProfileNTriples(profileIri, webId, username, baseUrl, publicPem) {

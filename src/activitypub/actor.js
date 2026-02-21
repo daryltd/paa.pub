@@ -2,7 +2,7 @@
  * Actor document (JSON-LD) and content-negotiated profile card.
  */
 import { wantsActivityPub, negotiateType, serializeRdf } from '../solid/conneg.js';
-import { solidHeaders } from '../solid/headers.js';
+import { solidHeaders, buildWacAllow } from '../solid/headers.js';
 import { parseNTriples } from '../rdf/ntriples.js';
 
 /**
@@ -11,7 +11,7 @@ import { parseNTriples } from '../rdf/ntriples.js';
  */
 export async function handleActor(reqCtx) {
   const { request, params, config, env } = reqCtx;
-  const username = params.user;
+  const username = params.user || config.username;
 
   if (username !== config.username) {
     return new Response('Not Found', { status: 404 });
@@ -62,7 +62,7 @@ async function actorJson(reqCtx) {
 }
 
 async function profileRdf(reqCtx) {
-  const { request, config, storage } = reqCtx;
+  const { request, config, storage, user } = reqCtx;
   const profileIri = `${config.baseUrl}/${config.username}/profile/card`;
   const webId = config.webId;
 
@@ -78,5 +78,17 @@ async function profileRdf(reqCtx) {
 
   const headers = solidHeaders(profileIri, false);
   headers.set('Content-Type', contentType);
+  // Tell Solid apps whether the profile is writable
+  if (user === config.username) {
+    headers.set('WAC-Allow', buildWacAllow({
+      user: ['read', 'write', 'append', 'control'],
+      public: ['read'],
+    }));
+  } else {
+    headers.set('WAC-Allow', buildWacAllow({
+      user: [],
+      public: ['read'],
+    }));
+  }
   return new Response(body, { status: 200, headers });
 }
