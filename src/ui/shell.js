@@ -38,7 +38,7 @@ function navBar(user, active) {
     `<a href="${i.href}" class="${active === i.id ? 'active' : ''}">${i.label}</a>`
   ).join('');
   return `<nav class="paa-nav">
-    <a href="/dashboard" class="brand">paa.pub</a>
+    <a href="/dashboard" class="brand">Kaiāulu Pa'a</a>
     ${links}
     <span class="spacer"></span>
     <span class="user">${escapeHtml(user)}</span>

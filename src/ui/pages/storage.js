@@ -82,6 +82,21 @@ async function renderContainerPage(reqCtx, path, resourceIri, username) {
       </form>
     </div>
     <div class="card">
+      <h2>Create Resource</h2>
+      <form method="POST" action="/storage/${escapeHtml(path)}">
+        <input type="hidden" name="action" value="create">
+        <div class="form-group">
+          <label for="create-name">Filename</label>
+          <input type="text" id="create-name" name="name" placeholder="e.g. notes.txt, data.ttl, page.html" required>
+        </div>
+        <div class="form-group">
+          <label for="create-content">Content</label>
+          <textarea id="create-content" name="content" rows="8" class="mono" style="font-size:0.85rem;tab-size:2;" placeholder="Enter content..."></textarea>
+        </div>
+        <button type="submit" class="btn">Create</button>
+      </form>
+    </div>
+    <div class="card">
       <h2>Contents</h2>
       ${listing}
       <div style="margin-top:0.75rem;display:flex;gap:0.5rem;">
@@ -248,6 +263,28 @@ export async function handleStorageAction(reqCtx) {
     await storage.put(`idx:${newIri}`, JSON.stringify({ subjects: [newIri] }));
     await appendContainment(storage, resourceIri, newIri);
     return redirect(`/storage/${path}`);
+  }
+
+  if (action === 'create' && name) {
+    const cleanName = name.replace(/[^a-zA-Z0-9._-]/g, '-');
+    const newIri = resourceIri + cleanName;
+    const fileCt = contentTypeForExt(cleanName);
+    const text = content || '';
+
+    if (fileCt === 'text/turtle' || fileCt === 'application/n-triples') {
+      const { parseTurtle } = await import('../../rdf/turtle-parser.js');
+      const triples = fileCt === 'text/turtle'
+        ? parseTurtle(text, newIri)
+        : parseNTriples(text);
+      await writeTriplesToKV(storage, newIri, triples);
+    } else {
+      const binary = new TextEncoder().encode(text);
+      await storage.putBlob(`blob:${newIri}`, binary.buffer, fileCt);
+      await writeMetadata(storage, newIri, fileCt, binary.byteLength);
+      await storage.put(`idx:${newIri}`, JSON.stringify({ subjects: [newIri], binary: true }));
+    }
+    await appendContainment(storage, resourceIri, newIri);
+    return redirect(`/storage/${path}${cleanName}`);
   }
 
   if (action === 'save' && content !== null && content !== undefined) {

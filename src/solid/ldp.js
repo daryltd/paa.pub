@@ -63,18 +63,33 @@ export async function handleLDP(reqCtx) {
     return new Response('Method Not Allowed', { status: 405 });
   }
 
-  // Content negotiation for HTML — serve stored HTML if available
+  // Content negotiation for HTML — serve index.html from container if it exists
   const accept = request.headers.get('Accept') || '';
-  if (request.method === 'GET' && isContainer(resourceIri) && accept.includes('text/html') && !wantsActivityPub(accept)) {
-    // Try serving index.html from the container
+  if ((request.method === 'GET' || request.method === 'HEAD') && isContainer(resourceIri) && accept.includes('text/html') && !wantsActivityPub(accept)) {
     const indexIri = resourceIri + 'index.html';
-    const result = await reqCtx.orchestrator.serveBinary(indexIri, reqCtx.user ? config.webId : null);
-    if (result.granted && result.data) {
-      return new Response(result.data, {
-        headers: { 'Content-Type': 'text/html; charset=utf-8' },
-      });
+    const indexBlob = await reqCtx.storage.getBlob(`blob:${indexIri}`);
+    if (indexBlob) {
+      // Check ACP on the index.html resource
+      if (reqCtx.user !== config.username) {
+        const agent = reqCtx.user ? config.webId : null;
+        const access = await checkAcpAccess(reqCtx.env.APPDATA, indexIri, agent, config.webId, config.username);
+        if (!access.readable) {
+          const status = agent ? 403 : 401;
+          const headers = new Headers({ 'Content-Type': 'application/json' });
+          if (!agent) headers.set('WWW-Authenticate', `Bearer realm="${config.baseUrl}", scope="openid webid"`);
+          return new Response(JSON.stringify({ error: agent ? 'forbidden' : 'unauthorized', message: 'Authentication required.' }), { status, headers });
+        }
+      }
+      // Serve the raw HTML blob — set Content-Type explicitly and return
+      // without going through handleGet which would serve Turtle
+      const htmlHeaders = new Headers();
+      htmlHeaders.set('Content-Type', 'text/html; charset=utf-8');
+      htmlHeaders.set('Cache-Control', 'no-cache');
+      htmlHeaders.set('X-Content-Type-Options', 'nosniff');
+      if (request.method === 'HEAD') return new Response(null, { status: 200, headers: htmlHeaders });
+      return new Response(new Uint8Array(indexBlob), { status: 200, headers: htmlHeaders });
     }
-    // Fall through to container listing
+    // Fall through to container RDF listing
   }
 
   switch (request.method) {
@@ -188,6 +203,12 @@ async function handlePut(reqCtx, resourceIri) {
   const agent = reqCtx.user ? config.webId : null;
   const contentType = request.headers.get('Content-Type') || 'application/octet-stream';
 
+  if (!agent) {
+    console.log(`[ldp] PUT ${resourceIri} rejected: no authenticated agent`);
+    return new Response('Unauthorized', { status: 401 });
+  }
+  console.log(`[ldp] PUT ${resourceIri} by ${agent} ct=${contentType}`);
+
   if (isBinaryType(contentType)) {
     const binary = await request.arrayBuffer();
     const metadataNquads = buildMetadataNQuads(resourceIri, contentType, binary.byteLength);
@@ -238,64 +259,57 @@ async function handlePut(reqCtx, resourceIri) {
     }
   }
 
-  // For new resources, write directly to KV to bypass WAC (the parent's
-  // acl:default should authorize this, but the kernel may not find ACLs
-  // for a resource that doesn't exist yet).
-  if (!existingIdx) {
-    // Check parent container ACL to verify write access
-    const parent = parentContainer(resourceIri);
-    if (parent && agent) {
-      // Write triples directly to KV
-      const subjects = new Set(triples.map(t => {
-        if (t.subject.startsWith('<') && t.subject.endsWith('>')) return t.subject.slice(1, -1);
-        return t.subject;
-      }));
-      for (const subjectIri of subjects) {
-        const subjectTriples = triples.filter(t => {
-          const s = t.subject.startsWith('<') ? t.subject.slice(1, -1) : t.subject;
-          return s === subjectIri;
-        });
-        const nt = subjectTriples.map(t => `${t.subject} ${t.predicate} ${t.object} .`).join('\n');
-        await storage.put(`doc:${resourceIri}:${subjectIri}`, nt);
-      }
-      await storage.put(`idx:${resourceIri}`, JSON.stringify({ subjects: [...subjects] }));
+  // Write triples directly to KV
+  if (!agent) return new Response('Forbidden', { status: 403 });
 
-      // Add containment triple to parent
+  const bySubject = new Map();
+  for (const t of triples) {
+    const s = t.subject.startsWith('<') && t.subject.endsWith('>') ? t.subject.slice(1, -1) : t.subject;
+    if (!bySubject.has(s)) bySubject.set(s, []);
+    bySubject.get(s).push(t);
+  }
+  for (const [subjectIri, st] of bySubject) {
+    await storage.put(`doc:${resourceIri}:${subjectIri}`, st.map(t => `${t.subject} ${t.predicate} ${t.object} .`).join('\n'));
+  }
+  await storage.put(`idx:${resourceIri}`, JSON.stringify({ subjects: [...bySubject.keys()] }));
+
+  // For new resources, add containment to parent
+  if (!existingIdx) {
+    const parent = parentContainer(resourceIri);
+    if (parent) {
+      const { appendContainment } = await import('../ui/pages/storage.js');
+      // Not available — inline it
       const containNt = `<${parent}> <${PREFIXES.ldp}contains> <${resourceIri}> .`;
       const parentDoc = await storage.get(`doc:${parent}:${parent}`);
-      await storage.put(`doc:${parent}:${parent}`, (parentDoc || '') + '\n' + containNt);
-
-      // Update parent index
-      const parentIdx = await storage.get(`idx:${parent}`);
-      if (parentIdx) {
-        const idx = JSON.parse(parentIdx);
-        if (!idx.subjects.includes(parent)) idx.subjects.push(parent);
-        await storage.put(`idx:${parent}`, JSON.stringify(idx));
+      if (parentDoc) {
+        if (!parentDoc.includes(`<${resourceIri}>`)) {
+          await storage.put(`doc:${parent}:${parent}`, parentDoc + '\n' + containNt);
+        }
+      } else {
+        await storage.put(`doc:${parent}:${parent}`, containNt);
       }
-
-      const headers = solidHeaders(resourceIri, isContainer(resourceIri));
-      headers.set('Location', resourceIri);
-      return new Response(null, { status: 201, headers });
     }
-    return new Response('Forbidden', { status: 403 });
   }
 
-  const result = await orchestrator.insert(nquads, agent);
-  if (result.type === 'auth_error') return new Response('Forbidden', { status: 403 });
-  if (result.type === 'validation_error') return new Response(result.report_json, { status: 422 });
-  if (result.type === 'error') return new Response(result.message, { status: 500 });
-
-  return new Response(null, { status: 201, headers: { 'Location': resourceIri } });
+  const status = existingIdx ? 204 : 201;
+  const headers = solidHeaders(resourceIri, isContainer(resourceIri));
+  if (status === 201) headers.set('Location', resourceIri);
+  return new Response(null, { status, headers });
 }
 
 async function handlePost(reqCtx, resourceIri) {
   const { request, orchestrator, config, url, storage } = reqCtx;
   const agent = reqCtx.user ? config.webId : null;
 
+  // Normalize: treat /path as /path/ for POST (container operations)
   if (!isContainer(resourceIri)) {
-    return new Response('POST is only supported on containers', { status: 405 });
+    resourceIri = resourceIri + '/';
   }
-  if (!agent) return new Response('Unauthorized', { status: 401 });
+  if (!agent) {
+    console.log(`[ldp] POST ${resourceIri} rejected: no authenticated agent`);
+    return new Response('Unauthorized', { status: 401 });
+  }
+  console.log(`[ldp] POST ${resourceIri} by ${agent} slug=${request.headers.get('Slug') || '(none)'}`);
 
   const slug = request.headers.get('Slug') || crypto.randomUUID();
   const linkHeader = request.headers.get('Link') || '';
@@ -389,37 +403,40 @@ async function handlePatch(reqCtx, resourceIri) {
 }
 
 async function handleDelete(reqCtx, resourceIri) {
-  const { orchestrator, config } = reqCtx;
-  const agent = reqCtx.user ? config.webId : null;
+  const { config, storage, env } = reqCtx;
+  if (!reqCtx.user) return new Response('Unauthorized', { status: 401 });
+  if (reqCtx.user !== config.username) return new Response('Forbidden', { status: 403 });
 
-  // Delete all triples in the resource graph
-  const sparql = `CONSTRUCT { ?s ?p ?o } WHERE { GRAPH <${resourceIri}> { ?s ?p ?o } }`;
-  const existing = await orchestrator.query(sparql, [resourceIri], agent);
-
-  if (existing.type === 'auth_error') return new Response('Forbidden', { status: 403 });
-
-  if (existing.type === 'query_results') {
-    const triples = sparqlJsonToTriples(JSON.parse(existing.sparql_json));
-    if (triples.length > 0) {
-      const nquads = triples.map(t =>
-        `${t.subject} ${t.predicate} ${t.object} <${resourceIri}> .`
-      ).join('\n');
-      await orchestrator.delete(nquads, agent);
+  // Delete all KV entries for this resource
+  const idx = await storage.get(`idx:${resourceIri}`);
+  if (idx) {
+    const parsed = JSON.parse(idx);
+    for (const subj of parsed.subjects || []) {
+      await storage.delete(`doc:${resourceIri}:${subj}`);
     }
+    await storage.delete(`idx:${resourceIri}`);
   }
+
+  // Delete blob, metadata, ACL, ACP
+  try { await storage.deleteBlob(`blob:${resourceIri}`); } catch {}
+  await storage.delete(`doc:${resourceIri}.meta:${resourceIri}`);
+  await storage.delete(`acl:${resourceIri}`);
+  await env.APPDATA.delete(`acp:${resourceIri}`);
 
   // Remove containment from parent
   const parent = parentContainer(resourceIri);
   if (parent) {
-    const containment = `${iri(parent)} ${iri(PREFIXES.ldp + 'contains')} ${iri(resourceIri)} ${iri(parent)} .`;
-    await orchestrator.delete(containment, agent);
+    const docKey = `doc:${parent}:${parent}`;
+    const parentDoc = await storage.get(docKey);
+    if (parentDoc) {
+      const triples = parseNTriples(parentDoc);
+      const filtered = triples.filter(t =>
+        !(t.predicate.includes('contains') && t.object.includes(resourceIri.replace(/[<>]/g, '')))
+      );
+      const { serializeNTriples: serNT } = await import('../rdf/ntriples.js');
+      await storage.put(docKey, serNT(filtered));
+    }
   }
-
-  // Delete ACL
-  await reqCtx.storage.delete(`acl:${resourceIri}`);
-
-  // Delete binary blob if exists
-  try { await reqCtx.storage.deleteBlob(`blob:${resourceIri}`); } catch {}
 
   return new Response(null, { status: 204 });
 }
@@ -506,22 +523,53 @@ function parseSparqlUpdate(body, baseIri) {
   const deleteTriples = [];
   const insertTriples = [];
 
-  // Simple SPARQL Update parser for DELETE DATA { } INSERT DATA { } patterns
-  const deleteMatch = body.match(/DELETE\s+DATA\s*\{([^}]*)\}/is);
-  const insertMatch = body.match(/INSERT\s+DATA\s*\{([^}]*)\}/is);
-
-  // Also handle DELETE { } INSERT { } WHERE { } pattern
-  const diMatch = body.match(/DELETE\s*\{([^}]*)\}\s*INSERT\s*\{([^}]*)\}\s*WHERE/is);
-
-  if (deleteMatch) {
-    deleteTriples.push(...parseTurtle(deleteMatch[1], baseIri));
+  // Extract PREFIX declarations (they apply to the whole update)
+  const prefixLines = [];
+  for (const match of body.matchAll(/PREFIX\s+(\S+)\s+<([^>]+)>/gi)) {
+    prefixLines.push(`@prefix ${match[1]} <${match[2]}> .`);
   }
-  if (insertMatch) {
-    insertTriples.push(...parseTurtle(insertMatch[1], baseIri));
+  const prefixBlock = prefixLines.join('\n');
+
+  // Extract brace-delimited blocks, handling balanced braces
+  function extractBlock(str, startIdx) {
+    let depth = 0;
+    let start = -1;
+    for (let i = startIdx; i < str.length; i++) {
+      if (str[i] === '{') { if (depth === 0) start = i + 1; depth++; }
+      else if (str[i] === '}') { depth--; if (depth === 0) return str.slice(start, i); }
+    }
+    return '';
   }
-  if (diMatch) {
-    deleteTriples.push(...parseTurtle(diMatch[1], baseIri));
-    insertTriples.push(...parseTurtle(diMatch[2], baseIri));
+
+  // INSERT DATA { ... }
+  const insIdx = body.search(/INSERT\s+DATA\s*\{/i);
+  if (insIdx >= 0) {
+    const blockStart = body.indexOf('{', insIdx);
+    const block = extractBlock(body, blockStart);
+    insertTriples.push(...parseTurtle(prefixBlock + '\n' + block, baseIri));
+  }
+
+  // DELETE DATA { ... }
+  const delIdx = body.search(/DELETE\s+DATA\s*\{/i);
+  if (delIdx >= 0) {
+    const blockStart = body.indexOf('{', delIdx);
+    const block = extractBlock(body, blockStart);
+    deleteTriples.push(...parseTurtle(prefixBlock + '\n' + block, baseIri));
+  }
+
+  // DELETE { ... } INSERT { ... } WHERE { ... }
+  const diIdx = body.search(/DELETE\s*\{/i);
+  if (diIdx >= 0 && insIdx < 0 && delIdx < 0) {
+    const delBlockStart = body.indexOf('{', diIdx);
+    const delBlock = extractBlock(body, delBlockStart);
+    deleteTriples.push(...parseTurtle(prefixBlock + '\n' + delBlock, baseIri));
+
+    const afterDel = delBlockStart + delBlock.length + 2;
+    const insPartIdx = body.indexOf('{', afterDel);
+    if (insPartIdx >= 0) {
+      const insBlock = extractBlock(body, insPartIdx);
+      insertTriples.push(...parseTurtle(prefixBlock + '\n' + insBlock, baseIri));
+    }
   }
 
   return { deleteTriples, insertTriples };

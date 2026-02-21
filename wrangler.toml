@@ -2,6 +2,11 @@ name = "paa-pub"
 main = "src/index.js"
 compatibility_date = "2024-09-23"
 
+[alias]
+"@s20e/host-core" = "../s20e/packages/s20e-host-core/src/index.ts"
+"@s20e/adapters/cloudflare" = "../s20e/packages/s20e-adapters/src/cloudflare.ts"
+"@s20e/kernel" = "../s20e/packages/s20e-kernel/mod.ts"
+
 [vars]
 PAA_USERNAME = "admin"
 # PAA_PASSWORD set via `wrangler secret put PAA_PASSWORD`
