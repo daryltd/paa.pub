@@ -31,3 +31,7 @@ th { font-weight: 600; font-size: 0.85rem; color: #666; }
 a { color: #1a1a2e; }
 .mono { font-family: "SF Mono", Monaco, "Cascadia Code", monospace; font-size: 0.85rem; }
 .text-muted { color: #666; font-size: 0.85rem; }
+dialog { border: none; border-radius: 8px; padding: 1.5rem; max-width: 420px; width: calc(100% - 2rem); box-shadow: 0 8px 30px rgba(0,0,0,0.2); font-family: inherit; color: #1a1a2e; margin: auto; }
+dialog::backdrop { background: rgba(0,0,0,0.4); }
+dialog p { margin-bottom: 1rem; line-height: 1.5; }
+dialog .dialog-actions { display: flex; gap: 0.5rem; justify-content: flex-end; }

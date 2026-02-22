@@ -20,6 +20,7 @@ import { renderDashboard } from './ui/pages/dashboard.js';
 import { renderActivityPage } from './ui/pages/activity.js';
 import { renderStoragePage, handleStorageAction } from './ui/pages/storage.js';
 import { renderAclEditor, handleAclUpdate } from './ui/pages/acl-editor.js';  // ACP editor (file retains old name for git history)
+import { renderProfileEditor, handleProfileUpdate, handleProfileIndexReset } from './ui/pages/profile-editor.js';
 import { handleDiscovery, handleJwks, handleRegister, handleAuthorize, handleToken, handleUserInfo, verifyAccessToken } from './oidc.js';
 
 let kernel = null;
@@ -59,6 +60,11 @@ function buildRouter() {
   router.post('/storage/**', handleStorageAction);
   router.get('/acp/**', renderAclEditor);
   router.post('/acp/**', handleAclUpdate);
+  // Profile editor
+  router.get('/profile', renderProfileEditor);
+  router.post('/profile', handleProfileUpdate);
+  router.post('/profile/reset-index', handleProfileIndexReset);
+
   // Legacy /acl/ redirect
   router.get('/acl/**', (ctx) => {
     const path = ctx.url.pathname.replace(/^\/acl\//, '');

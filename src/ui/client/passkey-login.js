@@ -4,7 +4,7 @@ if (window.PublicKeyCredential) {
 async function passkeyLogin() {
   try {
     var beginRes = await fetch('/webauthn/login/begin', { method: 'POST' });
-    if (!beginRes.ok) { alert('No passkeys registered'); return; }
+    if (!beginRes.ok) { await paaAlert('No passkeys registered'); return; }
     var options = await beginRes.json();
     options.challenge = base64ToBuffer(options.challenge);
     if (options.allowCredentials) {
@@ -29,6 +29,6 @@ async function passkeyLogin() {
       body: body,
     });
     if (completeRes.ok) { window.location.href = '/dashboard'; }
-    else { alert('Passkey authentication failed'); }
-  } catch (e) { console.error(e); alert('Passkey error: ' + e.message); }
+    else { await paaAlert('Passkey authentication failed'); }
+  } catch (e) { console.error(e); await paaAlert('Passkey error: ' + e.message); }
 }

@@ -5,12 +5,15 @@ import Mustache from 'mustache';
 import layoutTemplate from './templates/layout.html';
 import navPartial from './templates/partials/nav.html';
 import baseStyles from './styles/base.css';
+import dialogScript from './client/dialog.js';
 
 function renderNav(user, active) {
   return Mustache.render(navPartial, {
     user,
+    username: user,
     items: [
       { href: '/dashboard', label: 'Dashboard', id: 'dashboard' },
+      { href: '/profile', label: 'Profile', id: 'profile' },
       { href: '/activity', label: 'Activity', id: 'activity' },
       { href: '/storage/', label: 'Storage', id: 'storage' },
     ].map(i => ({ ...i, activeClass: active === i.id ? 'active' : '' })),
@@ -30,7 +33,7 @@ function renderNav(user, active) {
 export function renderPage(title, bodyTemplate, data, opts = {}) {
   const nav = opts.user ? renderNav(opts.user, opts.nav) : '';
   const body = Mustache.render(bodyTemplate, data);
-  const html = Mustache.render(layoutTemplate, { title, styles: baseStyles, nav, body });
+  const html = Mustache.render(layoutTemplate, { title, styles: baseStyles, nav, body, dialogScript });
   return htmlResponse(html);
 }
 
@@ -54,7 +57,7 @@ export function renderPartial(template, data) {
  */
 export function htmlPage(title, body, opts = {}) {
   const nav = opts.user ? renderNav(opts.user, opts.nav) : '';
-  return Mustache.render(layoutTemplate, { title, styles: baseStyles, nav, body });
+  return Mustache.render(layoutTemplate, { title, styles: baseStyles, nav, body, dialogScript });
 }
 
 export function escapeHtml(str) {

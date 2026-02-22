@@ -26,6 +26,15 @@
       {{/modeOptions}}
     </div>
 
+    {{#isInheritMode}}
+    <div style="background: #f0f4ff; border-radius: 4px; padding: 0.75rem; margin-bottom: 1rem; font-size: 0.9rem;">
+      Effective policy: <strong>{{effectiveLabel}}</strong>
+      {{#effectiveSource}}
+      <span class="text-muted"> — inherited from <span class="mono">{{effectiveSource}}</span></span>
+      {{/effectiveSource}}
+    </div>
+    {{/isInheritMode}}
+
     <div id="custom-agents" style="display: {{customDisplay}}; margin-bottom: 1rem;">
       <div class="form-group">
         <label for="agents">Allowed WebIDs (one per line)</label>
@@ -34,14 +43,13 @@
       </div>
     </div>
 
-    {{#isDir}}
-    <div class="form-group">
+    <div id="inherit-option" class="form-group" style="display: {{#showInheritCheckbox}}block{{/showInheritCheckbox}}{{^showInheritCheckbox}}none{{/showInheritCheckbox}};">
       <label>
         <input type="checkbox" name="inherit" value="1" {{{inheritChecked}}}>
-        Apply to all contents (children inherit this policy)
+        Allow children to inherit this policy
       </label>
+      <div class="text-muted" style="font-size: 0.8rem; margin-top: 0.15rem;">When unchecked, resources inside this container must set their own policy.</div>
     </div>
-    {{/isDir}}
 
     <div style="display: flex; gap: 0.5rem;">
       <button type="submit" class="btn">Save Policy</button>

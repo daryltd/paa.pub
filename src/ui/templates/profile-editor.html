@@ -1,0 +1,110 @@
+<h1>Edit Profile</h1>
+
+{{#success}}<div class="success">{{success}}</div>{{/success}}
+{{#error}}<div class="error">{{error}}</div>{{/error}}
+
+<form method="POST" action="/profile">
+  <div class="card">
+    <h2>Profile Fields</h2>
+
+    <div class="form-group">
+      <label for="name">Name (foaf:name)</label>
+      <input type="text" id="name" name="name" value="{{name}}" placeholder="Your display name">
+    </div>
+
+    <div class="form-group">
+      <label for="nick">Nickname (foaf:nick)</label>
+      <input type="text" id="nick" name="nick" value="{{nick}}" placeholder="Short handle or alias">
+    </div>
+
+    <div class="form-group">
+      <label for="img">Avatar URL (foaf:img)</label>
+      <input type="url" id="img" name="img" value="{{img}}" placeholder="https://example.com/photo.jpg">
+    </div>
+
+    <div class="form-group">
+      <label for="email">Email (foaf:mbox)</label>
+      <input type="text" id="email" name="email" value="{{email}}" placeholder="you@example.com">
+    </div>
+
+    <div class="form-group">
+      <label for="homepage">Homepage (foaf:homepage)</label>
+      <input type="url" id="homepage" name="homepage" value="{{homepage}}" placeholder="https://yoursite.com">
+    </div>
+
+    <div class="form-group">
+      <label for="bio">Bio (vcard:note)</label>
+      <textarea id="bio" name="bio" placeholder="A short bio about yourself">{{bio}}</textarea>
+    </div>
+
+    <div class="form-group">
+      <label for="role">Role (vcard:role)</label>
+      <input type="text" id="role" name="role" value="{{role}}" placeholder="Developer, Artist, etc.">
+    </div>
+
+    <div class="form-group">
+      <label for="description">Description (schema:description)</label>
+      <textarea id="description" name="description" placeholder="A longer description">{{description}}</textarea>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Custom Triples</h2>
+    <p class="text-muted" style="margin-bottom: 0.75rem;">Add custom predicate-object pairs for your WebID subject.</p>
+
+    <div id="custom-triples">
+      {{#customTriples}}
+      <div class="custom-triple-row" style="display: flex; gap: 0.5rem; margin-bottom: 0.5rem; align-items: center;">
+        <input type="text" name="custom_predicate[]" value="{{predicate}}" placeholder="Predicate IRI" style="flex: 1;">
+        <input type="text" name="custom_object[]" value="{{object}}" placeholder="Object value" style="flex: 1;">
+        <button type="button" class="btn btn-secondary" onclick="this.parentElement.remove()" style="padding: 0.35rem 0.6rem;">Remove</button>
+      </div>
+      {{/customTriples}}
+    </div>
+
+    <button type="button" class="btn btn-secondary" onclick="addCustomTriple()" style="margin-top: 0.5rem;">Add Triple</button>
+  </div>
+
+  <div style="margin-top: 1rem;">
+    <button type="submit" class="btn">Save Profile</button>
+    <a href="/dashboard" class="btn btn-secondary" style="margin-left: 0.5rem;">Cancel</a>
+  </div>
+</form>
+
+<div class="card" style="margin-top: 1rem;">
+  <h2>Profile Page</h2>
+  <p class="text-muted" style="margin-bottom: 0.75rem;">Your public profile page at <a href="/{{username}}/" class="mono">/{{username}}/</a> is rendered from an index.html template using your profile data. If you have customized it and want to start over, you can reset it to the default.</p>
+  <form method="POST" action="/profile/reset-index">
+    <button type="submit" class="btn btn-secondary" data-confirm="Reset your profile page to the default template? Any customizations to index.html will be lost.">Reset Profile Page to Default</button>
+  </form>
+</div>
+
+{{#hasSystemTriples}}
+<div class="card" style="margin-top: 1rem;">
+  <h2>System Triples (read-only)</h2>
+  <table>
+    <thead><tr><th>Predicate</th><th>Object</th></tr></thead>
+    <tbody>
+      {{#systemTriples}}
+      <tr>
+        <td class="mono">{{predicateShort}}</td>
+        <td class="mono" style="word-break: break-all;">{{object}}</td>
+      </tr>
+      {{/systemTriples}}
+    </tbody>
+  </table>
+</div>
+{{/hasSystemTriples}}
+
+<script>
+function addCustomTriple() {
+  var container = document.getElementById('custom-triples');
+  var row = document.createElement('div');
+  row.className = 'custom-triple-row';
+  row.style.cssText = 'display: flex; gap: 0.5rem; margin-bottom: 0.5rem; align-items: center;';
+  row.innerHTML = '<input type="text" name="custom_predicate[]" placeholder="Predicate IRI" style="flex: 1;">' +
+    '<input type="text" name="custom_object[]" placeholder="Object value" style="flex: 1;">' +
+    '<button type="button" class="btn btn-secondary" onclick="this.parentElement.remove()" style="padding: 0.35rem 0.6rem;">Remove</button>';
+  container.appendChild(row);
+}
+</script>

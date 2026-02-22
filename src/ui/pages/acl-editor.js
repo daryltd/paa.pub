@@ -2,6 +2,7 @@
  * Access Control Policy (ACP) editor with simplified interface.
  *
  * Modes:
+ *   inherit    — Inherit policy from parent container (default for new resources)
  *   public     — Anyone can read
  *   unlisted   — Anyone with the link can read (not shown in container listings)
  *   friends    — Only WebIDs in the friends list can read
@@ -10,6 +11,13 @@
  *
  * The owner always has full access (enforced by session/token auth).
  * ACP policies are stored as JSON in APPDATA KV at key `acp:{resourceIri}`.
+ *
+ * Inheritance:
+ *   Resources default to "inherit" mode, deferring to the nearest ancestor
+ *   container with an explicit policy. Container policies have an `inherit`
+ *   flag (default true) — when false, children cannot inherit through them
+ *   and must set their own policy. The root user container has no parent
+ *   and cannot use inherit mode.
  */
 import { renderPage } from '../shell.js';
 import template from '../templates/acl-editor.html';
@@ -29,20 +37,41 @@ export async function renderAclEditor(reqCtx) {
   const resourceIri = `${config.baseUrl}/${path}`;
   const isDir = path.endsWith('/');
 
+  // The root user container has no parent to inherit from
+  const isRootContainer = resourceIri === `${config.baseUrl}/${username}/`;
+
   // Load current policy
   const policy = await loadPolicy(env.APPDATA, resourceIri);
   const friends = await loadFriends(env.APPDATA, username);
 
-  const modeOptions = [
+  // Resolve the effective policy when in inherit mode (or no policy set)
+  let effectiveLabel = '';
+  let effectiveSource = '';
+  if (!isRootContainer && (policy.mode === 'inherit' || !policy.mode)) {
+    const resolved = await resolveInheritedPolicy(env.APPDATA, resourceIri);
+    if (resolved) {
+      effectiveLabel = MODE_LABELS[resolved.policy.mode] || resolved.policy.mode;
+      effectiveSource = resolved.source;
+    } else {
+      effectiveLabel = 'Private';
+      effectiveSource = '(default)';
+    }
+  }
+
+  const allModes = [
+    ...(!isRootContainer ? [{ value: 'inherit', label: 'Inherit from parent', description: 'Use the same access policy as the parent container.' }] : []),
     { value: 'public', label: 'Public', description: 'Anyone can discover and read this resource.' },
     { value: 'unlisted', label: 'Public (unlisted)', description: 'Anyone with the direct link can read, but not listed in container indexes.' },
     { value: 'friends', label: 'Friends', description: 'Only people in your friends list can read.' },
     { value: 'private', label: 'Private', description: 'Only you can access this resource.' },
     { value: 'custom', label: 'Custom', description: 'Grant read access to specific WebIDs.' },
-  ].map(opt => ({
+  ];
+
+  const currentMode = policy.mode || (isRootContainer ? 'private' : 'inherit');
+  const modeOptions = allModes.map(opt => ({
     ...opt,
-    checked: policy.mode === opt.value ? 'checked' : '',
-    bgColor: policy.mode === opt.value ? '#f0f0ff' : 'transparent',
+    checked: currentMode === opt.value ? 'checked' : '',
+    bgColor: currentMode === opt.value ? '#f0f0ff' : 'transparent',
   }));
 
   return renderPage('Access Policy', template, {
@@ -50,9 +79,13 @@ export async function renderAclEditor(reqCtx) {
     isDir,
     path,
     modeOptions,
-    customDisplay: policy.mode === 'custom' ? 'block' : 'none',
+    customDisplay: currentMode === 'custom' ? 'block' : 'none',
     agentsText: (policy.agents || []).join('\n'),
+    showInheritCheckbox: isDir && currentMode !== 'inherit',
     inheritChecked: policy.inherit !== false ? 'checked' : '',
+    isInheritMode: currentMode === 'inherit',
+    effectiveLabel,
+    effectiveSource,
     friends,
     hasFriends: friends.length > 0,
     turtlePolicy: policyToTurtle(policy, resourceIri, config.webId, friends),
@@ -77,12 +110,19 @@ export async function handleAclUpdate(reqCtx) {
 
   if (action === 'save_policy') {
     const mode = form.get('mode') || 'private';
-    const agentsRaw = form.get('agents') || '';
-    const agents = agentsRaw.split('\n').map(a => a.trim()).filter(Boolean);
-    const inherit = form.get('inherit') === '1';
 
-    const policy = { mode, agents, inherit };
-    await env.APPDATA.put(`acp:${resourceIri}`, JSON.stringify(policy));
+    if (mode === 'inherit') {
+      // Store explicit inherit marker
+      await env.APPDATA.put(`acp:${resourceIri}`, JSON.stringify({ mode: 'inherit' }));
+    } else {
+      const agentsRaw = form.get('agents') || '';
+      const agents = agentsRaw.split('\n').map(a => a.trim()).filter(Boolean);
+      const isDir = resourceIri.endsWith('/');
+      const inherit = isDir ? form.get('inherit') === '1' : true;
+
+      const policy = { mode, agents, inherit };
+      await env.APPDATA.put(`acp:${resourceIri}`, JSON.stringify(policy));
+    }
   }
 
   if (action === 'add_friend') {
@@ -108,11 +148,46 @@ export async function handleAclUpdate(reqCtx) {
 
 // ── Policy helpers ───────────────────────────────────
 
-const DEFAULT_POLICY = { mode: 'private', agents: [], inherit: true };
+const DEFAULT_POLICY = { mode: 'inherit', agents: [], inherit: true };
+
+const MODE_LABELS = {
+  public: 'Public',
+  unlisted: 'Public (unlisted)',
+  friends: 'Friends',
+  private: 'Private',
+  custom: 'Custom',
+  inherit: 'Inherit from parent',
+};
 
 async function loadPolicy(kv, resourceIri) {
   const data = await kv.get(`acp:${resourceIri}`);
   return data ? JSON.parse(data) : { ...DEFAULT_POLICY };
+}
+
+/**
+ * Walk up from a resource to find the nearest ancestor with an explicit (non-inherit) policy.
+ * Returns { policy, source } or null if nothing found.
+ */
+async function resolveInheritedPolicy(kv, resourceIri) {
+  let uri = resourceIri;
+  while (true) {
+    const parsed = new URL(uri);
+    const path = parsed.pathname;
+    const trimmed = path.endsWith('/') ? path.slice(0, -1) : path;
+    const lastSlash = trimmed.lastIndexOf('/');
+    if (lastSlash <= 0) return null;
+    uri = `${parsed.origin}${trimmed.slice(0, lastSlash + 1)}`;
+
+    const data = await kv.get(`acp:${uri}`);
+    if (!data) continue;
+
+    const policy = JSON.parse(data);
+    if (policy.inherit === false) {
+      return { policy: { mode: 'private' }, source: uri + ' (inheritance blocked)' };
+    }
+    if (policy.mode === 'inherit') continue;
+    return { policy, source: uri };
+  }
 }
 
 async function loadFriends(kv, username) {
@@ -122,7 +197,13 @@ async function loadFriends(kv, username) {
 
 /**
  * Check if a resource is readable by a given agent based on ACP.
- * Walks up the container hierarchy looking for an inherited policy.
+ * Walks up the container hierarchy looking for an applicable policy.
+ *
+ * Inheritance rules:
+ *  - A resource with mode "inherit" (or no policy at all) defers to its parent.
+ *  - A parent container with inherit: false blocks propagation — children that
+ *    reach it during the walk get the default (private).
+ *  - A parent container with inherit: true (or unset) applies its policy to children.
  *
  * @param {KVNamespace} kv - APPDATA
  * @param {string} resourceIri
@@ -135,21 +216,37 @@ export async function checkAcpAccess(kv, resourceIri, agentWebId, ownerWebId, us
   // Owner always has full access
   if (agentWebId === ownerWebId) return { readable: true, listed: true };
 
-  // Walk up the hierarchy to find applicable policy
-  let uri = resourceIri;
-  while (uri) {
-    const data = await kv.get(`acp:${uri}`);
-    if (data) {
-      const policy = JSON.parse(data);
-      return evaluatePolicy(policy, agentWebId, kv, username);
+  // Check the resource's own policy first
+  const ownData = await kv.get(`acp:${resourceIri}`);
+  if (ownData) {
+    const ownPolicy = JSON.parse(ownData);
+    if (ownPolicy.mode !== 'inherit') {
+      return evaluatePolicy(ownPolicy, agentWebId, kv, username);
     }
-    // Go up to parent
+    // mode is "inherit" — fall through to parent walk
+  }
+
+  // Walk up the container hierarchy
+  let uri = resourceIri;
+  while (true) {
     const parsed = new URL(uri);
     const path = parsed.pathname;
     const trimmed = path.endsWith('/') ? path.slice(0, -1) : path;
     const lastSlash = trimmed.lastIndexOf('/');
     if (lastSlash <= 0) break;
     uri = `${parsed.origin}${trimmed.slice(0, lastSlash + 1)}`;
+
+    const data = await kv.get(`acp:${uri}`);
+    if (!data) continue;
+
+    const policy = JSON.parse(data);
+    // If this ancestor's policy doesn't propagate to children, stop
+    if (policy.inherit === false) {
+      return { readable: false, listed: false };
+    }
+    // Skip "inherit" policies — keep walking up
+    if (policy.mode === 'inherit') continue;
+    return evaluatePolicy(policy, agentWebId, kv, username);
   }
 
   // No policy found — default to private
@@ -178,6 +275,10 @@ async function evaluatePolicy(policy, agentWebId, kv, username) {
 }
 
 function policyToTurtle(policy, resourceIri, ownerWebId, friends) {
+  if (policy.mode === 'inherit') {
+    return '# No explicit policy — inheriting from parent container.';
+  }
+
   const acrIri = `${resourceIri}.acr`;
   const lines = [
     '@prefix acp: <http://www.w3.org/ns/solid/acp#> .',

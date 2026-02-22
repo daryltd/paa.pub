@@ -8,6 +8,7 @@ import { hashPassword } from './auth/password.js';
 import { generateRSAKeyPair } from './crypto/rsa.js';
 import { iri, literal, typedLiteral } from './rdf/ntriples.js';
 import { PREFIXES } from './rdf/prefixes.js';
+import defaultIndexTemplate from './ui/templates/default-index.html';
 
 let bootstrapped = false;
 
@@ -165,6 +166,32 @@ async function bootstrap(env, config, storage) {
   const existingSettings = await storage.get(`doc:${settingsIri}:${settingsIri}`);
   await storage.put(`doc:${settingsIri}:${settingsIri}`,
     (existingSettings || '') + '\n' + settingsContainsNt);
+
+  // 6c. Create default index.html in root container
+  const rootContainerIri = `${baseUrl}/${username}/`;
+  const indexHtmlIri = `${rootContainerIri}index.html`;
+  const existingIndexBlob = await storage.getBlob(`blob:${indexHtmlIri}`);
+  if (!existingIndexBlob) {
+    const htmlBytes = new TextEncoder().encode(defaultIndexTemplate);
+    await storage.putBlob(`blob:${indexHtmlIri}`, htmlBytes, 'text/html');
+
+    // Add index.html resource metadata to KV
+    await storage.put(`idx:${indexHtmlIri}`, JSON.stringify({ binary: true }));
+    const metaDoc = `${iri(indexHtmlIri)} <${PREFIXES.dcterms}format> "text/html" .`;
+    await storage.put(`doc:${indexHtmlIri}.meta:${indexHtmlIri}`, metaDoc);
+
+    // Add index.html to root container's containment triples
+    const indexContainsNt = `${iri(rootContainerIri)} ${iri(ldp + 'contains')} ${iri(indexHtmlIri)} .`;
+    const existingRootDoc = await storage.get(`doc:${rootContainerIri}:${rootContainerIri}`);
+    if (existingRootDoc && !existingRootDoc.includes(indexHtmlIri)) {
+      await storage.put(`doc:${rootContainerIri}:${rootContainerIri}`, existingRootDoc + '\n' + indexContainsNt);
+    }
+
+    // ACP: public read for index.html
+    await env.APPDATA.put(`acp:${indexHtmlIri}`, JSON.stringify({
+      mode: 'public', agents: [], inherit: false,
+    }));
+  }
 
   // 7. Mark as initialized and store the domain used
   await env.APPDATA.put('user_initialized', 'true');
@@ -326,3 +353,4 @@ function buildProfileNTriples(profileIri, webId, username, baseUrl, publicPem) {
     `${iri(keyId)} ${iri('https://w3id.org/security#publicKeyPem')} ${literal(publicPem)} .`,
   ].join('\n');
 }
+

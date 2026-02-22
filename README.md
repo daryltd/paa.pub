@@ -1,4 +1,4 @@
-# paa.pub
+# Kaiāulu Pa'a
 
 Single-user [Solid](https://solidproject.org/) + [ActivityPub](https://www.w3.org/TR/activitypub/) server on Cloudflare Workers.
 

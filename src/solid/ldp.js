@@ -4,10 +4,11 @@
  * Maps HTTP methods to s20e Orchestrator calls for RDF resources,
  * and handles binary resources via uploadBinary/serveBinary.
  */
+import Mustache from 'mustache';
 import { negotiateType, serializeRdf, wantsActivityPub } from './conneg.js';
 import { solidHeaders, buildWacAllow } from './headers.js';
 import { parseTurtle } from '../rdf/turtle-parser.js';
-import { parseNTriples, serializeNQuads, iri } from '../rdf/ntriples.js';
+import { parseNTriples, serializeNQuads, iri, unwrapIri, unwrapLiteral } from '../rdf/ntriples.js';
 import { isContainer, slugToName, addContainment, containerTypeQuads, parentContainer } from './containers.js';
 import { handleAclGet, handleAclPut, handleAclPatch, handleAclDelete, defaultAclNTriples } from './acl.js';
 import { checkAcpAccess } from '../ui/pages/acl-editor.js';
@@ -71,24 +72,33 @@ export async function handleLDP(reqCtx) {
     const indexBlob = await reqCtx.storage.getBlob(`blob:${indexIri}`);
     if (indexBlob) {
       // Check ACP on the index.html resource
-      if (reqCtx.user !== config.username) {
-        const agent = reqCtx.user ? config.webId : null;
-        const access = await checkAcpAccess(reqCtx.env.APPDATA, indexIri, agent, config.webId, config.username);
-        if (!access.readable) {
-          const status = agent ? 403 : 401;
-          const headers = new Headers({ 'Content-Type': 'application/json' });
-          if (!agent) headers.set('WWW-Authenticate', `Bearer realm="${config.baseUrl}", scope="openid webid"`);
-          return new Response(JSON.stringify({ error: agent ? 'forbidden' : 'unauthorized', message: 'Authentication required.' }), { status, headers });
+      const agent = reqCtx.user ? config.webId : null;
+      const access = await checkAcpAccess(reqCtx.env.APPDATA, indexIri, agent, config.webId, config.username);
+      if (!access.readable) {
+        return denyAccess(agent, config.baseUrl);
+      }
+      let htmlContent = new Uint8Array(indexBlob);
+
+      // For the root container, render index.html through Mustache with profile data
+      const rootContainerIri = `${config.baseUrl}/${config.username}/`;
+      if (resourceIri === rootContainerIri) {
+        try {
+          const profileData = await buildProfileTemplateData(reqCtx.storage, config);
+          const templateStr = new TextDecoder().decode(htmlContent);
+          const rendered = Mustache.render(templateStr, profileData);
+          htmlContent = new TextEncoder().encode(rendered);
+        } catch (e) {
+          console.error('Mustache render error for root index.html:', e);
+          // Fall through to serve raw blob on error
         }
       }
-      // Serve the raw HTML blob — set Content-Type explicitly and return
-      // without going through handleGet which would serve Turtle
+
       const htmlHeaders = new Headers();
       htmlHeaders.set('Content-Type', 'text/html; charset=utf-8');
-      htmlHeaders.set('Cache-Control', 'no-cache');
+      htmlHeaders.set('Cache-Control', access.listed ? 'public, no-cache' : 'private, no-store');
       htmlHeaders.set('X-Content-Type-Options', 'nosniff');
       if (request.method === 'HEAD') return new Response(null, { status: 200, headers: htmlHeaders });
-      return new Response(new Uint8Array(indexBlob), { status: 200, headers: htmlHeaders });
+      return new Response(htmlContent, { status: 200, headers: htmlHeaders });
     }
     // Fall through to container RDF listing
   }
@@ -115,40 +125,22 @@ async function handleGet(reqCtx, resourceIri) {
     const blob = await storage.getBlob(`blob:${resourceIri}`);
     if (!blob) return new Response('Not Found', { status: 404 });
 
-    // Serve orphan blob — check ACP first
-    if (reqCtx.user !== config.username) {
-      const access = await checkAcpAccess(env.APPDATA, resourceIri, agent, config.webId, config.username);
-      if (!access.readable) {
-        const status = agent ? 403 : 401;
-        const headers = new Headers({ 'Content-Type': 'application/json' });
-        if (!agent) headers.set('WWW-Authenticate', `Bearer realm="${config.baseUrl}", scope="openid webid"`);
-        return new Response(JSON.stringify({
-          error: agent ? 'forbidden' : 'unauthorized',
-          message: agent ? 'You do not have access to this resource.' : 'Authentication required.',
-          resource: resourceIri,
-        }), { status, headers });
-      }
+    // Serve orphan blob — always check ACP (owner handled inside checkAcpAccess)
+    const access = await checkAcpAccess(env.APPDATA, resourceIri, agent, config.webId, config.username);
+    if (!access.readable) {
+      return denyAccess(agent, config.baseUrl);
     }
     const headers = solidHeaders(resourceIri, false);
     headers.set('Content-Type', 'application/octet-stream');
+    headers.set('Cache-Control', 'private, no-store');
     if (request.method === 'HEAD') return new Response(null, { status: 200, headers });
     return new Response(blob, { status: 200, headers });
   }
 
-  // Check ACP access for non-owner requests
-  if (reqCtx.user !== config.username) {
-    const access = await checkAcpAccess(env.APPDATA, resourceIri, agent, config.webId, config.username);
-    if (!access.readable) {
-      const status = agent ? 403 : 401;
-      const headers = new Headers();
-      headers.set('Content-Type', 'application/json');
-      if (!agent) headers.set('WWW-Authenticate', `Bearer realm="${config.baseUrl}", scope="openid webid"`);
-      return new Response(JSON.stringify({
-        error: agent ? 'forbidden' : 'unauthorized',
-        message: agent ? 'You do not have access to this resource.' : 'Authentication required to access this resource.',
-        resource: resourceIri,
-      }), { status, headers });
-    }
+  // Check ACP access — always run (owner is handled inside checkAcpAccess)
+  const access = await checkAcpAccess(env.APPDATA, resourceIri, agent, config.webId, config.username);
+  if (!access.readable) {
+    return denyAccess(agent, config.baseUrl);
   }
 
   const isOwner = reqCtx.user === config.username;
@@ -172,6 +164,7 @@ async function handleGet(reqCtx, resourceIri) {
     const headers = solidHeaders(resourceIri, false);
     headers.set('Content-Type', ct);
     headers.set('WAC-Allow', wacAllow);
+    headers.set('Cache-Control', access.listed ? 'public, max-age=300' : 'private, no-store');
     if (request.method === 'HEAD') return new Response(null, { status: 200, headers });
     return new Response(blob, { status: 200, headers });
   }
@@ -194,6 +187,7 @@ async function handleGet(reqCtx, resourceIri) {
   const headers = solidHeaders(resourceIri, isContainer(resourceIri));
   headers.set('Content-Type', contentType);
   headers.set('WAC-Allow', wacAllow);
+  headers.set('Cache-Control', access.listed ? 'public, max-age=300' : 'private, no-store');
 
   if (request.method === 'HEAD') return new Response(null, { status: 200, headers });
   return new Response(body, { status: 200, headers });
@@ -456,6 +450,19 @@ function parseBody(body, contentType, baseIri) {
   return parseTurtle(body, baseIri);
 }
 
+/**
+ * Build a 401/403 deny response for ACP access failures.
+ */
+function denyAccess(agent, baseUrl) {
+  const status = agent ? 403 : 401;
+  const headers = new Headers({ 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
+  if (!agent) headers.set('WWW-Authenticate', `Bearer realm="${baseUrl}", scope="openid webid"`);
+  return new Response(JSON.stringify({
+    error: agent ? 'forbidden' : 'unauthorized',
+    message: agent ? 'You do not have access to this resource.' : 'Authentication required.',
+  }), { status, headers });
+}
+
 function jsonLdToTriples(doc) {
   const triples = [];
   const items = Array.isArray(doc) ? doc : [doc];
@@ -581,7 +588,7 @@ function buildMetadataNQuads(resourceIri, contentType, byteLength) {
 /**
  * Write triples for a resource directly to KV, grouped by subject.
  */
-async function writeTriplesToKV(storage, resourceIri, triples) {
+export async function writeTriplesToKV(storage, resourceIri, triples) {
   const bySubject = new Map();
   for (const t of triples) {
     const s = t.subject.startsWith('<') && t.subject.endsWith('>') ? t.subject.slice(1, -1) : t.subject;
@@ -595,6 +602,104 @@ async function writeTriplesToKV(storage, resourceIri, triples) {
   }
 
   await storage.put(`idx:${resourceIri}`, JSON.stringify({ subjects: [...bySubject.keys()] }));
+}
+
+/**
+ * Predicate-to-template-variable mapping for profile rendering.
+ */
+const PROFILE_PREDICATE_MAP = {
+  [`${PREFIXES.foaf}name`]: 'name',
+  [`${PREFIXES.foaf}nick`]: 'nick',
+  [`${PREFIXES.foaf}img`]: 'img',
+  [`${PREFIXES.foaf}mbox`]: 'email',
+  [`${PREFIXES.foaf}homepage`]: 'homepage',
+  [`${PREFIXES.vcard}note`]: 'bio',
+  [`${PREFIXES.vcard}role`]: 'role',
+  [`${PREFIXES.schema}description`]: 'description',
+};
+
+/**
+ * Shorten a full predicate IRI to a prefixed form (e.g. foaf:name).
+ */
+function shortenPredicate(predicateIri) {
+  for (const [prefix, ns] of Object.entries(PREFIXES)) {
+    if (predicateIri.startsWith(ns)) {
+      return `${prefix}:${predicateIri.slice(ns.length)}`;
+    }
+  }
+  return predicateIri;
+}
+
+/**
+ * Read all profile triples from KV for the WebID subject.
+ * Returns the raw triple array from idx + doc keys of the profile document.
+ */
+export async function readProfileTriples(storage, config) {
+  const profileIri = `${config.baseUrl}/${config.username}/profile/card`;
+  const webId = config.webId;
+  const allTriples = [];
+
+  const idx = await storage.get(`idx:${profileIri}`);
+  if (idx) {
+    const { subjects } = JSON.parse(idx);
+    for (const subj of subjects) {
+      const nt = await storage.get(`doc:${profileIri}:${subj}`);
+      if (nt) allTriples.push(...parseNTriples(nt));
+    }
+  }
+
+  return allTriples;
+}
+
+/**
+ * Build Mustache template data from profile triples.
+ */
+async function buildProfileTemplateData(storage, config) {
+  const allTriples = await readProfileTriples(storage, config);
+  const webId = config.webId;
+
+  const data = {
+    username: config.username,
+    webId,
+    domain: config.domain,
+    baseUrl: config.baseUrl,
+    triples: [],
+  };
+
+  // Only map triples whose subject is the WebID
+  for (const t of allTriples) {
+    const subjectIri = unwrapIri(t.subject);
+    if (subjectIri !== webId) continue;
+
+    const predicateIri = unwrapIri(t.predicate);
+    const varName = PROFILE_PREDICATE_MAP[predicateIri];
+
+    // Determine the object value
+    let objectValue;
+    if (t.object.startsWith('<')) {
+      objectValue = unwrapIri(t.object);
+    } else {
+      objectValue = unwrapLiteral(t.object);
+    }
+
+    if (varName) {
+      let val = objectValue;
+      // Strip mailto: for email
+      if (varName === 'email' && val.startsWith('mailto:')) {
+        val = val.slice(7);
+      }
+      data[varName] = val;
+    }
+
+    // Always add to the raw triples array
+    data.triples.push({
+      predicate: predicateIri,
+      predicateShort: shortenPredicate(predicateIri),
+      object: objectValue,
+    });
+  }
+
+  return data;
 }
 
 /**

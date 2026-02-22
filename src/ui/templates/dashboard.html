@@ -4,11 +4,20 @@
   <h2>Profile</h2>
   <table>
     <tr><td>Username</td><td class="mono">{{username}}</td></tr>
-    <tr><td>WebID</td><td class="mono"><a href="/{{username}}/profile/card">{{webId}}</a></td></tr>
-    <tr><td>Actor</td><td class="mono"><a href="/{{username}}/profile/card">{{actorId}}</a></td></tr>
+    <tr><td>WebID</td><td class="mono"><a href="{{ webId }}">{{webId}}</a></td></tr>
+    <tr><td>Actor</td><td class="mono"><a href="{{ actorId }}">{{actorId}}</a></td></tr>
     <tr><td>Domain</td><td class="mono">{{domain}}</td></tr>
   </table>
 </div>
+
+<!-- <div class="card">
+  <h2>Quick Links</h2>
+  <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+    <a href="/activity" class="btn">Activity Feed</a>
+    <a href="/storage/" class="btn btn-secondary">File Storage</a>
+    <a href="/.well-known/webfinger?resource=acct:{{{webfingerParam}}}" class="btn btn-secondary">WebFinger</a>
+  </div>
+</div> -->
 
 <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem;">
   <div class="card">
@@ -23,19 +32,26 @@
     <div class="text-muted">Posts</div>
     <div style="font-size: 2rem; font-weight: 700;">{{postCount}}</div>
   </div>
-  <div class="card">
-    <div class="text-muted">Storage Used</div>
-    <div style="font-size: 2rem; font-weight: 700;">{{{storageUsed}}}</div>
-  </div>
 </div>
 
+
 <div class="card">
-  <h2>Quick Links</h2>
-  <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
-    <a href="/activity" class="btn">Activity Feed</a>
-    <a href="/storage/" class="btn btn-secondary">File Storage</a>
-    <a href="/.well-known/webfinger?resource=acct:{{{webfingerParam}}}" class="btn btn-secondary">WebFinger</a>
-  </div>
+  <h2>Storage - {{{storageUsed}}} used</h2>
+  <p class="text-muted" style="margin-bottom: 0.75rem;">{{totalResources}} resource{{#totalResourcesPlural}}s{{/totalResourcesPlural}} across all containers</p>
+  {{#hasBreakdown}}
+  <table>
+    <thead><tr><th>Category</th><th style="text-align:right;">Size</th><th style="text-align:right;">Files</th></tr></thead>
+    <tbody>
+      {{#storageBreakdown}}
+      <tr>
+        <td>{{name}}</td>
+        <td class="mono" style="text-align:right;">{{size}}</td>
+        <td class="text-muted" style="text-align:right;">{{label}}</td>
+      </tr>
+      {{/storageBreakdown}}
+    </tbody>
+  </table>
+  {{/hasBreakdown}}
 </div>
 
 <div class="card">
@@ -57,9 +73,9 @@
         </td>
         <td class="text-muted">{{createdAt}}</td>
         <td>
-          <form method="POST" action="/webauthn/delete" onsubmit="return confirm('Delete this passkey?');">
+          <form method="POST" action="/webauthn/delete">
             <input type="hidden" name="credId" value="{{id}}">
-            <button type="submit" class="btn btn-secondary" style="padding:0.15rem 0.4rem;font-size:0.85rem;">Delete</button>
+            <button type="submit" class="btn btn-secondary" style="padding:0.15rem 0.4rem;font-size:0.85rem;" data-confirm="Delete this passkey?">Delete</button>
           </form>
         </td>
       </tr>

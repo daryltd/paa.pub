@@ -53,7 +53,7 @@
         <form method="POST" action="/storage/{{storagePath}}" class="inline" style="margin-left:0.5rem;">
           <input type="hidden" name="action" value="delete">
           <button type="submit" class="text-muted" style="background:none;border:none;cursor:pointer;font-size:0.8rem;color:#dc3545;padding:0;"
-            onclick="return confirm('Delete {{name}}?')">delete</button>
+            data-confirm="Delete {{name}}?">delete</button>
         </form>
       </td>
     </tr>
@@ -66,7 +66,7 @@
     <form method="POST" action="/storage/{{{path}}}" class="inline">
       <input type="hidden" name="action" value="delete">
       <button type="submit" class="btn btn-danger" style="font-size:0.8rem;"
-        onclick="return confirm('Delete this container and all its contents?')">Delete Container</button>
+        data-confirm="Delete this container and all its contents?">Delete Container</button>
     </form>
     {{/isRoot}}
   </div>
