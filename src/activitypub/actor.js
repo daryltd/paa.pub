@@ -1,5 +1,18 @@
 /**
- * Actor document (JSON-LD) and content-negotiated profile card.
+ * ActivityPub Actor document and content-negotiated profile card.
+ *
+ * The profile card endpoint (/{user}/profile/card) serves two representations
+ * based on the Accept header:
+ *
+ *   - `application/activity+json` or `application/ld+json` → ActivityPub Actor
+ *     JSON-LD document with inbox, outbox, followers, following endpoints,
+ *     and the RSA public key for HTTP Signature verification
+ *
+ *   - `text/turtle` or other RDF types → Solid WebID profile document
+ *     with foaf:Person triples, read from KV storage
+ *
+ * The /profile/card shortcut (without /{user}/ prefix) also works for
+ * single-user convenience.
  */
 import { wantsActivityPub, negotiateType, serializeRdf } from '../solid/conneg.js';
 import { solidHeaders, buildWacAllow } from '../solid/headers.js';

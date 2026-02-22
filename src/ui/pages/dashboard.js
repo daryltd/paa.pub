@@ -17,28 +17,26 @@ export async function renderDashboard(reqCtx) {
   const username = config.username;
 
   // Load stats
-  const [followersData, followingData, outboxData, quotaData] = await Promise.all([
+  const [followersData, followingData, outboxData, quotaData, pendingData] = await Promise.all([
     env.APPDATA.get(`ap_followers:${username}`),
     env.APPDATA.get(`ap_following:${username}`),
     env.APPDATA.get(`ap_outbox_index:${username}`),
     env.APPDATA.get(`quota:${username}`),
+    env.APPDATA.get(`ap_pending_follows:${username}`),
   ]);
 
   const followers = JSON.parse(followersData || '[]');
   const following = JSON.parse(followingData || '[]');
   const outbox = JSON.parse(outboxData || '[]');
   const quota = JSON.parse(quotaData || '{"usedBytes":0}');
+  const pendingFollows = JSON.parse(pendingData || '[]');
 
   // Load passkey list
   const credIds = JSON.parse(await env.APPDATA.get(`webauthn_creds:${username}`) || '[]');
-  const passkeys = [];
-  for (const id of credIds) {
-    const data = await env.APPDATA.get(`webauthn_cred:${username}:${id}`);
-    if (data) {
-      const cred = JSON.parse(data);
-      passkeys.push({ id, name: cred.name, createdAt: cred.createdAt });
-    }
-  }
+  const credResults = await Promise.all(
+    credIds.map(id => env.APPDATA.get(`webauthn_cred:${username}:${id}`).then(d => d ? { id, ...JSON.parse(d) } : null))
+  );
+  const passkeys = credResults.filter(Boolean).map(c => ({ id: c.id, name: c.name, createdAt: c.createdAt }));
 
   // Compute storage breakdown by resource type
   const breakdown = await computeStorageBreakdown(reqCtx.storage, config);
@@ -51,6 +49,8 @@ export async function renderDashboard(reqCtx) {
     followerCount: followers.length,
     followingCount: following.length,
     postCount: outbox.length,
+    pendingFollowCount: pendingFollows.length,
+    hasPendingFollows: pendingFollows.length > 0,
     storageUsed: formatBytes(quota.usedBytes),
     webfingerParam: encodeURIComponent(username) + '@' + encodeURIComponent(config.domain),
     passkeys,
@@ -106,44 +106,35 @@ async function collectResources(storage, containerIri, results) {
     }
   }
 
-  for (const uri of contained) {
-    if (uri.endsWith('/')) {
-      // Recurse into sub-container
-      await collectResources(storage, uri, results);
-      continue;
-    }
+  // Separate containers (recurse) from resources (process in parallel)
+  const subContainers = contained.filter(uri => uri.endsWith('/'));
+  const resources = contained.filter(uri => !uri.endsWith('/'));
 
-    const idx = await storage.get(`idx:${uri}`);
-    if (!idx) continue;
+  await Promise.all(subContainers.map(uri => collectResources(storage, uri, results)));
 
-    const parsed = JSON.parse(idx);
-    if (parsed.binary) {
-      // Binary resource — read metadata for type + size
-      const metaDoc = await storage.get(`doc:${uri}.meta:${uri}`);
+  // Fetch idx entries for all resources in parallel
+  const idxEntries = await Promise.all(resources.map(uri => storage.get(`idx:${uri}`).then(d => d ? { uri, ...JSON.parse(d) } : null)));
+
+  // Process each resource's metadata in parallel
+  await Promise.all(idxEntries.filter(Boolean).map(async (entry) => {
+    if (entry.binary) {
+      const metaDoc = await storage.get(`doc:${entry.uri}.meta:${entry.uri}`);
       let contentType = 'application/octet-stream';
       let size = 0;
       if (metaDoc) {
-        const metaTriples = parseNTriples(metaDoc);
-        for (const mt of metaTriples) {
+        for (const mt of parseNTriples(metaDoc)) {
           const pred = unwrapIri(mt.predicate);
-          if (pred === PREFIXES.dcterms + 'format') {
-            contentType = unwrapLiteral(mt.object);
-          } else if (pred === PREFIXES.dcterms + 'extent') {
-            size = parseInt(unwrapLiteral(mt.object), 10) || 0;
-          }
+          if (pred === PREFIXES.dcterms + 'format') contentType = unwrapLiteral(mt.object);
+          else if (pred === PREFIXES.dcterms + 'extent') size = parseInt(unwrapLiteral(mt.object), 10) || 0;
         }
       }
       results.push({ contentType, size });
     } else {
-      // RDF resource — estimate size from stored triples
-      let totalLen = 0;
-      for (const subj of parsed.subjects || []) {
-        const nt = await storage.get(`doc:${uri}:${subj}`);
-        if (nt) totalLen += nt.length;
-      }
+      const docs = await Promise.all((entry.subjects || []).map(subj => storage.get(`doc:${entry.uri}:${subj}`)));
+      const totalLen = docs.reduce((sum, nt) => sum + (nt ? nt.length : 0), 0);
       results.push({ contentType: 'text/turtle', size: totalLen });
     }
-  }
+  }));
 }
 
 /**

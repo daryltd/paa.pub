@@ -34,6 +34,17 @@
   </div>
 </div>
 
+{{#hasPendingFollows}}
+<div class="card" style="border-left: 3px solid #ffc107;">
+  <div style="display: flex; justify-content: space-between; align-items: center;">
+    <div>
+      <strong>{{pendingFollowCount}}</strong> pending follow request{{#pendingFollowCountPlural}}s{{/pendingFollowCountPlural}}
+    </div>
+    <a href="/activity" class="btn" style="padding: 0.25rem 0.75rem; font-size: 0.85rem;">Review</a>
+  </div>
+</div>
+{{/hasPendingFollows}}
+
 
 <div class="card">
   <h2>Storage - {{{storageUsed}}} used</h2>

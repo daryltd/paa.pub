@@ -1,19 +1,45 @@
 /**
- * Minimal Solid-OIDC provider for single-user server.
+ * Solid-OIDC provider for single-user server.
+ *
+ * Implements the OpenID Connect Authorization Code flow with PKCE,
+ * as required by the Solid-OIDC specification. This allows Solid apps
+ * (like Mashlib, Penny, etc.) to authenticate users against this server.
+ *
+ * Flow:
+ *   1. Client discovers endpoints via /.well-known/openid-configuration
+ *   2. Client redirects user to /authorize with code_challenge (PKCE)
+ *   3. User logs in (password) and approves the client
+ *   4. Server redirects back with an authorization code
+ *   5. Client exchanges code + code_verifier at /token for:
+ *      - access_token (JWT signed with server's RSA key)
+ *      - id_token (JWT with WebID claim)
+ *   6. Client uses access_token as Bearer token for Solid requests
+ *
+ * DPoP (Demonstration of Proof-of-Possession) is supported: if the client
+ * sends a DPoP header, the access token is bound to the client's key.
  *
  * Endpoints:
- *   GET  /.well-known/openid-configuration
- *   GET  /jwks
- *   GET  /authorize  (show consent page)
- *   POST /authorize  (login + approve)
- *   POST /token      (exchange code for tokens)
- *   GET  /userinfo
+ *   GET  /.well-known/openid-configuration — discovery document
+ *   GET  /jwks — public key for token verification
+ *   POST /register — dynamic client registration (returns client_id)
+ *   GET  /authorize — consent page (or auto-approve for remembered clients)
+ *   POST /authorize — process login + approval, issue authorization code
+ *   POST /token — exchange code for access_token + id_token
+ *   GET  /userinfo — returns the authenticated user's WebID
+ *
+ * Token verification:
+ *   verifyAccessToken() validates Bearer tokens on incoming Solid requests.
+ *   It checks the JWT signature, expiry, issuer, and optional DPoP binding.
  */
 import { verifyPassword } from './auth/password.js';
 import { importPrivateKey, rsaSign } from './crypto/rsa.js';
 import { sha256 } from './crypto/digest.js';
 import { createSession } from './auth/session.js';
 import { htmlPage, htmlResponse, escapeHtml } from './ui/shell.js';
+import { bufferToBase64url } from './utils.js';
+import { grantAppPermission, hasAppPermissions } from './solid/app-permissions.js';
+import { parseNTriples, unwrapIri } from './rdf/ntriples.js';
+import { PREFIXES } from './rdf/prefixes.js';
 
 const CODE_TTL = 120; // 2 minutes
 const ACCESS_TTL = 3600; // 1 hour
@@ -101,8 +127,10 @@ export async function handleAuthorize(reqCtx) {
     // Check if this client has been previously approved (remembered)
     const isRemembered = user && await isClientRemembered(reqCtx.env.APPDATA, config.username, clientId);
 
-    // Auto-approve if logged in, not prompt=login/consent, and client is remembered
-    if (user && prompt !== 'login' && prompt !== 'consent' && isRemembered) {
+    // Auto-approve only if the app has stored permissions (went through new consent flow).
+    // If remembered but no permissions, fall through to show consent with container selection.
+    const hasPerms = isRemembered && await hasAppPermissions(reqCtx.env.APPDATA, config.username, clientId);
+    if (user && prompt !== 'login' && prompt !== 'consent' && hasPerms) {
       return issueCode(reqCtx, {
         clientId, redirectUri, scope, state, codeChallenge, codeChallengeMethod, nonce,
       });
@@ -110,6 +138,15 @@ export async function handleAuthorize(reqCtx) {
 
     // Fetch client metadata to display app name
     const clientName = await fetchClientName(clientId);
+
+    // Load top-level containers for permission checkboxes
+    const containers = await loadTopLevelContainers(reqCtx.storage, config);
+    const containerCheckboxes = containers.map(c =>
+      `<label style="font-weight: normal; font-size: 0.85rem; display: flex; align-items: center; gap: 0.5rem;">
+        <input type="checkbox" name="allowed_containers" value="${escapeHtml(c.iri)}">
+        <span class="mono">${escapeHtml(c.path)}</span>
+      </label>`
+    ).join('\n');
 
     const body = `
       <div class="card" style="max-width: 450px; margin: 4rem auto;">
@@ -134,6 +171,14 @@ export async function handleAuthorize(reqCtx) {
               <input type="password" id="password" name="password" required autofocus>
             </div>
           ` : ''}
+          ${containers.length > 0 ? `
+            <div class="form-group" style="margin-top: 0.75rem;">
+              <label style="font-weight: 500; font-size: 0.9rem; margin-bottom: 0.5rem; display: block;">Allow write access to:</label>
+              <div style="display: flex; flex-direction: column; gap: 0.25rem; padding: 0.5rem; background: #f8f8f8; border-radius: 4px;">
+                ${containerCheckboxes}
+              </div>
+            </div>
+          ` : ''}
           <div class="form-group" style="margin-top: 0.75rem;">
             <label style="font-weight: normal; font-size: 0.85rem; display: flex; align-items: center; gap: 0.5rem;">
               <input type="checkbox" name="remember" value="1">
@@ -156,6 +201,11 @@ export async function handleAuthorize(reqCtx) {
   const redirectUri = form.get('redirect_uri') || '';
   const state = form.get('state') || '';
 
+  // Validate redirect_uri to prevent open redirect
+  if (!isValidRedirectUri(redirectUri)) {
+    return jsonResponse({ error: 'invalid_request', error_description: 'Invalid redirect_uri' }, 400);
+  }
+
   if (approve !== 'yes') {
     const sep = redirectUri.includes('?') ? '&' : '?';
     return Response.redirect(`${redirectUri}${sep}error=access_denied&state=${encodeURIComponent(state)}`, 302);
@@ -163,6 +213,11 @@ export async function handleAuthorize(reqCtx) {
 
   const clientId = form.get('client_id') || '';
   const remember = form.get('remember') === '1';
+
+  // Save container permissions
+  const allowedContainers = form.getAll('allowed_containers');
+  const clientName = await fetchClientName(clientId);
+  await grantAppPermission(reqCtx.env.APPDATA, config.username, clientId, clientName || '', allowedContainers);
 
   // Save remembered client if requested
   if (remember && clientId) {
@@ -202,6 +257,12 @@ export async function handleAuthorize(reqCtx) {
   return issueCode(reqCtx, codeParams);
 }
 
+/**
+ * Generate an authorization code and store it in KV with a short TTL.
+ * The code is a random UUID that maps to the authorization parameters
+ * (client_id, redirect_uri, PKCE challenge, scope, nonce).
+ * The client exchanges this code at /token within CODE_TTL seconds.
+ */
 async function issueCode(reqCtx, params) {
   const { env, config } = reqCtx;
   const code = crypto.randomUUID();
@@ -290,6 +351,16 @@ async function handleRefreshToken(reqCtx, params) {
 
 const REFRESH_TTL = 30 * 24 * 3600; // 30 days
 
+/**
+ * Issue access_token and id_token JWTs.
+ *
+ * Both tokens are signed with the server's RSA private key.
+ * The access_token contains the WebID as `sub` and the client_id as `client_id`.
+ * If DPoP is used, the access_token includes a `cnf.jkt` claim binding it
+ * to the client's proof-of-possession key.
+ *
+ * @returns {{ access_token: string, id_token: string, token_type: string, expires_in: number }}
+ */
 async function issueTokens(reqCtx, clientId, scope, nonce) {
   const { request, env, config } = reqCtx;
 
@@ -367,6 +438,11 @@ export async function handleUserInfo(reqCtx) {
 
 // ── JWT helpers ──────────────────────────────────────
 
+/**
+ * Sign a JWT with RS256 using the server's RSA private key.
+ * Constructs header.payload, signs with RSASSA-PKCS1-v1_5, and returns
+ * the compact serialization (header.payload.signature).
+ */
 async function signJwt(privatePem, payload) {
   const header = { alg: 'RS256', typ: 'JWT', kid: 'main-key' };
   const headerB64 = bufferToBase64url(new TextEncoder().encode(JSON.stringify(header)));
@@ -380,6 +456,23 @@ async function signJwt(privatePem, payload) {
   return `${signingInput}.${sigB64}`;
 }
 
+/**
+ * Verify a Bearer or DPoP access token from an incoming request.
+ *
+ * Called on every request (in index.js) to check if the requester is
+ * authenticated via an OIDC token (as opposed to a session cookie).
+ *
+ * Validation steps:
+ *   1. Extract token from Authorization header (Bearer or DPoP scheme)
+ *   2. Decode JWT payload (we trust our own tokens — we're the issuer)
+ *   3. Check expiry and issuer match
+ *   4. If DPoP token: verify the DPoP proof header signature and binding
+ *
+ * @param {Request} request - Incoming HTTP request
+ * @param {object} env - Cloudflare env bindings
+ * @param {object} config - Server configuration
+ * @returns {Promise<string|null>} The authenticated WebID, or null
+ */
 export async function verifyAccessToken(request, env, config) {
   const auth = request.headers.get('Authorization') || '';
   const [scheme, token] = auth.split(' ', 2);
@@ -422,8 +515,9 @@ export async function verifyAccessToken(request, env, config) {
     }
 
     const webid = payload.webid || payload.sub || null;
-    console.log(`[auth] verified token for ${webid}`);
-    return webid;
+    const clientId = payload.client_id || null;
+    console.log(`[auth] verified token for ${webid} client=${clientId}`);
+    return { webId: webid, clientId };
   } catch (e) {
     console.log(`[auth] token decode error: ${e.message}`);
     return null;
@@ -458,18 +552,21 @@ async function pemToJwk(pem) {
   return crypto.subtle.exportKey('jwk', key);
 }
 
+function isValidRedirectUri(uri) {
+  try {
+    const parsed = new URL(uri);
+    return parsed.protocol === 'https:' || parsed.protocol === 'http:';
+  } catch {
+    return false;
+  }
+}
+
 function pemToDer(pem) {
   const b64 = pem.replace(/-----[A-Z ]+-----/g, '').replace(/\s/g, '');
   const binary = atob(b64);
   const bytes = new Uint8Array(binary.length);
   for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
   return bytes.buffer;
-}
-
-function bufferToBase64url(buf) {
-  const bytes = buf instanceof Uint8Array ? buf : new Uint8Array(buf);
-  return btoa(String.fromCharCode(...bytes))
-    .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
 
 function jsonResponse(data, status = 200) {
@@ -487,6 +584,9 @@ function jsonResponse(data, status = 200) {
  */
 async function fetchClientName(clientId) {
   if (!clientId || !clientId.startsWith('http')) return null;
+  // SSRF protection: skip fetching private/reserved URLs
+  const { validateExternalUrl } = await import('./security/ssrf.js');
+  if (!validateExternalUrl(clientId)) return null;
   try {
     const res = await fetch(clientId, {
       headers: { 'Accept': 'application/ld+json, application/json' },
@@ -520,4 +620,32 @@ async function rememberClient(kv, username, clientId) {
     trusted.push(clientId);
     await kv.put(`oidc_trusted_clients:${username}`, JSON.stringify(trusted));
   }
+}
+
+/**
+ * Load top-level containers from the user's root container.
+ */
+async function loadTopLevelContainers(storage, config) {
+  const rootIri = `${config.baseUrl}/${config.username}/`;
+  const ntData = await storage.get(`doc:${rootIri}:${rootIri}`);
+  if (!ntData) return [];
+
+  const triples = parseNTriples(ntData);
+  const ldpContains = PREFIXES.ldp + 'contains';
+  const containers = [];
+
+  for (const t of triples) {
+    if (unwrapIri(t.predicate) === ldpContains) {
+      const childIri = unwrapIri(t.object);
+      if (childIri.endsWith('/')) {
+        containers.push({
+          iri: childIri,
+          path: childIri.replace(config.baseUrl, ''),
+        });
+      }
+    }
+  }
+
+  containers.sort((a, b) => a.path.localeCompare(b.path));
+  return containers;
 }

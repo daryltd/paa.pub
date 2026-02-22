@@ -1,5 +1,27 @@
 /**
- * HTML page shell with Mustache template rendering.
+ * HTML page shell — the server-side rendering layer.
+ *
+ * All UI pages are rendered server-side using Mustache templates. The
+ * rendering pipeline is:
+ *
+ *   1. Page handler prepares a data object with template variables
+ *   2. `renderPage()` renders the body template with Mustache
+ *   3. Navigation bar is rendered (if user is logged in)
+ *   4. Body + nav + styles + dialog script are injected into layout.html
+ *   5. Returns an HTML Response
+ *
+ * Template files (imported as strings by wrangler's text rules):
+ *   - `templates/layout.html` — outer HTML shell (head, styles, body wrapper)
+ *   - `templates/partials/nav.html` — navigation bar
+ *   - `styles/base.css` — all CSS (inlined into each page)
+ *   - `client/dialog.js` — accessible confirm/alert dialogs (inlined globally)
+ *
+ * Mustache syntax used in templates:
+ *   - `{{var}}` — HTML-escaped variable
+ *   - `{{{var}}}` — unescaped (for pre-rendered HTML, styles, scripts)
+ *   - `{{#flag}}...{{/flag}}` — conditional section
+ *   - `{{^flag}}...{{/flag}}` — inverted section (render if falsy)
+ *   - `{{#array}}...{{/array}}` — iteration
  */
 import Mustache from 'mustache';
 import layoutTemplate from './templates/layout.html';
@@ -71,6 +93,12 @@ export function escapeHtml(str) {
 export function htmlResponse(html, status = 200) {
   return new Response(html, {
     status,
-    headers: { 'Content-Type': 'text/html; charset=utf-8' },
+    headers: {
+      'Content-Type': 'text/html; charset=utf-8',
+      'Content-Security-Policy': "default-src 'self'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src * data:; connect-src 'self'",
+      'X-Content-Type-Options': 'nosniff',
+      'X-Frame-Options': 'DENY',
+      'Referrer-Policy': 'strict-origin-when-cross-origin',
+    },
   });
 }

@@ -6,7 +6,7 @@
  */
 import { hashPassword } from './auth/password.js';
 import { generateRSAKeyPair } from './crypto/rsa.js';
-import { iri, literal, typedLiteral } from './rdf/ntriples.js';
+import { iri, literal } from './rdf/ntriples.js';
 import { PREFIXES } from './rdf/prefixes.js';
 import defaultIndexTemplate from './ui/templates/default-index.html';
 
@@ -45,6 +45,24 @@ export async function ensureBootstrapped(env, config, storage) {
   bootstrapped = true;
 }
 
+/**
+ * Perform full server bootstrap. Creates all the foundational data structures:
+ *
+ *   1. Hash the password and store the user record in APPDATA
+ *   2. Generate an RSA keypair for ActivityPub HTTP Signatures
+ *   3. Initialize ActivityPub collections (followers, following, inbox, outbox)
+ *   4. Create root containers (/{user}/, /profile/, /public/, /private/, /settings/)
+ *      with WAC ACLs and ACP policies
+ *   5. Create the WebID profile document at /{user}/profile/card with:
+ *      - foaf:Person type, name, oidcIssuer, storage root, inbox
+ *      - ActivityPub public key for federation
+ *      - PersonalProfileDocument metadata
+ *   6. Create TypeIndex documents (private + public) in /settings/
+ *   6c. Create a default Mustache-rendered index.html in the root container
+ *   7. Mark bootstrap complete and record the domain
+ *
+ * Idempotent — skips resources that already exist.
+ */
 async function bootstrap(env, config, storage) {
   const { username, baseUrl } = config;
 

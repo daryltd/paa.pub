@@ -95,6 +95,35 @@
   </form>
 </div>
 
+{{#isDir}}
+<div class="card">
+  <h2>Storage Quota</h2>
+  <p class="text-muted" style="margin-bottom: 0.75rem; font-size: 0.85rem;">
+    Set a storage limit for this container and its contents.
+  </p>
+  {{#quotaData}}
+  <div style="margin-bottom: 0.75rem;">
+    <div style="font-size: 0.9rem; margin-bottom: 0.25rem;">
+      Used: <strong>{{usedFormatted}}</strong>{{#hasLimit}} / {{limitFormatted}}{{/hasLimit}}
+    </div>
+    {{#hasLimit}}
+    <div style="background: #e9ecef; border-radius: 4px; height: 8px; overflow: hidden;">
+      <div style="background: {{barColor}}; height: 100%; width: {{usedPercent}}%; transition: width 0.3s;"></div>
+    </div>
+    {{/hasLimit}}
+  </div>
+  {{/quotaData}}
+  <form method="POST" action="/acp/{{{path}}}">
+    <input type="hidden" name="action" value="save_quota">
+    <div class="form-group" style="margin-bottom: 0.5rem;">
+      <label for="quota_limit">Limit (e.g., 500MB, 1GB, or empty for no limit)</label>
+      <input type="text" id="quota_limit" name="quota_limit" value="{{quotaLimitValue}}" placeholder="No limit" style="max-width: 200px;">
+    </div>
+    <button type="submit" class="btn">Save Quota</button>
+  </form>
+</div>
+{{/isDir}}
+
 <div class="card">
   <h2>ACP Details</h2>
   <details>

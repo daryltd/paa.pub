@@ -1,5 +1,23 @@
 /**
- * Profile editor page — view and edit WebID profile triples.
+ * Profile editor — view and edit WebID profile triples.
+ *
+ * Routes:
+ *   GET  /profile              — render the editor form
+ *   POST /profile              — save profile changes
+ *   POST /profile/reset-index  — reset root container index.html to default
+ *
+ * The profile document lives at /{username}/profile/card and contains triples
+ * about the WebID subject (/{username}/profile/card#me). Triples are categorized:
+ *
+ *   - **Editable fields**: foaf:name, foaf:nick, foaf:img, foaf:mbox,
+ *     foaf:homepage, vcard:note, vcard:role, schema:description
+ *   - **System fields** (read-only): rdf:type, solid:oidcIssuer, space:storage,
+ *     ldp:inbox, TypeIndex references, security keys
+ *   - **Custom triples**: any other predicates on the WebID subject
+ *
+ * On save, system triples are preserved unchanged, editable fields are replaced
+ * with form values, and custom triples are replaced with the submitted set.
+ * Triples with other subjects (e.g., document-level triples) are preserved.
  */
 import { renderPage } from '../shell.js';
 import template from '../templates/profile-editor.html';

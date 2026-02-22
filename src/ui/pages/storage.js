@@ -1,6 +1,25 @@
 /**
- * Storage browser page: file listing, upload, container creation,
- * resource editing, metadata management, and deletion.
+ * Storage browser — the web UI for managing Solid pod contents.
+ *
+ * Routes:
+ *   GET  /storage/**  — render a container listing or resource detail page
+ *   POST /storage/**  — handle actions: upload, mkdir, create, save, delete
+ *
+ * Features:
+ *   - Container pages show: file listing with icons, upload form, create
+ *     container form, create text resource form, delete buttons
+ *   - Resource pages show: content preview (text/image/binary), raw download
+ *     link, edit form (for text resources), metadata table, delete button
+ *   - Metadata editing: Dublin Core triples (format, extent, created, title)
+ *     stored in `doc:{iri}.meta:{iri}` as N-Triples
+ *   - Recursive container deletion with quota tracking
+ *
+ * Storage keys used:
+ *   - `idx:{iri}` — resource index (JSON with subjects array, binary flag)
+ *   - `doc:{iri}:{subject}` — RDF triple documents
+ *   - `doc:{iri}.meta:{iri}` — resource metadata
+ *   - `blob:{iri}` — binary file data (R2)
+ *   - `quota:{username}` — storage usage counter
  */
 import { renderPage, renderPartial } from '../shell.js';
 import containerTemplate from '../templates/storage-container.html';
@@ -9,6 +28,8 @@ import breadcrumbsPartial from '../templates/partials/breadcrumbs.html';
 import { requireAuth } from '../../auth/middleware.js';
 import { parseNTriples, unwrapIri, serializeNTriples, iri, literal, typedLiteral } from '../../rdf/ntriples.js';
 import { PREFIXES } from '../../rdf/prefixes.js';
+import { checkQuota, quotaExceededResponse, addQuota } from '../../storage/quota.js';
+import { checkContainerQuota, containerQuotaExceededResponse, addContainerBytes } from '../../storage/container-quota.js';
 
 const TEXT_EXTS = new Set([
   'ttl', 'txt', 'html', 'css', 'csv', 'xml', 'md', 'n3',
@@ -178,6 +199,13 @@ export async function handleStorageAction(reqCtx) {
     const newIri = resourceIri + cleanName;
     const fileCt = contentTypeForExt(cleanName);
     const text = content || '';
+    const textBytes = new TextEncoder().encode(text).byteLength;
+
+    // Quota check
+    const quotaResult = await checkQuota(env.APPDATA, config.username, textBytes, config.storageLimit);
+    if (!quotaResult.allowed) return quotaExceededResponse(quotaResult.usedBytes, quotaResult.limitBytes);
+    const cqResult = await checkContainerQuota(env.APPDATA, resourceIri, textBytes);
+    if (!cqResult.allowed) return containerQuotaExceededResponse(cqResult.blockedBy, cqResult.usedBytes, cqResult.limitBytes);
 
     if (fileCt === 'text/turtle' || fileCt === 'application/n-triples') {
       const { parseTurtle } = await import('../../rdf/turtle-parser.js');
@@ -192,6 +220,11 @@ export async function handleStorageAction(reqCtx) {
       await storage.put(`idx:${newIri}`, JSON.stringify({ subjects: [newIri], binary: true }));
     }
     await appendContainment(storage, resourceIri, newIri);
+
+    // Update quota tracking
+    await addQuota(env.APPDATA, config.username, textBytes);
+    await addContainerBytes(env.APPDATA, resourceIri, textBytes);
+
     return redirect(`/storage/${path}${cleanName}`);
   }
 
@@ -244,6 +277,12 @@ async function handleUpload(form, containerIri, path, config, storage, env) {
   const binary = await file.arrayBuffer();
   const fileType = file.type || 'application/octet-stream';
 
+  // Quota checks before writing
+  const quotaResult = await checkQuota(env.APPDATA, config.username, binary.byteLength, config.storageLimit);
+  if (!quotaResult.allowed) return quotaExceededResponse(quotaResult.usedBytes, quotaResult.limitBytes);
+  const cqResult = await checkContainerQuota(env.APPDATA, containerIri, binary.byteLength);
+  if (!cqResult.allowed) return containerQuotaExceededResponse(cqResult.blockedBy, cqResult.usedBytes, cqResult.limitBytes);
+
   await storage.putBlob(`blob:${newIri}`, binary, fileType);
 
   // Capture file metadata
@@ -264,10 +303,9 @@ async function handleUpload(form, containerIri, path, config, storage, env) {
   await storage.put(`idx:${newIri}`, JSON.stringify({ subjects: [newIri], binary: true }));
   await appendContainment(storage, containerIri, newIri);
 
-  const quotaData = await env.APPDATA.get(`quota:${config.username}`);
-  const quota = JSON.parse(quotaData || '{"usedBytes":0}');
-  quota.usedBytes += binary.byteLength;
-  await env.APPDATA.put(`quota:${config.username}`, JSON.stringify(quota));
+  // Update quota tracking
+  await addQuota(env.APPDATA, config.username, binary.byteLength);
+  await addContainerBytes(env.APPDATA, containerIri, binary.byteLength);
 
   return redirect(`/storage/${path}`);
 }

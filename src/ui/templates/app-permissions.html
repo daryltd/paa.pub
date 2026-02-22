@@ -1,0 +1,60 @@
+<h1>App Permissions</h1>
+
+<div class="card">
+  <p class="text-muted" style="margin-bottom: 1rem;">
+    Manage which Solid apps can write to your pod and which containers they can access.
+  </p>
+</div>
+
+{{#hasApps}}
+{{#apps}}
+<div class="card">
+  <h2 style="margin-bottom: 0.25rem;">{{clientName}}</h2>
+  <div class="mono text-muted" style="font-size: 0.8rem; word-break: break-all; margin-bottom: 0.5rem;">{{clientId}}</div>
+  <div class="text-muted" style="font-size: 0.85rem; margin-bottom: 0.75rem;">Authorized: {{grantedAt}}</div>
+
+  {{#hasContainers}}
+  <div style="margin-bottom: 0.75rem;">
+    <strong style="font-size: 0.9rem;">Allowed containers:</strong>
+    <ul style="margin: 0.25rem 0 0 0; padding-left: 1.5rem;">
+      {{#containers}}
+      <li class="mono" style="font-size: 0.85rem;">{{path}}</li>
+      {{/containers}}
+    </ul>
+  </div>
+  {{/hasContainers}}
+  {{^hasContainers}}
+  <div class="text-muted" style="margin-bottom: 0.75rem; font-size: 0.9rem;">No write access granted.</div>
+  {{/hasContainers}}
+
+  <details style="margin-bottom: 0.75rem;">
+    <summary style="cursor: pointer; font-size: 0.85rem;">Update container access</summary>
+    <form method="POST" action="/app-permissions" style="margin-top: 0.5rem;">
+      <input type="hidden" name="action" value="update">
+      <input type="hidden" name="client_id" value="{{clientId}}">
+      <div style="display: flex; flex-direction: column; gap: 0.25rem; margin-bottom: 0.5rem;">
+        {{#allContainers}}
+        <label style="font-size: 0.85rem; display: flex; align-items: center; gap: 0.5rem;">
+          <input type="checkbox" name="containers" value="{{iri}}">
+          <span class="mono">{{path}}</span>
+        </label>
+        {{/allContainers}}
+      </div>
+      <button type="submit" class="btn">Update Access</button>
+    </form>
+  </details>
+
+  <form method="POST" action="/app-permissions" style="display: inline;">
+    <input type="hidden" name="action" value="revoke">
+    <input type="hidden" name="client_id" value="{{clientId}}">
+    <button type="submit" class="btn btn-secondary" style="color: #dc3545;">Revoke Access</button>
+  </form>
+</div>
+{{/apps}}
+{{/hasApps}}
+
+{{^hasApps}}
+<div class="card">
+  <div class="text-muted">No apps have been authorized yet.</div>
+</div>
+{{/hasApps}}

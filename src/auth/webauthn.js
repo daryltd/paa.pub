@@ -1,8 +1,36 @@
 /**
- * WebAuthn passkey registration and authentication flows.
+ * WebAuthn passkey registration and authentication.
+ *
+ * Enables passwordless login using platform authenticators (Touch ID, Windows
+ * Hello, security keys). The flow has two phases:
+ *
+ * Registration (authenticated user adds a passkey):
+ *   1. POST /webauthn/register/begin → server generates a challenge, stores in KV
+ *   2. Browser calls navigator.credentials.create() with the challenge
+ *   3. POST /webauthn/register/complete → server verifies the attestation:
+ *      - Decodes clientDataJSON, checks challenge matches
+ *      - Decodes attestationObject (CBOR) to extract authenticator data
+ *      - Extracts the COSE public key from the credential
+ *      - Converts COSE key to JWK format for storage
+ *      - Stores credential in APPDATA KV
+ *
+ * Authentication (any user logs in with a passkey):
+ *   1. POST /webauthn/login/begin → server generates a challenge, lists allowed credentials
+ *   2. Browser calls navigator.credentials.get() with the challenge
+ *   3. POST /webauthn/login/complete → server verifies the assertion:
+ *      - Checks challenge, origin, and rpIdHash
+ *      - Imports stored JWK public key
+ *      - Verifies the signature over authenticatorData + clientDataHash
+ *      - Creates a session on success
+ *
+ * Credential storage in APPDATA KV:
+ *   - `webauthn_creds:{username}` → JSON array of credential IDs
+ *   - `webauthn_cred:{username}:{credId}` → JSON with name, publicKey (JWK), createdAt
+ *   - `webauthn_challenge:{challenge}` → temporary challenge data (60s TTL)
  */
 import { decodeCBOR } from '../crypto/cbor.js';
 import { createSession } from './session.js';
+import { bufferToBase64url } from '../utils.js';
 
 const CHALLENGE_TTL = 60; // seconds
 
@@ -70,7 +98,12 @@ export async function handleWebAuthnRegisterComplete(reqCtx) {
   const { request, env, user, config } = reqCtx;
   if (!user) return new Response('Unauthorized', { status: 401 });
 
-  const body = await request.json();
+  let body;
+  try {
+    body = await request.json();
+  } catch {
+    return new Response('Invalid JSON', { status: 400 });
+  }
   const { id, rawId, response: credResponse, type } = body;
 
   if (type !== 'public-key') {
@@ -184,7 +217,12 @@ export async function handleWebAuthnLoginComplete(reqCtx) {
   const { request, env, config } = reqCtx;
   const username = config.username;
 
-  const body = await request.json();
+  let body;
+  try {
+    body = await request.json();
+  } catch {
+    return new Response('Invalid JSON', { status: 400 });
+  }
   const { id, rawId, response: credResponse, type } = body;
 
   if (type !== 'public-key') {
@@ -386,14 +424,6 @@ async function coseToJwk(coseKey) {
   }
 
   throw new Error(`Unsupported COSE key type: ${kty}`);
-}
-
-function bufferToBase64url(buf) {
-  const bytes = buf instanceof Uint8Array ? buf : new Uint8Array(buf);
-  return btoa(String.fromCharCode(...bytes))
-    .replace(/\+/g, '-')
-    .replace(/\//g, '_')
-    .replace(/=+$/, '');
 }
 
 function base64urlToBuffer(b64) {

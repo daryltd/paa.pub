@@ -11,6 +11,9 @@
     "wrangler": "^4.67.0"
   },
   "dependencies": {
+    "@s20e/adapters": "npm:@jsr/s20e__adapters@^0.2.0",
+    "@s20e/host-core": "npm:@jsr/s20e__host-core@^0.2.0",
+    "@s20e/kernel": "npm:@jsr/s20e__kernel@^0.2.0",
     "mustache": "^4.2.0"
   }
 }

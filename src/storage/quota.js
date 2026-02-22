@@ -14,6 +14,38 @@ export async function getQuota(kv, username) {
 }
 
 /**
+ * Check whether an incoming write would exceed the storage limit.
+ * @param {KVNamespace} kv
+ * @param {string} username
+ * @param {number} incomingBytes - Size of the incoming write
+ * @param {number} limit - Storage limit in bytes
+ * @returns {Promise<{allowed: boolean, usedBytes: number, limitBytes: number}>}
+ */
+export async function checkQuota(kv, username, incomingBytes, limit) {
+  const quota = await getQuota(kv, username);
+  const allowed = (quota.usedBytes + incomingBytes) <= limit;
+  return { allowed, usedBytes: quota.usedBytes, limitBytes: limit };
+}
+
+/**
+ * Build a 507 Insufficient Storage response.
+ * @param {number} usedBytes
+ * @param {number} limitBytes
+ * @returns {Response}
+ */
+export function quotaExceededResponse(usedBytes, limitBytes) {
+  return new Response(JSON.stringify({
+    error: 'insufficient_storage',
+    message: 'Storage quota exceeded.',
+    usedBytes,
+    limitBytes,
+  }), {
+    status: 507,
+    headers: { 'Content-Type': 'application/json' },
+  });
+}
+
+/**
  * Add bytes to quota.
  * @param {KVNamespace} kv
  * @param {string} username

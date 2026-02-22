@@ -1,11 +1,23 @@
 /**
- * Minimal Turtle parser.
+ * Minimal Turtle (Terse RDF Triple Language) parser.
  *
- * Handles the subset used by ACLs, profiles, and LDP containers:
- * - @prefix declarations
- * - Subject-predicate-object triples with ; and , shorthand
- * - IRI refs (<...>), prefixed names (prefix:local), literals, blank nodes
- * - a → rdf:type
+ * Parses Turtle text into an array of {subject, predicate, object} triples
+ * where each component is in N-Triples notation (IRIs wrapped in <>, literals
+ * in quotes with optional language tags or datatypes).
+ *
+ * Supports the Turtle subset needed by Solid:
+ *   - `@prefix` and `@base` declarations
+ *   - Full IRI references: `<http://...>`
+ *   - Prefixed names: `foaf:name` (expanded using declared prefixes)
+ *   - The `a` keyword (shorthand for rdf:type)
+ *   - Plain, language-tagged, and datatyped string literals
+ *   - Blank nodes: `_:label`
+ *   - Predicate-object lists (`;` separator — same subject, different predicate)
+ *   - Object lists (`,` separator — same subject and predicate)
+ *   - Single-line `#` comments
+ *
+ * Does NOT support: collections (), nested blank nodes [], multi-line strings,
+ * numeric/boolean literals without quotes, or other advanced Turtle features.
  */
 
 const RDF_TYPE = 'http://www.w3.org/1999/02/22-rdf-syntax-ns#type';

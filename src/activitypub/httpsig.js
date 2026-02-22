@@ -1,7 +1,20 @@
 /**
- * HTTP Signature sign/verify (draft-cavage).
+ * HTTP Signatures (draft-cavage-http-signatures-12).
  *
- * Ported from paa/src/lib/src/activity/httpsig.rs
+ * Used by ActivityPub for server-to-server authentication. When this
+ * server sends an activity to a remote inbox, it signs the request with
+ * its RSA private key. When receiving activities, it verifies the
+ * sender's signature using their public key (fetched from their actor document).
+ *
+ * Signature format: `Signature` header containing:
+ *   - keyId: URI pointing to the signer's public key (e.g., actor#main-key)
+ *   - algorithm: "rsa-sha256"
+ *   - headers: space-separated list of signed headers
+ *   - signature: base64-encoded RSA-SHA256 signature of the signing string
+ *
+ * The signing string is constructed by concatenating the specified headers
+ * in `headerName: headerValue` format, joined by newlines. The special
+ * `(request-target)` pseudo-header includes the HTTP method and path.
  */
 import { importPrivateKey, importPublicKey, rsaSign, rsaVerify } from '../crypto/rsa.js';
 import { digestHeader } from '../crypto/digest.js';
@@ -58,6 +71,20 @@ export async function verifyRequestSignature(request, publicPem) {
 
   const url = new URL(request.url);
   const headerNames = params.headers.split(' ');
+
+  // Check Date header staleness (5 minute window) if date is a signed header
+  if (headerNames.includes('date')) {
+    const dateValue = request.headers.get('date');
+    if (dateValue) {
+      const requestDate = new Date(dateValue);
+      if (isNaN(requestDate.getTime())) return false;
+      const age = Math.abs(Date.now() - requestDate.getTime());
+      if (age > 5 * 60 * 1000) {
+        console.log(`[httpsig] rejected: Date header too old (${age}ms)`);
+        return false;
+      }
+    }
+  }
 
   const sigStringParts = [];
   for (const name of headerNames) {

@@ -2,9 +2,10 @@
  * Outbox collection and C2S activity creation.
  */
 import { requireAuth } from '../auth/middleware.js';
-import { buildCreateNote, buildFollow, buildUnfollow, storeOutboxActivity } from './activities.js';
+import { buildCreateNote, buildFollow, buildUnfollow, storeOutboxActivity, acceptFollowRequest, rejectFollowRequest } from './activities.js';
 import { deliverActivity, collectInboxes } from './delivery.js';
 import { resolveHandle, fetchRemoteActor, getActorInbox } from './remote.js';
+import { simpleHash } from '../utils.js';
 
 const PAGE_SIZE = 20;
 
@@ -198,16 +199,79 @@ export async function handleUnfollow(reqCtx) {
   return new Response(null, { status: 302, headers: { 'Location': '/activity' } });
 }
 
+/**
+ * Handle POST /follow-requests/accept
+ */
+export async function handleAcceptFollowRequest(reqCtx) {
+  const authCheck = requireAuth(reqCtx);
+  if (authCheck) return authCheck;
+
+  const { request, config, env, ctx } = reqCtx;
+  const form = await request.formData();
+  const target = form.get('target');
+  if (!target) {
+    return new Response(null, { status: 302, headers: { 'Location': '/activity' } });
+  }
+
+  const accept = await acceptFollowRequest(target, config, env);
+
+  // Deliver Accept to the follower
+  const remoteActor = await fetchRemoteActor(target, env.APPDATA);
+  if (remoteActor) {
+    const inboxUrl = getActorInbox(remoteActor);
+    if (inboxUrl) {
+      const privatePem = await env.APPDATA.get(`ap_private_key:${config.username}`);
+      deliverActivity({
+        activityJson: JSON.stringify(accept),
+        inboxUrls: [inboxUrl],
+        keyId: config.keyId,
+        privatePem,
+        ctx,
+      });
+    }
+  }
+
+  return new Response(null, { status: 302, headers: { 'Location': '/activity' } });
+}
+
+/**
+ * Handle POST /follow-requests/reject
+ */
+export async function handleRejectFollowRequest(reqCtx) {
+  const authCheck = requireAuth(reqCtx);
+  if (authCheck) return authCheck;
+
+  const { request, config, env, ctx } = reqCtx;
+  const form = await request.formData();
+  const target = form.get('target');
+  if (!target) {
+    return new Response(null, { status: 302, headers: { 'Location': '/activity' } });
+  }
+
+  const reject = await rejectFollowRequest(target, config, env);
+
+  // Deliver Reject to the follower
+  const remoteActor = await fetchRemoteActor(target, env.APPDATA);
+  if (remoteActor) {
+    const inboxUrl = getActorInbox(remoteActor);
+    if (inboxUrl) {
+      const privatePem = await env.APPDATA.get(`ap_private_key:${config.username}`);
+      deliverActivity({
+        activityJson: JSON.stringify(reject),
+        inboxUrls: [inboxUrl],
+        keyId: config.keyId,
+        privatePem,
+        ctx,
+      });
+    }
+  }
+
+  return new Response(null, { status: 302, headers: { 'Location': '/activity' } });
+}
+
 function jsonResponse(data) {
   return new Response(JSON.stringify(data, null, 2), {
     headers: { 'Content-Type': 'application/activity+json' },
   });
 }
 
-function simpleHash(str) {
-  let hash = 0;
-  for (let i = 0; i < str.length; i++) {
-    hash = ((hash << 5) - hash + str.charCodeAt(i)) | 0;
-  }
-  return Math.abs(hash).toString(36);
-}

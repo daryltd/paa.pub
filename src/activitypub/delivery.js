@@ -2,6 +2,8 @@
  * Activity delivery via ctx.waitUntil().
  */
 import { signRequest } from './httpsig.js';
+import { fetchRemoteActor, getActorInbox } from './remote.js';
+import { validateExternalUrl } from '../security/ssrf.js';
 
 /**
  * Deliver an activity to a list of inbox URLs.
@@ -19,6 +21,11 @@ export function deliverActivity({ activityJson, inboxUrls, keyId, privatePem, ct
 }
 
 async function deliverToInbox(activityJson, inboxUrl, keyId, privatePem) {
+  if (!validateExternalUrl(inboxUrl)) {
+    console.error(`[delivery] SSRF blocked: ${inboxUrl}`);
+    return;
+  }
+
   try {
     const headers = await signRequest({
       keyId,
@@ -54,10 +61,11 @@ async function deliverToInbox(activityJson, inboxUrl, keyId, privatePem) {
  */
 export async function collectInboxes(actorUris, kv) {
   const inboxes = new Set();
-  const { fetchRemoteActor, getActorInbox } = await import('./remote.js');
 
-  for (const uri of actorUris) {
-    const actor = await fetchRemoteActor(uri, kv);
+  const actors = await Promise.all(
+    actorUris.map(uri => fetchRemoteActor(uri, kv))
+  );
+  for (const actor of actors) {
     if (actor) {
       const inbox = getActorInbox(actor);
       if (inbox) inboxes.add(inbox);

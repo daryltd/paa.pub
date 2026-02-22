@@ -1,5 +1,16 @@
 /**
  * Minimal URL pattern router for Cloudflare Workers.
+ *
+ * Supports two types of dynamic segments:
+ *   - `:param` — matches a single path segment (e.g. /:user/ matches /alice/)
+ *   - `**`     — matches any remaining path (e.g. /storage/** matches /storage/a/b/c)
+ *
+ * Routes are matched in registration order — first match wins. When building
+ * the route table, register specific routes before catch-all patterns.
+ *
+ * Patterns are compiled to RegExp on registration, so matching is fast.
+ * Captured segments are returned in the `params` object keyed by their
+ * parameter name (`:user` → params.user, `**` → params.wild).
  */
 export class Router {
   constructor() {

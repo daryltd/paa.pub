@@ -1,8 +1,30 @@
 /**
- * LDP protocol handler.
+ * Linked Data Platform (LDP) protocol handler.
  *
- * Maps HTTP methods to s20e Orchestrator calls for RDF resources,
- * and handles binary resources via uploadBinary/serveBinary.
+ * This is the core Solid protocol implementation. It handles all HTTP methods
+ * (GET, PUT, POST, PATCH, DELETE) for resources under /{username}/.
+ *
+ * Resource types:
+ *   - **RDF resources** — stored as N-Triples in KV, grouped by subject.
+ *     Each resource has an `idx:{iri}` index entry listing its subjects,
+ *     and `doc:{iri}:{subject}` entries containing the actual triples.
+ *   - **Binary resources** — stored as blobs in R2 at `blob:{iri}`, with
+ *     metadata in `doc:{iri}.meta:{iri}` and `idx:{iri}` marked `binary: true`.
+ *   - **Containers** — RDF resources whose IRI ends with `/`. Container
+ *     membership is tracked via `ldp:contains` triples in the container's
+ *     own document (`doc:{containerIri}:{containerIri}`).
+ *
+ * Access control:
+ *   All GET/HEAD requests run through `checkAcpAccess()` which evaluates
+ *   the ACP policy for the resource, walking up the container hierarchy
+ *   if the resource inherits its policy. Responses include Cache-Control
+ *   headers based on the access level (public vs private).
+ *
+ * Special cases:
+ *   - `.acl` suffixed URLs → WAC ACL management (delegated to acl.js)
+ *   - `.acr` suffixed URLs → ACP editor redirect
+ *   - Container root + `Accept: text/html` → serves index.html blob if present
+ *   - Root container index.html → Mustache-rendered with WebID profile data
  */
 import Mustache from 'mustache';
 import { negotiateType, serializeRdf, wantsActivityPub } from './conneg.js';
@@ -13,6 +35,9 @@ import { isContainer, slugToName, addContainment, containerTypeQuads, parentCont
 import { handleAclGet, handleAclPut, handleAclPatch, handleAclDelete, defaultAclNTriples } from './acl.js';
 import { checkAcpAccess } from '../ui/pages/acl-editor.js';
 import { PREFIXES } from '../rdf/prefixes.js';
+import { checkQuota, quotaExceededResponse, addQuota } from '../storage/quota.js';
+import { checkContainerQuota, containerQuotaExceededResponse, addContainerBytes } from '../storage/container-quota.js';
+import { checkAppWritePermission } from './app-permissions.js';
 
 const RDF_TYPES = new Set([
   'text/turtle',
@@ -27,6 +52,7 @@ const BINARY_INDICATOR_TYPES = [
   'application/octet-stream', 'application/gzip',
 ];
 
+/** Check if a Content-Type should be treated as a binary upload (not RDF). */
 function isBinaryType(contentType) {
   if (!contentType) return false;
   return BINARY_INDICATOR_TYPES.some(t => contentType.startsWith(t));
@@ -114,6 +140,17 @@ export async function handleLDP(reqCtx) {
   }
 }
 
+/**
+ * Handle GET/HEAD requests for a resource.
+ *
+ * Flow:
+ *   1. Look up `idx:{iri}` — if missing, check for an orphan blob in R2
+ *   2. Run ACP access check (owner is handled inside checkAcpAccess)
+ *   3. If binary (idx.binary === true) → fetch blob from R2, read content-type
+ *      from metadata, serve with appropriate Cache-Control
+ *   4. If RDF → fetch all subject documents in parallel, parse N-Triples,
+ *      content-negotiate (Turtle, JSON-LD, N-Triples), serialize and serve
+ */
 async function handleGet(reqCtx, resourceIri) {
   const { request, config, storage, env } = reqCtx;
   const agent = reqCtx.user ? config.webId : null;
@@ -169,10 +206,12 @@ async function handleGet(reqCtx, resourceIri) {
     return new Response(blob, { status: 200, headers });
   }
 
-  // Read RDF triples
+  // Read RDF triples (parallel fetch)
+  const docs = await Promise.all(
+    (parsed.subjects || []).map(subj => storage.get(`doc:${resourceIri}:${subj}`))
+  );
   const allTriples = [];
-  for (const subj of parsed.subjects || []) {
-    const nt = await storage.get(`doc:${resourceIri}:${subj}`);
+  for (const nt of docs) {
     if (nt) allTriples.push(...parseNTriples(nt));
   }
 
@@ -193,8 +232,15 @@ async function handleGet(reqCtx, resourceIri) {
   return new Response(body, { status: 200, headers });
 }
 
+/**
+ * Handle PUT — create or replace a resource.
+ *
+ * Binary content types → stored via orchestrator.uploadBinary() to R2.
+ * RDF content types → parsed to triples, old triples deleted, new ones written to KV.
+ * Creates parent containers if they don't exist.
+ */
 async function handlePut(reqCtx, resourceIri) {
-  const { request, orchestrator, config, storage } = reqCtx;
+  const { request, orchestrator, config, storage, env } = reqCtx;
   const agent = reqCtx.user ? config.webId : null;
   const contentType = request.headers.get('Content-Type') || 'application/octet-stream';
 
@@ -202,15 +248,40 @@ async function handlePut(reqCtx, resourceIri) {
     console.log(`[ldp] PUT ${resourceIri} rejected: no authenticated agent`);
     return new Response('Unauthorized', { status: 401 });
   }
+
+  // App write permission check (OIDC apps only)
+  if (reqCtx.authMethod === 'oidc' && reqCtx.clientId) {
+    const allowed = await checkAppWritePermission(env.APPDATA, config.username, reqCtx.clientId, resourceIri);
+    if (!allowed) {
+      console.log(`[ldp] PUT ${resourceIri} rejected: app ${reqCtx.clientId} not authorized`);
+      return new Response('Forbidden — app not authorized for this container', { status: 403 });
+    }
+  }
+
   console.log(`[ldp] PUT ${resourceIri} by ${agent} ct=${contentType}`);
 
   if (isBinaryType(contentType)) {
     const binary = await request.arrayBuffer();
+
+    // Quota checks
+    const quotaResult = await checkQuota(env.APPDATA, config.username, binary.byteLength, config.storageLimit);
+    if (!quotaResult.allowed) return quotaExceededResponse(quotaResult.usedBytes, quotaResult.limitBytes);
+    const parent = parentContainer(resourceIri);
+    if (parent) {
+      const cqResult = await checkContainerQuota(env.APPDATA, parent, binary.byteLength);
+      if (!cqResult.allowed) return containerQuotaExceededResponse(cqResult.blockedBy, cqResult.usedBytes, cqResult.limitBytes);
+    }
+
     const metadataNquads = buildMetadataNQuads(resourceIri, contentType, binary.byteLength);
     const aclNt = defaultAclNTriples(resourceIri, config.webId);
     const result = await orchestrator.uploadBinary(resourceIri, binary, contentType, metadataNquads, aclNt, agent);
     if (result.type === 'auth_error') return new Response('Forbidden', { status: 403 });
     if (result.type === 'validation_error') return new Response(result.report_json, { status: 422 });
+
+    // Update quota tracking
+    await addQuota(env.APPDATA, config.username, binary.byteLength);
+    if (parent) await addContainerBytes(env.APPDATA, parent, binary.byteLength);
+
     return new Response(null, { status: 201, headers: { 'Location': resourceIri } });
   }
 
@@ -279,8 +350,16 @@ async function handlePut(reqCtx, resourceIri) {
   return new Response(null, { status, headers });
 }
 
+/**
+ * Handle POST — create a new resource inside a container.
+ *
+ * The Slug header determines the resource name. The Link header with
+ * rel="type" BasicContainer creates a sub-container; otherwise the
+ * content is stored as a binary blob or parsed as RDF triples.
+ * Adds an ldp:contains triple to the parent container.
+ */
 async function handlePost(reqCtx, resourceIri) {
-  const { request, orchestrator, config, url, storage } = reqCtx;
+  const { request, orchestrator, config, url, storage, env } = reqCtx;
   const agent = reqCtx.user ? config.webId : null;
 
   // Normalize: treat /path as /path/ for POST (container operations)
@@ -291,6 +370,16 @@ async function handlePost(reqCtx, resourceIri) {
     console.log(`[ldp] POST ${resourceIri} rejected: no authenticated agent`);
     return new Response('Unauthorized', { status: 401 });
   }
+
+  // App write permission check (OIDC apps only)
+  if (reqCtx.authMethod === 'oidc' && reqCtx.clientId) {
+    const allowed = await checkAppWritePermission(env.APPDATA, config.username, reqCtx.clientId, resourceIri);
+    if (!allowed) {
+      console.log(`[ldp] POST ${resourceIri} rejected: app ${reqCtx.clientId} not authorized`);
+      return new Response('Forbidden — app not authorized for this container', { status: 403 });
+    }
+  }
+
   console.log(`[ldp] POST ${resourceIri} by ${agent} slug=${request.headers.get('Slug') || '(none)'}`);
 
   const slug = request.headers.get('Slug') || crypto.randomUUID();
@@ -321,6 +410,13 @@ async function handlePost(reqCtx, resourceIri) {
 
   if (isBinaryType(contentType)) {
     const binary = await request.arrayBuffer();
+
+    // Quota checks
+    const quotaResult = await checkQuota(env.APPDATA, config.username, binary.byteLength, config.storageLimit);
+    if (!quotaResult.allowed) return quotaExceededResponse(quotaResult.usedBytes, quotaResult.limitBytes);
+    const cqResult = await checkContainerQuota(env.APPDATA, resourceIri, binary.byteLength);
+    if (!cqResult.allowed) return containerQuotaExceededResponse(cqResult.blockedBy, cqResult.usedBytes, cqResult.limitBytes);
+
     const metadataNquads = buildMetadataNQuads(newResourceIri, contentType, binary.byteLength);
     const aclNt = '';
     try {
@@ -331,6 +427,10 @@ async function handlePost(reqCtx, resourceIri) {
       console.error('uploadBinary error, falling back to direct KV:', e);
       await storage.putBlob(`blob:${newResourceIri}`, binary, contentType);
     }
+
+    // Update quota tracking
+    await addQuota(env.APPDATA, config.username, binary.byteLength);
+    await addContainerBytes(env.APPDATA, resourceIri, binary.byteLength);
 
     await appendContainment(storage, resourceIri, newResourceIri);
     return new Response(null, { status: 201, headers: { 'Location': newResourceIri } });
@@ -345,9 +445,25 @@ async function handlePost(reqCtx, resourceIri) {
   return new Response(null, { status: 201, headers: { 'Location': newResourceIri } });
 }
 
+/**
+ * Handle PATCH — apply SPARQL Update to a resource.
+ *
+ * Supports INSERT DATA, DELETE DATA, and DELETE/INSERT/WHERE patterns.
+ * Reads existing triples from KV, applies deletions (set-based matching),
+ * appends insertions, and writes the result back.
+ */
 async function handlePatch(reqCtx, resourceIri) {
-  const { request, config, storage } = reqCtx;
+  const { request, config, storage, env } = reqCtx;
   if (!reqCtx.user) return new Response('Unauthorized', { status: 401 });
+
+  // App write permission check (OIDC apps only)
+  if (reqCtx.authMethod === 'oidc' && reqCtx.clientId) {
+    const allowed = await checkAppWritePermission(env.APPDATA, config.username, reqCtx.clientId, resourceIri);
+    if (!allowed) {
+      console.log(`[ldp] PATCH ${resourceIri} rejected: app ${reqCtx.clientId} not authorized`);
+      return new Response('Forbidden — app not authorized for this container', { status: 403 });
+    }
+  }
 
   const contentType = request.headers.get('Content-Type') || '';
   if (!contentType.includes('application/sparql-update')) {
@@ -362,8 +478,8 @@ async function handlePatch(reqCtx, resourceIri) {
   let allTriples = [];
   if (idx) {
     const { subjects } = JSON.parse(idx);
-    for (const subj of subjects) {
-      const nt = await storage.get(`doc:${resourceIri}:${subj}`);
+    const docs = await Promise.all(subjects.map(subj => storage.get(`doc:${resourceIri}:${subj}`)));
+    for (const nt of docs) {
       if (nt) allTriples.push(...parseNTriples(nt));
     }
   }
@@ -390,10 +506,34 @@ async function handlePatch(reqCtx, resourceIri) {
   return new Response(null, { status: idx ? 204 : 201 });
 }
 
+/**
+ * Handle DELETE — remove a resource and all its associated data.
+ *
+ * Deletes: idx entry, all subject documents, blob, metadata, WAC ACL,
+ * and ACP policy. Removes the ldp:contains triple from the parent container.
+ * Owner-only operation.
+ */
 async function handleDelete(reqCtx, resourceIri) {
   const { config, storage, env } = reqCtx;
   if (!reqCtx.user) return new Response('Unauthorized', { status: 401 });
   if (reqCtx.user !== config.username) return new Response('Forbidden', { status: 403 });
+
+  // App write permission check (OIDC apps only)
+  if (reqCtx.authMethod === 'oidc' && reqCtx.clientId) {
+    const allowed = await checkAppWritePermission(env.APPDATA, config.username, reqCtx.clientId, resourceIri);
+    if (!allowed) {
+      console.log(`[ldp] DELETE ${resourceIri} rejected: app ${reqCtx.clientId} not authorized`);
+      return new Response('Forbidden — app not authorized for this container', { status: 403 });
+    }
+  }
+
+  // Read size from metadata for quota tracking before deletion
+  let deletedBytes = 0;
+  const metaDoc = await storage.get(`doc:${resourceIri}.meta:${resourceIri}`);
+  if (metaDoc) {
+    const extentMatch = metaDoc.match(/"(\d+)"\^\^<[^>]*integer>/);
+    if (extentMatch) deletedBytes = parseInt(extentMatch[1], 10);
+  }
 
   // Delete all KV entries for this resource
   const idx = await storage.get(`idx:${resourceIri}`);
@@ -426,6 +566,14 @@ async function handleDelete(reqCtx, resourceIri) {
     }
   }
 
+  // Update quota tracking on delete
+  if (deletedBytes > 0) {
+    const { subtractQuota } = await import('../storage/quota.js');
+    const { subtractContainerBytes } = await import('../storage/container-quota.js');
+    await subtractQuota(env.APPDATA, config.username, deletedBytes);
+    if (parent) await subtractContainerBytes(env.APPDATA, parent, deletedBytes);
+  }
+
   return new Response(null, { status: 204 });
 }
 
@@ -436,6 +584,14 @@ function handleOptions(reqCtx, resourceIri) {
 
 // --- Helpers ---
 
+/**
+ * Parse an HTTP request body into an array of triples based on Content-Type.
+ * Supports Turtle, N-Triples/N-Quads, JSON-LD, and falls back to Turtle.
+ * @param {string} body - Raw request body text
+ * @param {string} contentType - MIME type of the body
+ * @param {string} baseIri - Base IRI for resolving relative references
+ * @returns {Array<{subject: string, predicate: string, object: string}>}
+ */
 function parseBody(body, contentType, baseIri) {
   if (contentType.includes('text/turtle')) {
     return parseTurtle(body, baseIri);
@@ -463,6 +619,12 @@ function denyAccess(agent, baseUrl) {
   }), { status, headers });
 }
 
+/**
+ * Convert a flat JSON-LD document to triples.
+ * Handles @id (subject), @type (rdf:type), and simple key-value properties.
+ * Object values can be IRIs ({@id}), typed literals ({@value, @type}),
+ * language-tagged literals ({@value, @language}), or plain strings.
+ */
 function jsonLdToTriples(doc) {
   const triples = [];
   const items = Array.isArray(doc) ? doc : [doc];
@@ -520,6 +682,21 @@ function termToNT(term) {
   return null;
 }
 
+/**
+ * Parse a SPARQL Update request body into delete and insert triple sets.
+ *
+ * Supports three patterns:
+ *   - `INSERT DATA { ... }` — triples to add
+ *   - `DELETE DATA { ... }` — triples to remove
+ *   - `DELETE { ... } INSERT { ... } WHERE { ... }` — combined update
+ *
+ * PREFIX declarations are extracted and prepended to each block before
+ * parsing as Turtle. The WHERE clause is ignored (we do set-based matching).
+ *
+ * @param {string} body - SPARQL Update text
+ * @param {string} baseIri - Base IRI for the target resource
+ * @returns {{ deleteTriples: Array, insertTriples: Array }}
+ */
 export function parseSparqlUpdate(body, baseIri) {
   const deleteTriples = [];
   const insertTriples = [];

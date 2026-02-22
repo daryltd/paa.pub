@@ -1,8 +1,24 @@
 /**
- * Minimal CBOR decoder for WebAuthn attestation objects.
+ * Minimal CBOR (Concise Binary Object Representation) decoder.
  *
- * Handles the subset of CBOR used by WebAuthn:
- * - Maps, arrays, byte strings, text strings, positive/negative integers, booleans, null
+ * Used exclusively for decoding WebAuthn attestation objects, which are
+ * CBOR-encoded. This decoder handles the subset of CBOR types that appear
+ * in WebAuthn data:
+ *
+ *   Major type 0: Positive integers (credential IDs, counters)
+ *   Major type 1: Negative integers
+ *   Major type 2: Byte strings (public key data, authenticator data)
+ *   Major type 3: Text strings (format identifiers)
+ *   Major type 4: Arrays
+ *   Major type 5: Maps (the attestation object itself is a map)
+ *   Major type 7: Simple values (booleans, null)
+ *
+ * CBOR format: each value starts with a byte where the high 3 bits are
+ * the major type and the low 5 bits encode the length (or the value itself
+ * for small integers). Lengths 24-27 mean "read 1/2/4/8 additional bytes
+ * for the actual length."
+ *
+ * Reference: RFC 8949 (CBOR)
  */
 
 /**

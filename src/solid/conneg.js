@@ -1,5 +1,13 @@
 /**
  * Content negotiation for RDF serialization formats.
+ *
+ * Maps the client's Accept header to the best available serialization:
+ *   - `text/turtle` (default) — human-readable RDF with prefix shorthand
+ *   - `application/n-triples` — line-based, no prefixes
+ *   - `application/ld+json` — JSON-LD (flat structure, basic conversion)
+ *
+ * Also detects ActivityPub requests (Accept: application/activity+json)
+ * so the LDP handler can delegate to the ActivityPub actor handler.
  */
 import { serializeTurtle } from '../rdf/turtle-serializer.js';
 import { serializeNTriples } from '../rdf/ntriples.js';

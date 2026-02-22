@@ -1,6 +1,8 @@
 /**
  * Remote actor fetch and cache.
  */
+import { simpleHash } from '../utils.js';
+import { validateExternalUrl } from '../security/ssrf.js';
 
 const CACHE_TTL = 3600; // 1 hour
 
@@ -11,7 +13,12 @@ const CACHE_TTL = 3600; // 1 hour
  * @returns {Promise<object|null>}
  */
 export async function fetchRemoteActor(actorUri, kv) {
-  const cacheKey = `ap_remote_actor:${hashStr(actorUri)}`;
+  if (!validateExternalUrl(actorUri)) {
+    console.log(`[remote] SSRF blocked: ${actorUri}`);
+    return null;
+  }
+
+  const cacheKey = `ap_remote_actor:${simpleHash(actorUri)}`;
   const cached = await kv.get(cacheKey);
   if (cached) return JSON.parse(cached);
 
@@ -59,8 +66,13 @@ export async function resolveHandle(handle) {
   const [user, domain] = handle.split('@');
   if (!user || !domain) return null;
 
+  const url = `https://${domain}/.well-known/webfinger?resource=acct:${encodeURIComponent(handle)}`;
+  if (!validateExternalUrl(url)) {
+    console.log(`[remote] SSRF blocked webfinger: ${url}`);
+    return null;
+  }
+
   try {
-    const url = `https://${domain}/.well-known/webfinger?resource=acct:${encodeURIComponent(handle)}`;
     const response = await fetch(url, {
       headers: { Accept: 'application/jrd+json' },
     });
@@ -74,10 +86,3 @@ export async function resolveHandle(handle) {
   }
 }
 
-function hashStr(str) {
-  let hash = 0;
-  for (let i = 0; i < str.length; i++) {
-    hash = ((hash << 5) - hash + str.charCodeAt(i)) | 0;
-  }
-  return Math.abs(hash).toString(36);
-}

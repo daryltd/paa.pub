@@ -23,6 +23,7 @@ import { renderPage } from '../shell.js';
 import template from '../templates/acl-editor.html';
 import aclToggleScript from '../client/acl-toggle.js';
 import { requireAuth } from '../../auth/middleware.js';
+import { getContainerQuota, setContainerQuotaLimit } from '../../storage/container-quota.js';
 
 /**
  * Handle GET /acp/**
@@ -74,6 +75,27 @@ export async function renderAclEditor(reqCtx) {
     bgColor: currentMode === opt.value ? '#f0f0ff' : 'transparent',
   }));
 
+  // Container quota data (only for containers)
+  let quotaData = null;
+  let quotaLimitValue = '';
+  if (isDir) {
+    const cq = await getContainerQuota(env.APPDATA, resourceIri);
+    if (cq) {
+      const hasLimit = cq.limitBytes !== undefined && cq.limitBytes !== null;
+      const usedPercent = hasLimit ? Math.min(100, Math.round(((cq.usedBytes || 0) / cq.limitBytes) * 100)) : 0;
+      quotaData = {
+        usedFormatted: formatBytes(cq.usedBytes || 0),
+        limitFormatted: hasLimit ? formatBytes(cq.limitBytes) : '',
+        hasLimit,
+        usedPercent,
+        barColor: usedPercent > 90 ? '#dc3545' : usedPercent > 70 ? '#ffc107' : '#28a745',
+      };
+      if (hasLimit) {
+        quotaLimitValue = formatBytesShort(cq.limitBytes);
+      }
+    }
+  }
+
   return renderPage('Access Policy', template, {
     resourceIri,
     isDir,
@@ -90,6 +112,8 @@ export async function renderAclEditor(reqCtx) {
     hasFriends: friends.length > 0,
     turtlePolicy: policyToTurtle(policy, resourceIri, config.webId, friends),
     clientScript: aclToggleScript,
+    quotaData,
+    quotaLimitValue,
   }, { user: username, nav: 'storage' });
 }
 
@@ -136,6 +160,18 @@ export async function handleAclUpdate(reqCtx) {
     }
   }
 
+  if (action === 'save_quota') {
+    const limitStr = (form.get('quota_limit') || '').trim();
+    if (limitStr) {
+      const limitBytes = parseQuotaLimit(limitStr);
+      if (limitBytes !== null) {
+        await setContainerQuotaLimit(env.APPDATA, resourceIri, limitBytes);
+      }
+    } else {
+      await setContainerQuotaLimit(env.APPDATA, resourceIri, null);
+    }
+  }
+
   if (action === 'remove_friend') {
     const webid = (form.get('webid') || '').trim();
     const friends = await loadFriends(env.APPDATA, username);
@@ -159,6 +195,13 @@ const MODE_LABELS = {
   inherit: 'Inherit from parent',
 };
 
+/**
+ * Load the ACP policy for a resource from APPDATA KV.
+ * Returns the stored policy JSON, or the default (inherit) if none exists.
+ * @param {KVNamespace} kv
+ * @param {string} resourceIri
+ * @returns {Promise<{mode: string, agents?: string[], inherit?: boolean}>}
+ */
 async function loadPolicy(kv, resourceIri) {
   const data = await kv.get(`acp:${resourceIri}`);
   return data ? JSON.parse(data) : { ...DEFAULT_POLICY };
@@ -253,6 +296,16 @@ export async function checkAcpAccess(kv, resourceIri, agentWebId, ownerWebId, us
   return { readable: false, listed: false };
 }
 
+/**
+ * Evaluate a resolved ACP policy for a specific agent.
+ * @param {object} policy - The ACP policy to evaluate
+ * @param {string|null} agentWebId - The requesting agent's WebID, or null for anonymous
+ * @param {KVNamespace} kv - APPDATA KV (for loading friends list)
+ * @param {string} username - Server owner's username
+ * @returns {Promise<{readable: boolean, listed: boolean}>}
+ *   - readable: whether the agent can read the resource
+ *   - listed: whether the resource should appear in container listings
+ */
 async function evaluatePolicy(policy, agentWebId, kv, username) {
   switch (policy.mode) {
     case 'public':
@@ -351,4 +404,30 @@ function policyToTurtle(policy, resourceIri, ownerWebId, friends) {
   }
 
   return lines.join('\n');
+}
+
+function formatBytes(bytes) {
+  if (!bytes || bytes === 0) return '0 B';
+  const k = 1024;
+  const sizes = ['B', 'KB', 'MB', 'GB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return `${(bytes / Math.pow(k, i)).toFixed(1)} ${sizes[i]}`;
+}
+
+function formatBytesShort(bytes) {
+  if (!bytes || bytes === 0) return '';
+  const k = 1024;
+  if (bytes >= k * k * k) return `${(bytes / (k * k * k)).toFixed(0)}GB`;
+  if (bytes >= k * k) return `${(bytes / (k * k)).toFixed(0)}MB`;
+  if (bytes >= k) return `${(bytes / k).toFixed(0)}KB`;
+  return `${bytes}B`;
+}
+
+function parseQuotaLimit(str) {
+  const match = str.match(/^(\d+(?:\.\d+)?)\s*(GB|MB|KB|B)?$/i);
+  if (!match) return null;
+  const num = parseFloat(match[1]);
+  const unit = (match[2] || 'B').toUpperCase();
+  const multipliers = { B: 1, KB: 1024, MB: 1024 * 1024, GB: 1024 * 1024 * 1024 };
+  return Math.floor(num * (multipliers[unit] || 1));
 }

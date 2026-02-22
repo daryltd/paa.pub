@@ -1,16 +1,49 @@
 /**
  * Activity processors: Follow, Accept, Undo, Create.
  */
+import { simpleHash } from '../utils.js';
 
 const AS_PUBLIC = 'https://www.w3.org/ns/activitystreams#Public';
 
 /**
  * Process an incoming Follow activity.
- * Auto-accepts and adds follower.
+ * Stores as pending — the owner must accept or reject via the UI.
  */
 export async function processFollow(activity, config, env, ctx) {
   const username = config.username;
-  const followerUri = activity.actor;
+  const followerUri = typeof activity.actor === 'string' ? activity.actor : activity.actor?.id || '';
+
+  // Store in inbox
+  await storeInboxActivity(activity, username, env);
+
+  // Add to pending follow requests
+  const pendingData = await env.APPDATA.get(`ap_pending_follows:${username}`);
+  const pending = JSON.parse(pendingData || '[]');
+  // Avoid duplicates
+  if (!pending.some(p => p.actor === followerUri)) {
+    pending.push({
+      actor: followerUri,
+      activityId: activity.id,
+      receivedAt: new Date().toISOString(),
+    });
+    await env.APPDATA.put(`ap_pending_follows:${username}`, JSON.stringify(pending));
+  }
+
+  return { followerUri };
+}
+
+/**
+ * Accept a pending follow request: add to followers, deliver Accept.
+ */
+export async function acceptFollowRequest(followerUri, config, env) {
+  const username = config.username;
+
+  // Find and remove from pending
+  const pendingData = await env.APPDATA.get(`ap_pending_follows:${username}`);
+  const pending = JSON.parse(pendingData || '[]');
+  const entry = pending.find(p => p.actor === followerUri);
+  const filtered = pending.filter(p => p.actor !== followerUri);
+  await env.APPDATA.put(`ap_pending_follows:${username}`, JSON.stringify(filtered));
 
   // Add to followers list
   const followersData = await env.APPDATA.get(`ap_followers:${username}`);
@@ -20,23 +53,55 @@ export async function processFollow(activity, config, env, ctx) {
     await env.APPDATA.put(`ap_followers:${username}`, JSON.stringify(followers));
   }
 
-  // Store in inbox
-  await storeInboxActivity(activity, username, env);
-
-  // Auto-accept: create and deliver Accept activity
+  // Build Accept activity
   const accept = {
     '@context': 'https://www.w3.org/ns/activitystreams',
     type: 'Accept',
     id: `${config.baseUrl}/${username}/outbox/${crypto.randomUUID()}`,
     actor: config.actorId,
-    object: activity,
+    object: {
+      type: 'Follow',
+      actor: followerUri,
+      object: config.actorId,
+      ...(entry?.activityId ? { id: entry.activityId } : {}),
+    },
     published: new Date().toISOString(),
   };
 
-  // Store Accept in outbox
   await storeOutboxActivity(accept, username, env);
+  return accept;
+}
 
-  return { accept, followerUri };
+/**
+ * Reject a pending follow request: remove from pending, deliver Reject.
+ */
+export async function rejectFollowRequest(followerUri, config, env) {
+  const username = config.username;
+
+  // Remove from pending
+  const pendingData = await env.APPDATA.get(`ap_pending_follows:${username}`);
+  const pending = JSON.parse(pendingData || '[]');
+  const entry = pending.find(p => p.actor === followerUri);
+  const filtered = pending.filter(p => p.actor !== followerUri);
+  await env.APPDATA.put(`ap_pending_follows:${username}`, JSON.stringify(filtered));
+
+  // Build Reject activity
+  const reject = {
+    '@context': 'https://www.w3.org/ns/activitystreams',
+    type: 'Reject',
+    id: `${config.baseUrl}/${username}/outbox/${crypto.randomUUID()}`,
+    actor: config.actorId,
+    object: {
+      type: 'Follow',
+      actor: followerUri,
+      object: config.actorId,
+      ...(entry?.activityId ? { id: entry.activityId } : {}),
+    },
+    published: new Date().toISOString(),
+  };
+
+  await storeOutboxActivity(reject, username, env);
+  return reject;
 }
 
 /**
@@ -200,10 +265,3 @@ export async function storeOutboxActivity(activity, username, env) {
   await env.APPDATA.put(`ap_outbox_index:${username}`, JSON.stringify(index));
 }
 
-function simpleHash(str) {
-  let hash = 0;
-  for (let i = 0; i < str.length; i++) {
-    hash = ((hash << 5) - hash + str.charCodeAt(i)) | 0;
-  }
-  return Math.abs(hash).toString(36);
-}
