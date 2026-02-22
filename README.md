@@ -11,17 +11,49 @@ Own your identity and data. Your server provides:
 - A **web UI** — dashboard, profile editor, activity feed, file browser, and access control editor
 - **Security hardening** — rate limiting, request size limits, storage quotas, SSRF protection, app write restrictions, and HTTP Signature verification
 
-Uses [s20e](https://github.com/anthropics/s20e) as the RDF/SPARQL engine (Oxigraph compiled to WASM). Everything else — authentication, federation, LDP, UI — is vanilla JavaScript using only Web APIs.
+Uses [s20e](https://github.com/chapeaux/s20e) as the RDF/SPARQL engine (Oxigraph compiled to WASM). Everything else — authentication, federation, LDP, UI — is vanilla JavaScript using only Web APIs.
+
+[![Deploy to Cloudflare Workers](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/daryltd/paa.pub)
 
 ## Quick start
 
-### Prerequisites
+There are three ways to deploy:
+
+1. **Deploy button** (above) — click, connect your GitHub fork, and configure in the Cloudflare dashboard
+2. **GitHub Actions** — fork the repo and set up automated deploys on push
+3. **Manual** — clone, configure `wrangler.toml`, and deploy with the Wrangler CLI
+
+All three require creating KV namespaces and an R2 bucket first (step 2 below).
+
+### Option A: Deploy button
+
+Click the deploy button above. Cloudflare will walk you through:
+
+1. Forking the repo to your GitHub account
+2. Connecting it to your Cloudflare account
+3. Creating a Worker
+
+After deployment, you still need to create the storage resources (step 2 below), update `wrangler.toml` with the IDs, set secrets (step 3), and re-deploy.
+
+### Option B: GitHub Actions (CI/CD)
+
+1. Fork this repo
+2. Create the Cloudflare resources (step 2 below) and update `wrangler.toml` with your KV/R2 IDs
+3. In your fork's **Settings** → **Secrets and variables** → **Actions**, add:
+   - `CLOUDFLARE_API_TOKEN` — create one at [dash.cloudflare.com/profile/api-tokens](https://dash.cloudflare.com/profile/api-tokens) with the **Edit Cloudflare Workers** template
+   - `CLOUDFLARE_ACCOUNT_ID` — found on the Workers overview page
+4. Set app secrets with `wrangler secret put PAA_PASSWORD` and `wrangler secret put PAA_DOMAIN`
+5. Push to `main` — the workflow at `.github/workflows/deploy.yml` deploys automatically
+
+### Option C: Manual deploy
+
+#### Prerequisites
 
 - **Node.js** 20+
 - **Wrangler CLI** (`npm install -g wrangler`)
 - A **Cloudflare account** (free tier works)
 
-### 1. Clone and install
+#### 1. Clone and install
 
 ```sh
 git clone <repo-url> paa.pub
