@@ -1,37 +1,88 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" prefix="foaf: http://xmlns.com/foaf/0.1/ vcard: http://www.w3.org/2006/vcard/ns# schema: http://schema.org/">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{{#name}}{{name}}{{/name}}{{^name}}{{username}}{{/name}} — {{domain}}</title>
-  <style>
-    *, *::before, *::after { box-sizing: border-box; }
-    body { font-family: system-ui, -apple-system, sans-serif; max-width: 640px; margin: 2rem auto; padding: 0 1rem; color: #1a1a1a; background: #fafafa; line-height: 1.6; }
-    h1 { margin: 0 0 0.25rem; font-size: 1.8rem; }
-    .subtitle { color: #666; margin: 0 0 1.5rem; }
-    .avatar { width: 96px; height: 96px; border-radius: 50%; object-fit: cover; margin-bottom: 1rem; }
-    .bio { margin: 1rem 0; }
-    .meta { color: #555; font-size: 0.9rem; }
-    .meta a { color: #2563eb; text-decoration: none; }
-    .meta a:hover { text-decoration: underline; }
-    .links { margin-top: 1.5rem; display: flex; gap: 0.75rem; flex-wrap: wrap; }
-    .links a { display: inline-block; padding: 0.4rem 1rem; border: 1px solid #ddd; border-radius: 6px; color: #333; text-decoration: none; font-size: 0.9rem; }
-    .links a:hover { background: #f0f0f0; }
-  </style>
+  <link rel="stylesheet" href="/css/base.css">
 </head>
 <body>
-  {{#img}}<img src="{{img}}" alt="{{#name}}{{name}}{{/name}}{{^name}}{{username}}{{/name}}" class="avatar">{{/img}}
-  <h1>{{#name}}{{name}}{{/name}}{{^name}}{{username}}{{/name}}</h1>
-  {{#role}}<p class="subtitle">{{role}}</p>{{/role}}
-  {{#bio}}<p class="bio">{{bio}}</p>{{/bio}}
-  {{#description}}<p class="bio">{{description}}</p>{{/description}}
-  <div class="meta">
-    {{#email}}<p>Email: <a href="mailto:{{email}}">{{email}}</a></p>{{/email}}
-    {{#homepage}}<p>Web: <a href="{{homepage}}">{{homepage}}</a></p>{{/homepage}}
-    {{#nick}}<p>Nickname: {{nick}}</p>{{/nick}}
-  </div>
-  <div class="links">
-    <a href="{{webId}}">WebID</a>
-  </div>
+  {{=<% %>=}}
+  <!--
+    RDFa usage:
+      about="..."          — the subject IRI this block describes
+      typeof="foaf:Person" — the rdf:type of the subject
+      property="foaf:name" — marks an element's text content as an RDF literal
+      rel="foaf:homepage"  — marks an <a href> as an RDF IRI relation
+      resource="..."       — explicit object IRI (when the href differs)
+
+    Mustache keys for profile fields:
+      {{name}}        foaf:name           {{email}}       foaf:mbox
+      {{nick}}        foaf:nick           {{homepage}}    foaf:homepage
+      {{img}}         foaf:img            {{bio}}         vcard:note
+      {{role}}        vcard:role           {{description}} schema:description
+
+    Custom triples added via the profile editor are available as:
+      {{key}}           — plain string (first value)
+      {{#key_list}}     — iterate all values: {{value}}, {{isLink}}
+      {{#has_key}}      — conditional
+      {{#customGroups}} — iterate all custom groups: {{predicateShort}}, {{#values}}
+
+    Key names are derived from the predicate IRI:
+      foaf:knows      → foaf_knows
+      schema:jobTitle → schema_jobTitle
+  -->
+  <%={{ }}=%>
+  <main about="{{webId}}" typeof="foaf:Person">
+    <div class="card">
+      {{#img}}<img property="foaf:img" src="{{img}}" alt="{{#name}}{{name}}{{/name}}{{^name}}{{username}}{{/name}}" class="avatar img-preview mb-075">{{/img}}
+      <h1 property="foaf:name">{{#name}}{{name}}{{/name}}{{^name}}{{username}}{{/name}}</h1>
+      {{#role}}<p class="text-muted" property="vcard:role">{{role}}</p>{{/role}}
+    </div>
+
+    <div class="card">
+      <h2>Details</h2>
+      {{#bio}}<p property="vcard:note" class="mb-05">{{bio}}</p>{{/bio}}
+      {{#description}}<p property="schema:description" class="mb-05">{{description}}</p>{{/description}}
+      {{#email}}<p class="mb-025">Email: <a rel="foaf:mbox" href="mailto:{{email}}">{{email}}</a></p>{{/email}}
+      {{#homepage}}<p class="mb-025">Web: <a rel="foaf:homepage" href="{{homepage}}">{{homepage}}</a></p>{{/homepage}}
+      {{#nick}}<p class="mb-025">Nickname: <span property="foaf:nick">{{nick}}</span></p>{{/nick}}
+    </div>
+
+    {{=<% %>=}}
+    <!-- Scalar custom triple example:
+         {{#has_term_cvTitle}}<p>Job Title: <span property="http://example.org/term/cvTitle">{{term_cvTitle}}</span></p>{{/has_term_cvTitle}}
+    -->
+    <%={{ }}=%>
+
+    <!-- Multi-valued custom triple: append _list to the key to iterate all values -->
+    {{#has_foaf_knows}}
+    <div class="card">
+      <h2>People</h2>
+      <ul class="list-indented">
+        {{#foaf_knows_list}}
+        <li>{{#isLink}}<a rel="foaf:knows" href="{{value}}">{{value}}</a>{{/isLink}}{{^isLink}}<span property="foaf:knows">{{value}}</span>{{/isLink}}</li>
+        {{/foaf_knows_list}}
+      </ul>
+    </div>
+    {{/has_foaf_knows}}
+
+    <!-- Generic: render all custom triple groups automatically -->
+    <div class="card">
+      <h2>Triples</h2>
+      {{#customGroups}}
+      <h2>{{predicateShort}}</h2>
+      <ul class="list-indented">
+        {{#values}}
+        <li>{{#isLink}}<a rel="{{predicateShort}}" href="{{value}}">{{value}}</a>{{/isLink}}{{^isLink}}<span property="{{predicateShort}}">{{value}}</span>{{/isLink}}</li>
+        {{/values}}
+      </ul>
+      {{/customGroups}}
+    </div>
+
+    <div class="card">
+      <a href="{{webId}}" class="mono text-muted text-sm">WebID</a>
+    </div>
+  </main>
 </body>
 </html>

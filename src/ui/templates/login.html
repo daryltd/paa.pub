@@ -1,4 +1,4 @@
-<div class="card" style="max-width: 400px; margin: 4rem auto;">
+<div class="card login-card">
   <h1>Login</h1>
   {{#error}}
   <div class="error">{{error}}</div>
@@ -6,12 +6,13 @@
   <form method="POST" action="/login">
     <div class="form-group">
       <label for="password">Password</label>
-      <input type="password" id="password" name="password" required autofocus>
+      <input type="password" id="password" name="password" autocomplete="current-password" required autofocus>
     </div>
     <button type="submit" class="btn">Sign In</button>
   </form>
-  <div id="passkey-login" style="margin-top: 1rem;">
-    <button type="button" class="btn btn-secondary" onclick="passkeyLogin()" id="passkey-btn" style="display:none;">Sign in with Passkey</button>
+  <div id="passkey-login" class="mt-1">
+    <button type="button" class="btn btn-secondary hidden" onclick="passkeyLogin()" id="passkey-btn">Sign in with Passkey</button>
   </div>
-  <script>{{{clientScript}}}</script>
+  <script src="/scripts/webauthn-utils.js"></script>
+  <script src="/scripts/passkey-login.js"></script>
 </div>

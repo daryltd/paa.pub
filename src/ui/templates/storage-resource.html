@@ -1,6 +1,6 @@
 <h1>Storage</h1>
 <div class="card">
-  <div class="text-muted" style="margin-bottom:0.5rem;">Path: <span class="mono">{{displayPath}}</span></div>
+  <div class="text-muted mb-05">Path: <span class="mono">{{displayPath}}</span></div>
   {{{breadcrumbs}}}
 </div>
 <div class="card">
@@ -9,41 +9,41 @@
   <form method="POST" action="/storage/{{{path}}}">
     <input type="hidden" name="action" value="save">
     <div class="form-group"><label for="content">Content</label>
-      <textarea id="content" name="content" rows="20" class="mono" style="font-size:0.85rem;tab-size:2;">{{content}}</textarea>
+      <textarea id="content" name="content" rows="20" class="mono editor-textarea">{{content}}</textarea>
     </div>
-    <div style="display:flex;gap:0.5rem;">
+    <div class="flex gap-05">
       <button type="submit" class="btn">Save</button>
       <a href="/storage/{{{path}}}" class="btn btn-secondary">Cancel</a>
     </div>
   </form>
   {{/showEditor}}
   {{#showImage}}
-  <div style="margin-bottom:0.75rem;">
-    <img src="{{resourceUrl}}" alt="{{fileName}}" style="max-width:100%;border-radius:4px;">
+  <div class="mb-075">
+    <img src="{{resourceUrl}}" alt="{{fileName}}" class="img-preview">
   </div>
   <div class="text-muted">{{contentType}} &middot; {{{sizeFormatted}}}</div>
-  <div style="margin-top:0.5rem;"><a href="{{resourceUrl}}" class="mono text-muted" target="_blank">{{fullResourceUrl}}</a></div>
+  <div class="mt-05"><a href="{{resourceUrl}}" class="mono text-muted" target="_blank">{{fullResourceUrl}}</a></div>
   {{/showImage}}
   {{#showBinaryDownload}}
   <div class="text-muted">{{contentType}} &middot; {{{sizeFormatted}}}</div>
-  <div style="margin-top:0.5rem;"><a href="{{resourceUrl}}" class="btn btn-secondary" target="_blank">Download File</a></div>
-  <div style="margin-top:0.5rem;"><a href="{{resourceUrl}}" class="mono text-muted" target="_blank">{{fullResourceUrl}}</a></div>
+  <div class="mt-05"><a href="{{resourceUrl}}" class="btn btn-secondary" target="_blank">Download File</a></div>
+  <div class="mt-05"><a href="{{resourceUrl}}" class="mono text-muted" target="_blank">{{fullResourceUrl}}</a></div>
   {{/showBinaryDownload}}
   {{#showContent}}
-  <pre class="mono" style="font-size:0.85rem;background:#f8f8f8;padding:1rem;border-radius:4px;overflow-x:auto;white-space:pre-wrap;">{{content}}</pre>
+  <pre class="mono code-block-lg">{{content}}</pre>
   {{/showContent}}
   {{#showEmpty}}
   <div class="text-muted">Resource exists but has no content.</div>
   {{/showEmpty}}
-  <div style="margin-top:0.75rem;display:flex;gap:0.5rem;flex-wrap:wrap;">
-    <a href="{{resourceUrl}}" class="btn btn-secondary" style="font-size:0.8rem;" target="_blank">View Raw</a>
+  <div class="mt-075 flex gap-05 flex-wrap">
+    <a href="{{resourceUrl}}" class="btn btn-secondary btn-small-text" target="_blank">View Raw</a>
     {{#showEditButton}}
-    <a href="/storage/{{{path}}}?edit=1" class="btn" style="font-size:0.8rem;">Edit</a>
+    <a href="/storage/{{{path}}}?edit=1" class="btn btn-small-text">Edit</a>
     {{/showEditButton}}
-    <a href="/acp/{{{path}}}" class="btn btn-secondary" style="font-size:0.8rem;">Access Policy</a>
-    <form method="POST" action="/storage/{{{path}}}" class="inline">
+    <a href="/acp/{{{path}}}" class="btn btn-secondary btn-small-text">Access Policy</a>
+    <form method="POST" action="/storage/{{{path}}}" class="inline-form">
       <input type="hidden" name="action" value="delete">
-      <button type="submit" class="btn btn-danger" style="font-size:0.8rem;"
+      <button type="submit" class="btn btn-danger btn-small-text"
         data-confirm="Delete this resource?">Delete</button>
     </form>
   </div>
@@ -53,33 +53,48 @@
   {{#showMetaEditor}}
   <form method="POST" action="/storage/{{{path}}}">
     <input type="hidden" name="action" value="save_meta">
-    <div class="form-group"><label for="metadata">Linked Metadata (N-Triples)</label>
-      <textarea id="metadata" name="metadata" rows="8" class="mono" style="font-size:0.85rem;">{{metaTurtle}}</textarea>
+    <div class="triple-editor"
+         data-subject="{{resourceIri}}"
+         data-output="ntriples"
+         data-ntriples-name="metadata"
+         data-prefixes='{{{prefixesJson}}}'>
+      {{#metaTriplesEditable}}
+      <div class="te-row">
+        <div class="te-pred-cell">
+          <span class="te-pred-display mono cursor-pointer">{{predicateShort}}</span>
+          <input type="text" class="te-pred-input hidden"
+                 value="{{predicate}}" placeholder="Predicate IRI">
+          <button type="button" class="te-search-btn btn btn-secondary btn-xs hidden">Search</button>
+        </div>
+        <div class="te-obj-cell">
+          <input type="text" class="te-obj-input" value="{{object}}" placeholder="Object value">
+        </div>
+        <button type="button" class="btn btn-secondary btn-compact te-remove">Remove</button>
+      </div>
+      {{/metaTriplesEditable}}
+      <div class="te-add-area"></div>
     </div>
-    <div class="text-muted" style="font-size:0.8rem;margin-bottom:0.75rem;">
-      Subject should be <code class="mono">&lt;{{resourceIri}}&gt;</code>.
-      Common predicates: <code class="mono">dcterms:title</code>, <code class="mono">dcterms:description</code>, <code class="mono">dcterms:creator</code>, <code class="mono">schema:keywords</code>.
-    </div>
-    <div style="display:flex;gap:0.5rem;">
+    <div class="flex gap-05 mt-075">
       <button type="submit" class="btn">Save Metadata</button>
       <a href="/storage/{{{path}}}" class="btn btn-secondary">Cancel</a>
     </div>
   </form>
   {{/showMetaEditor}}
   {{#hasMetaTriples}}
-  <table style="font-size:0.85rem;">
+  <table class="table-sm">
     {{#metaTriples}}
     <tr><td class="text-muted">{{predLabel}}</td><td class="mono">{{value}}</td></tr>
     {{/metaTriples}}
   </table>
-  <div style="margin-top:0.5rem;">
-    <a href="/storage/{{{path}}}?meta=1" class="btn btn-secondary" style="font-size:0.8rem;">Edit Metadata</a>
+  <div class="mt-05">
+    <a href="/storage/{{{path}}}?meta=1" class="btn btn-secondary btn-small-text">Edit Metadata</a>
   </div>
   {{/hasMetaTriples}}
   {{#showNoMeta}}
   <div class="text-muted">No metadata.</div>
-  <div style="margin-top:0.5rem;">
-    <a href="/storage/{{{path}}}?meta=1" class="btn btn-secondary" style="font-size:0.8rem;">Edit Metadata</a>
+  <div class="mt-05">
+    <a href="/storage/{{{path}}}?meta=1" class="btn btn-secondary btn-small-text">Edit Metadata</a>
   </div>
   {{/showNoMeta}}
 </div>
+<script src="/scripts/triple-editor.js"></script>

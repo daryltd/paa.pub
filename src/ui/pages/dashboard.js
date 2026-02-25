@@ -3,8 +3,6 @@
  */
 import { renderPage } from '../shell.js';
 import template from '../templates/dashboard.html';
-import webauthnUtils from '../client/webauthn-utils.js';
-import passkeyRegisterScript from '../client/passkey-register.js';
 import { requireAuth } from '../../auth/middleware.js';
 import { parseNTriples, unwrapIri, unwrapLiteral } from '../../rdf/ntriples.js';
 import { PREFIXES } from '../../rdf/prefixes.js';
@@ -55,12 +53,11 @@ export async function renderDashboard(reqCtx) {
     webfingerParam: encodeURIComponent(username) + '@' + encodeURIComponent(config.domain),
     passkeys,
     hasPasskeys: passkeys.length > 0,
-    clientScript: webauthnUtils + '\n' + passkeyRegisterScript,
     storageBreakdown: breakdown.categories,
     hasBreakdown: breakdown.categories.length > 0,
     totalResources: breakdown.totalCount,
     totalResourcesPlural: breakdown.totalCount !== 1,
-  }, { user: username, nav: 'dashboard' });
+  }, { user: username, nav: 'dashboard', storage: reqCtx.storage, baseUrl: config.baseUrl });
 }
 
 function formatBytes(bytes) {

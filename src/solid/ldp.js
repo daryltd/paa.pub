@@ -843,6 +843,9 @@ async function buildProfileTemplateData(storage, config) {
     triples: [],
   };
 
+  // Collect custom (non-mapped) predicates grouped by key
+  const customBuckets = new Map();
+
   // Only map triples whose subject is the WebID
   for (const t of allTriples) {
     const subjectIri = unwrapIri(t.subject);
@@ -866,6 +869,20 @@ async function buildProfileTemplateData(storage, config) {
         val = val.slice(7);
       }
       data[varName] = val;
+    } else {
+      // Group custom triples by predicate key
+      const key = predicateToKey(predicateIri);
+      if (!customBuckets.has(key)) {
+        customBuckets.set(key, {
+          predicate: predicateIri,
+          predicateShort: shortenPredicate(predicateIri),
+          key,
+          values: [],
+        });
+      }
+      const isLink = objectValue.startsWith('http://') || objectValue.startsWith('https://');
+      const short = shortenPredicate(predicateIri);
+      customBuckets.get(key).values.push({ value: objectValue, isLink, predicate: predicateIri, predicateShort: short });
     }
 
     // Always add to the raw triples array
@@ -876,7 +893,36 @@ async function buildProfileTemplateData(storage, config) {
     });
   }
 
+  // Expose each custom group in two forms:
+  //   data[key]          = plain string (first value) for scalar use: {{key}}
+  //   data[key + '_list'] = array of {value, isLink} for iteration: {{#key_list}}
+  //   data['has_' + key] = boolean flag for conditionals: {{#has_key}}
+  const customGroups = [];
+  for (const group of customBuckets.values()) {
+    data[group.key] = group.values[0].value;
+    data[group.key + '_list'] = group.values;
+    data['has_' + group.key] = true;
+    customGroups.push(group);
+  }
+  data.customGroups = customGroups;
+  data.hasCustomGroups = customGroups.length > 0;
+
   return data;
+}
+
+/**
+ * Convert a predicate IRI to a Mustache-safe variable name.
+ * e.g. "http://xmlns.com/foaf/0.1/knows" → "foaf_knows"
+ */
+function predicateToKey(predicateIri) {
+  for (const [prefix, ns] of Object.entries(PREFIXES)) {
+    if (predicateIri.startsWith(ns)) {
+      return prefix + '_' + predicateIri.slice(ns.length);
+    }
+  }
+  // Fallback: use last path or fragment segment
+  const pos = Math.max(predicateIri.lastIndexOf('#'), predicateIri.lastIndexOf('/'));
+  return pos >= 0 ? predicateIri.slice(pos + 1) : predicateIri;
 }
 
 /**

@@ -1,9 +1,10 @@
 <nav class="paa-nav">
-    <a href="/dashboard" class="brand">Kaiāulu Pa'a</a>
-    {{#items}}
-    <a href="{{href}}" class="{{activeClass}}">{{label}}</a>
-    {{/items}}
-    <span class="spacer"></span>
-    <a href="/{{username}}/" class="user">{{user}}</a>
-    <form method="POST" action="/logout" class="inline"><button type="submit">Logout</button></form>
-  </nav>
+  <a href="/dashboard" class="brand">Kaiāulu Pa'a</a>
+  {{#items}}
+  <a href="{{href}}" class="{{activeClass}}">{{label}}</a>
+  {{/items}}
+  <a href="/{{username}}/" class="user">{{user}}</a>
+  <form method="POST" action="/logout" class="inline">
+    <button type="submit">Logout</button>
+  </form>
+</nav>

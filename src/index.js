@@ -43,7 +43,7 @@ import { handleLDP } from './solid/ldp.js';
 import { applyCors } from './solid/cors.js';
 import { renderLoginPage } from './ui/pages/login.js';
 import { renderDashboard } from './ui/pages/dashboard.js';
-import { renderActivityPage, renderRemoteFeed } from './ui/pages/activity.js';
+import { renderActivityPage, renderRemoteFeed, handleMarkRead, handleMarkAllRead } from './ui/pages/activity.js';
 import { renderStoragePage, handleStorageAction } from './ui/pages/storage.js';
 import { renderAclEditor, handleAclUpdate } from './ui/pages/acl-editor.js';  // ACP editor (file retains old name for git history)
 import { renderProfileEditor, handleProfileUpdate, handleProfileIndexReset } from './ui/pages/profile-editor.js';
@@ -92,6 +92,8 @@ function buildRouter() {
   router.get('/dashboard', renderDashboard);
   router.get('/activity', renderActivityPage);
   router.get('/activity/remote', renderRemoteFeed);
+  router.post('/activity/mark-read', handleMarkRead);
+  router.post('/activity/mark-all-read', handleMarkAllRead);
   router.post('/compose', handleCompose);
   router.post('/follow', handleFollow);
   router.post('/unfollow', handleUnfollow);

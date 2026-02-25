@@ -28,18 +28,18 @@
 {{#hasPendingRequests}}
 <div class="card">
   <h2>Follow Requests ({{pendingCount}})</h2>
-  <ul style="list-style: none; padding: 0;">
+  <ul class="list-plain">
     {{#pendingRequests}}
-    <li style="display: flex; align-items: center; gap: 0.5rem; padding: 0.4rem 0; border-bottom: 1px solid #eee;">
-      <span class="mono" style="flex: 1; font-size: 0.8rem; overflow: hidden; text-overflow: ellipsis;">{{actor}}</span>
-      <span class="text-muted" style="font-size: 0.75rem; white-space: nowrap;">{{receivedAt}}</span>
-      <form method="POST" action="/follow-requests/accept" class="inline">
+    <li class="follow-request-item">
+      <span class="mono flex-1 text-sm truncate">{{actor}}</span>
+      <span class="text-muted text-xs nowrap">{{receivedAt}}</span>
+      <form method="POST" action="/follow-requests/accept" class="inline-form">
         <input type="hidden" name="target" value="{{actor}}">
-        <button type="submit" class="btn" style="padding: 0.15rem 0.5rem; font-size: 0.75rem;">Accept</button>
+        <button type="submit" class="btn btn-xs">Accept</button>
       </form>
-      <form method="POST" action="/follow-requests/reject" class="inline">
+      <form method="POST" action="/follow-requests/reject" class="inline-form">
         <input type="hidden" name="target" value="{{actor}}">
-        <button type="submit" class="btn btn-secondary" style="padding: 0.15rem 0.5rem; font-size: 0.75rem;">Reject</button>
+        <button type="submit" class="btn btn-secondary btn-xs">Reject</button>
       </form>
     </li>
     {{/pendingRequests}}
@@ -49,20 +49,20 @@
 
 <div class="card">
   <h2>Follow / Unfollow</h2>
-  <form method="POST" action="/follow" style="display: flex; gap: 0.5rem; margin-bottom: 0.5rem;">
-    <input type="text" name="target" placeholder="user@domain.com or actor URL" style="flex: 1;">
+  <form method="POST" action="/follow" class="flex gap-05 mb-05">
+    <input type="text" name="target" placeholder="user@domain.com or actor URL" class="flex-1">
     <button type="submit" class="btn">Follow</button>
   </form>
   {{#hasFollowing}}
   <details>
     <summary class="text-muted">{{followingCount}} following</summary>
-    <ul style="list-style: none; padding: 0; margin-top: 0.5rem;">
+    <ul class="list-plain mt-05">
       {{#following}}
-      <li style="display: flex; align-items: center; gap: 0.5rem; padding: 0.25rem 0;">
-        <a href="{{feedUrl}}" class="mono" style="flex: 1; font-size: 0.8rem; overflow: hidden; text-overflow: ellipsis;">{{uri}}</a>
-        <form method="POST" action="/unfollow" class="inline">
+      <li class="list-row">
+        <a href="{{feedUrl}}" class="mono flex-1 text-sm truncate">{{uri}}</a>
+        <form method="POST" action="/unfollow" class="inline-form">
           <input type="hidden" name="target" value="{{uri}}">
-          <button type="submit" class="btn btn-secondary" style="padding: 0.15rem 0.5rem; font-size: 0.75rem;">Unfollow</button>
+          <button type="submit" class="btn btn-secondary btn-xs">Unfollow</button>
         </form>
       </li>
       {{/following}}
@@ -70,12 +70,12 @@
   </details>
   {{/hasFollowing}}
   {{#hasFollowers}}
-  <details style="margin-top: 0.5rem;">
+  <details class="mt-05">
     <summary class="text-muted">{{followerCount}} followers</summary>
-    <ul style="list-style: none; padding: 0; margin-top: 0.5rem;">
+    <ul class="list-plain mt-05">
       {{#followers}}
-      <li style="padding: 0.25rem 0;">
-        <a href="{{feedUrl}}" class="mono" style="font-size: 0.8rem; overflow: hidden; text-overflow: ellipsis;">{{uri}}</a>
+      <li class="list-row">
+        <a href="{{feedUrl}}" class="mono text-sm truncate">{{uri}}</a>
       </li>
       {{/followers}}
     </ul>
@@ -84,19 +84,39 @@
 </div>
 
 <div>
-  <h2>Feed <span class="text-muted" style="font-size: 0.85rem; font-weight: normal;">(latest {{feedLimit}})</span></h2>
+  <div class="flex justify-between items-center">
+    <h2>Activity Feed <span class="text-muted text-sm font-normal">(latest {{feedLimit}})</span></h2>
+    <div class="flex gap-05">
+      {{#showAll}}
+      <a href="/activity" class="btn btn-secondary btn-xs">Hide read</a>
+      {{/showAll}}
+      {{^showAll}}
+      <a href="/activity?show=all" class="btn btn-secondary btn-xs">Show all</a>
+      {{/showAll}}
+      {{#hasActivities}}
+      <form method="POST" action="/activity/mark-all-read" class="inline-form">
+        <button type="submit" class="btn btn-secondary btn-xs">Mark all as read</button>
+      </form>
+      {{/hasActivities}}
+    </div>
+  </div>
   {{^hasActivities}}
   <div class="card text-muted">No activities yet.</div>
   {{/hasActivities}}
   {{#activities}}
   <div class="card">
-    <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
-      <span class="mono" style="font-size: 0.8rem;">{{actor}}</span>
+    <div class="flex justify-between mb-05">
+      <span class="mono text-sm">{{actor}}</span>
       <span class="text-muted">{{published}}</span>
     </div>
-    <div style="display: flex; gap: 0.5rem; margin-bottom: 0.5rem;">
-      <span style="background: #e8e8e8; padding: 0.1rem 0.4rem; border-radius: 3px; font-size: 0.75rem;">{{type}}</span>
-      <span style="background: {{{sourceColor}}}; padding: 0.1rem 0.4rem; border-radius: 3px; font-size: 0.75rem;">{{source}}</span>
+    <div class="flex gap-05 mb-05">
+      <span class="badge badge-type">{{type}}</span>
+      {{#isReceived}}<span class="badge badge-received">{{source}}</span>{{/isReceived}}
+      {{^isReceived}}<span class="badge badge-sent">{{source}}</span>{{/isReceived}}
+      <form method="POST" action="/activity/mark-read" class="inline-form">
+        <input type="hidden" name="id" value="{{activityId}}">
+        <button type="submit" class="btn btn-secondary btn-xs">Mark as read</button>
+      </form>
     </div>
     {{#isCreate}}
       {{#hasSummary}}<div class="text-muted"><em>CW: {{summary}}</em></div>{{/hasSummary}}

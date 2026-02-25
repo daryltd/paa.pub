@@ -142,18 +142,18 @@ export async function handleAuthorize(reqCtx) {
     // Load top-level containers for permission checkboxes
     const containers = await loadTopLevelContainers(reqCtx.storage, config);
     const containerCheckboxes = containers.map(c =>
-      `<label style="font-weight: normal; font-size: 0.85rem; display: flex; align-items: center; gap: 0.5rem;">
+      `<label class="container-label">
         <input type="checkbox" name="allowed_containers" value="${escapeHtml(c.iri)}">
         <span class="mono">${escapeHtml(c.path)}</span>
       </label>`
     ).join('\n');
 
     const body = `
-      <div class="card" style="max-width: 450px; margin: 4rem auto;">
+      <div class="card login-card-wide">
         <h1>Authorize</h1>
-        ${clientName ? `<p style="font-size: 1.1rem; font-weight: 600; margin-bottom: 0.25rem;">${escapeHtml(clientName)}</p>` : ''}
-        <p class="mono text-muted" style="margin-bottom: 1rem; font-size: 0.8rem; word-break: break-all;">${escapeHtml(clientId)}</p>
-        <p class="text-muted" style="margin-bottom: 1rem;">
+        ${clientName ? `<p class="client-name">${escapeHtml(clientName)}</p>` : ''}
+        <p class="mono text-muted mb-1 text-sm break-all">${escapeHtml(clientId)}</p>
+        <p class="text-muted mb-1">
           This application wants to access your Solid pod.
         </p>
         <form method="POST" action="/authorize">
@@ -172,27 +172,27 @@ export async function handleAuthorize(reqCtx) {
             </div>
           ` : ''}
           ${containers.length > 0 ? `
-            <div class="form-group" style="margin-top: 0.75rem;">
-              <label style="font-weight: 500; font-size: 0.9rem; margin-bottom: 0.5rem; display: block;">Allow write access to:</label>
-              <div style="display: flex; flex-direction: column; gap: 0.25rem; padding: 0.5rem; background: #f8f8f8; border-radius: 4px;">
+            <div class="form-group mt-075">
+              <label class="font-medium text-md mb-05">Allow write access to:</label>
+              <div class="checkbox-panel">
                 ${containerCheckboxes}
               </div>
             </div>
           ` : ''}
-          <div class="form-group" style="margin-top: 0.75rem;">
-            <label style="font-weight: normal; font-size: 0.85rem; display: flex; align-items: center; gap: 0.5rem;">
+          <div class="form-group mt-075">
+            <label class="container-label">
               <input type="checkbox" name="remember" value="1">
               Remember this app (skip consent next time)
             </label>
           </div>
-          <div style="display: flex; gap: 0.5rem;">
+          <div class="flex gap-05">
             <button type="submit" name="approve" value="yes" class="btn">Approve</button>
             <button type="submit" name="approve" value="no" class="btn btn-secondary">Deny</button>
           </div>
         </form>
       </div>`;
 
-    return htmlResponse(htmlPage('Authorize', body));
+    return htmlResponse(await htmlPage('Authorize', body));
   }
 
   // POST — process login + approval
@@ -239,8 +239,8 @@ export async function handleAuthorize(reqCtx) {
     const password = form.get('password') || '';
     const userRecord = await reqCtx.env.APPDATA.get(`user:${config.username}`);
     if (!userRecord || !await verifyPassword(password, userRecord)) {
-      return htmlResponse(htmlPage('Authorize', `
-        <div class="card" style="max-width: 450px; margin: 4rem auto;">
+      return htmlResponse(await htmlPage('Authorize', `
+        <div class="card login-card-wide">
           <div class="error">Invalid password</div>
           <a href="${escapeHtml(reqCtx.url.href)}" class="btn">Try Again</a>
         </div>`));

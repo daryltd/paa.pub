@@ -1,41 +1,7 @@
 <h1>Storage</h1>
 <div class="card">
-  <div class="text-muted" style="margin-bottom: 0.5rem;">Path: <span class="mono">{{displayPath}}</span></div>
+  <div class="text-muted mb-05">Path: <span class="mono">{{displayPath}}</span></div>
   {{{breadcrumbs}}}
-</div>
-<div class="card">
-  <h2>Upload File</h2>
-  <form method="POST" action="/storage/{{{path}}}" enctype="multipart/form-data">
-    <input type="hidden" name="action" value="upload">
-    <div class="form-group"><input type="file" name="file" required></div>
-    <div class="form-group"><input type="text" name="slug" placeholder="Filename (optional, uses original name if empty)"></div>
-    <button type="submit" class="btn">Upload</button>
-  </form>
-</div>
-<div class="card">
-  <h2>Create Container</h2>
-  <form method="POST" action="/storage/{{{path}}}">
-    <input type="hidden" name="action" value="mkdir">
-    <div style="display:flex;gap:0.5rem;">
-      <input type="text" name="name" placeholder="Container name" required style="flex:1;">
-      <button type="submit" class="btn">Create</button>
-    </div>
-  </form>
-</div>
-<div class="card">
-  <h2>Create Resource</h2>
-  <form method="POST" action="/storage/{{{path}}}">
-    <input type="hidden" name="action" value="create">
-    <div class="form-group">
-      <label for="create-name">Filename</label>
-      <input type="text" id="create-name" name="name" placeholder="e.g. notes.txt, data.ttl, page.html" required>
-    </div>
-    <div class="form-group">
-      <label for="create-content">Content</label>
-      <textarea id="create-content" name="content" rows="8" class="mono" style="font-size:0.85rem;tab-size:2;" placeholder="Enter content..."></textarea>
-    </div>
-    <button type="submit" class="btn">Create</button>
-  </form>
 </div>
 <div class="card">
   <h2>Contents</h2>
@@ -46,13 +12,13 @@
   <table>
     {{#items}}
     <tr>
-      <td style="width:1.5rem;">{{{icon}}}</td>
+      <td class="col-icon">{{{icon}}}</td>
       <td><a href="/storage/{{storagePath}}" class="mono">{{name}}</a></td>
-      <td style="white-space:nowrap;">
-        <a href="/{{rawPath}}" class="text-muted" target="_blank" style="font-size:0.8rem;">raw</a>
-        <form method="POST" action="/storage/{{storagePath}}" class="inline" style="margin-left:0.5rem;">
+      <td class="col-action">
+        <a href="/{{rawPath}}" class="text-muted text-sm" target="_blank">raw</a>
+        <form method="POST" action="/storage/{{storagePath}}" class="inline-form ml-05">
           <input type="hidden" name="action" value="delete">
-          <button type="submit" class="text-muted" style="background:none;border:none;cursor:pointer;font-size:0.8rem;color:#dc3545;padding:0;"
+          <button type="submit" class="link-btn"
             data-confirm="Delete {{name}}?">delete</button>
         </form>
       </td>
@@ -60,14 +26,49 @@
     {{/items}}
   </table>
   {{/hasItems}}
-  <div style="margin-top:0.75rem;display:flex;gap:0.5rem;">
-    <a href="/acp/{{{path}}}" class="btn btn-secondary" style="font-size:0.8rem;">Access Policy</a>
+  <div class="mt-075 flex gap-05">
+    <a href="/acp/{{{path}}}" class="btn btn-secondary btn-small-text">Access Policy</a>
     {{^isRoot}}
-    <form method="POST" action="/storage/{{{path}}}" class="inline">
+    <form method="POST" action="/storage/{{{path}}}" class="inline-form">
       <input type="hidden" name="action" value="delete">
-      <button type="submit" class="btn btn-danger" style="font-size:0.8rem;"
+      <button type="submit" class="btn btn-danger btn-small-text"
         data-confirm="Delete this container and all its contents?">Delete Container</button>
     </form>
     {{/isRoot}}
   </div>
 </div>
+<details class="card">
+  <summary>Create Container</summary>
+  <form method="POST" action="/storage/{{{path}}}">
+    <input type="hidden" name="action" value="mkdir">
+    <div class="flex gap-05">
+      <input type="text" name="name" placeholder="Container name" required class="flex-1">
+      <button type="submit" class="btn">Create</button>
+    </div>
+  </form>
+</details>
+<details class="card">
+  <summary>Upload File</summary>
+  <form method="POST" action="/storage/{{{path}}}" enctype="multipart/form-data">
+    <input type="hidden" name="action" value="upload">
+    <div class="form-group"><input type="file" name="file" required></div>
+    <div class="form-group"><input type="text" name="slug" placeholder="Filename (optional, uses original name if empty)"></div>
+    <button type="submit" class="btn">Upload</button>
+  </form>
+</details>
+<details class="card">
+  <summary>Create Resource</summary>
+  <form method="POST" action="/storage/{{{path}}}">
+    <input type="hidden" name="action" value="create">
+    <div class="form-group">
+      <label for="create-name">Filename</label>
+      <input type="text" id="create-name" name="name" placeholder="e.g. notes.txt, data.ttl, page.html" required>
+    </div>
+    <div class="form-group">
+      <label for="create-content">Content</label>
+      <textarea id="create-content" name="content" rows="8" class="mono editor-textarea" placeholder="Enter content..."></textarea>
+    </div>
+    <button type="submit" class="btn">Create</button>
+  </form>
+</details>
+

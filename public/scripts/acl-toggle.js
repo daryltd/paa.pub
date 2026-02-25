@@ -1,10 +1,9 @@
 document.querySelectorAll('input[name="mode"]').forEach(function(r) {
   r.addEventListener('change', function() {
-    document.getElementById('custom-agents').style.display =
-      r.value === 'custom' ? 'block' : 'none';
+    document.getElementById('custom-agents').classList.toggle('hidden', r.value !== 'custom');
     var inheritOpt = document.getElementById('inherit-option');
     if (inheritOpt) {
-      inheritOpt.style.display = r.value === 'inherit' ? 'none' : 'block';
+      inheritOpt.classList.toggle('hidden', r.value === 'inherit');
     }
   });
 });

@@ -1,5 +1,5 @@
 if (window.PublicKeyCredential) {
-  document.getElementById('passkey-btn').style.display = 'inline-block';
+  document.getElementById('passkey-btn').classList.remove('hidden');
 }
 async function passkeyLogin() {
   try {

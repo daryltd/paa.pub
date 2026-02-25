@@ -27,7 +27,7 @@ import resourceTemplate from '../templates/storage-resource.html';
 import breadcrumbsPartial from '../templates/partials/breadcrumbs.html';
 import { requireAuth } from '../../auth/middleware.js';
 import { parseNTriples, unwrapIri, serializeNTriples, iri, literal, typedLiteral } from '../../rdf/ntriples.js';
-import { PREFIXES } from '../../rdf/prefixes.js';
+import { PREFIXES, shortenPredicate, loadMergedPrefixes } from '../../rdf/prefixes.js';
 import { checkQuota, quotaExceededResponse, addQuota } from '../../storage/quota.js';
 import { checkContainerQuota, containerQuotaExceededResponse, addContainerBytes } from '../../storage/container-quota.js';
 
@@ -90,7 +90,7 @@ async function renderContainerPage(reqCtx, path, resourceIri, username) {
     items,
     hasItems: items.length > 0,
     isRoot,
-  }, { user: username, nav: 'storage' });
+  }, { user: username, nav: 'storage', storage, baseUrl: config.baseUrl });
 }
 
 // ── Resource page ────────────────────────────────────
@@ -117,6 +117,20 @@ async function renderResourcePage(reqCtx, path, resourceIri, username, editMode,
     if (value.startsWith('"')) value = value.match(/^"([^"]*)"/)?.[1] || value;
     else if (value.startsWith('<')) value = unwrapIri(value);
     return { predLabel, value };
+  });
+
+  // Editable metadata triples for the triple editor widget
+  const mergedPrefixes = await loadMergedPrefixes(storage, config.baseUrl, username);
+  const metaTriplesEditable = metaTriples.map(t => {
+    const predicateIri = unwrapIri(t.predicate);
+    let objectValue = t.object;
+    if (objectValue.startsWith('"')) objectValue = objectValue.match(/^"([^"]*)"/)?.[1] || objectValue;
+    else if (objectValue.startsWith('<')) objectValue = unwrapIri(objectValue);
+    return {
+      predicate: predicateIri,
+      predicateShort: shortenPredicate(predicateIri, mergedPrefixes),
+      object: objectValue,
+    };
   });
 
   // Pre-compute mutually exclusive display flags for Mustache
@@ -148,8 +162,10 @@ async function renderResourcePage(reqCtx, path, resourceIri, username, editMode,
     showNoMeta: !editMeta && processedMeta.length === 0,
     resourceIri,
     metaTriples: processedMeta,
+    metaTriplesEditable,
     metaTurtle,
-  }, { user: username, nav: 'storage' });
+    prefixesJson: JSON.stringify(mergedPrefixes),
+  }, { user: username, nav: 'storage', storage, baseUrl: config.baseUrl });
 }
 
 // ── POST /storage/** ─────────────────────────────────

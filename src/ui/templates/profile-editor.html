@@ -3,6 +3,14 @@
 {{#success}}<div class="success">{{success}}</div>{{/success}}
 {{#error}}<div class="error">{{error}}</div>{{/error}}
 
+<div class="card mt-1">
+  <h2>Profile Page</h2>
+  <p class="text-muted mb-075">Your public profile page at <a href="/{{username}}/" class="mono">/{{username}}/</a> is rendered from an index.html template using your profile data. If you have customized it and want to start over, you can reset it to the default.</p>
+  <form method="POST" action="/profile/reset-index">
+    <button type="submit" class="btn btn-secondary" data-confirm="Reset your profile page to the default template? Any customizations to index.html will be lost.">Reset Profile Page to Default</button>
+  </form>
+</div>
+
 <form method="POST" action="/profile">
   <div class="card">
     <h2>Profile Fields</h2>
@@ -50,61 +58,56 @@
 
   <div class="card">
     <h2>Custom Triples</h2>
-    <p class="text-muted" style="margin-bottom: 0.75rem;">Add custom predicate-object pairs for your WebID subject.</p>
+    <p class="text-muted mb-075">Add custom predicate-object pairs for your WebID subject. Use the template key in your profile page template, e.g. <code>{{=<% %>=}}{{#foaf_knows}}...{{/foaf_knows}}<%={{ }}=%></code>.</p>
 
-    <div id="custom-triples">
+    <div class="triple-editor"
+         data-subject="{{webId}}"
+         data-output="arrays"
+         data-predicate-name="custom_predicate[]"
+         data-object-name="custom_object[]"
+         data-show-template-key
+         data-prefixes='{{{prefixesJson}}}'>
       {{#customTriples}}
-      <div class="custom-triple-row" style="display: flex; gap: 0.5rem; margin-bottom: 0.5rem; align-items: center;">
-        <input type="text" name="custom_predicate[]" value="{{predicate}}" placeholder="Predicate IRI" style="flex: 1;">
-        <input type="text" name="custom_object[]" value="{{object}}" placeholder="Object value" style="flex: 1;">
-        <button type="button" class="btn btn-secondary" onclick="this.parentElement.remove()" style="padding: 0.35rem 0.6rem;">Remove</button>
+      <div class="te-row">
+        <div class="te-pred-cell">
+          <span class="te-pred-display mono cursor-pointer">{{predicateShort}}</span>
+          <input type="text" class="te-pred-input hidden" name="custom_predicate[]"
+                 value="{{predicate}}" placeholder="Predicate IRI">
+          <button type="button" class="te-search-btn btn btn-secondary btn-xs hidden">Search</button>
+        </div>
+        <div class="te-obj-cell">
+          <input type="text" class="te-obj-input" name="custom_object[]"
+                 value="{{object}}" placeholder="Object value">
+        </div>
+        <span class="te-template-key text-muted mono text-sm nowrap" title="Template key">{{templateKey}}</span>
+        <button type="button" class="btn btn-secondary btn-compact te-remove">Remove</button>
       </div>
       {{/customTriples}}
+      <div class="te-add-area"></div>
     </div>
-
-    <button type="button" class="btn btn-secondary" onclick="addCustomTriple()" style="margin-top: 0.5rem;">Add Triple</button>
   </div>
 
-  <div style="margin-top: 1rem;">
+  <div class="mt-1">
     <button type="submit" class="btn">Save Profile</button>
-    <a href="/dashboard" class="btn btn-secondary" style="margin-left: 0.5rem;">Cancel</a>
+    <a href="/dashboard" class="btn btn-secondary ml-05">Cancel</a>
   </div>
 </form>
 
-<div class="card" style="margin-top: 1rem;">
-  <h2>Profile Page</h2>
-  <p class="text-muted" style="margin-bottom: 0.75rem;">Your public profile page at <a href="/{{username}}/" class="mono">/{{username}}/</a> is rendered from an index.html template using your profile data. If you have customized it and want to start over, you can reset it to the default.</p>
-  <form method="POST" action="/profile/reset-index">
-    <button type="submit" class="btn btn-secondary" data-confirm="Reset your profile page to the default template? Any customizations to index.html will be lost.">Reset Profile Page to Default</button>
-  </form>
-</div>
-
 {{#hasSystemTriples}}
-<div class="card" style="margin-top: 1rem;">
+<div class="card mt-1">
   <h2>System Triples (read-only)</h2>
-  <table>
-    <thead><tr><th>Predicate</th><th>Object</th></tr></thead>
-    <tbody>
-      {{#systemTriples}}
-      <tr>
-        <td class="mono">{{predicateShort}}</td>
-        <td class="mono" style="word-break: break-all;">{{object}}</td>
-      </tr>
-      {{/systemTriples}}
-    </tbody>
-  </table>
+  <div class="triple-editor" data-subject="{{webId}}" data-output="none">
+    {{#systemTriples}}
+    <div class="te-row" data-readonly="true">
+      <div class="te-pred-cell">
+        <span class="te-pred-display mono">{{predicateShort}}</span>
+        <input type="hidden" class="te-pred-iri" value="{{predicate}}">
+      </div>
+      <div class="te-obj-cell mono break-all">{{object}}</div>
+    </div>
+    {{/systemTriples}}
+  </div>
 </div>
 {{/hasSystemTriples}}
 
-<script>
-function addCustomTriple() {
-  var container = document.getElementById('custom-triples');
-  var row = document.createElement('div');
-  row.className = 'custom-triple-row';
-  row.style.cssText = 'display: flex; gap: 0.5rem; margin-bottom: 0.5rem; align-items: center;';
-  row.innerHTML = '<input type="text" name="custom_predicate[]" placeholder="Predicate IRI" style="flex: 1;">' +
-    '<input type="text" name="custom_object[]" placeholder="Object value" style="flex: 1;">' +
-    '<button type="button" class="btn btn-secondary" onclick="this.parentElement.remove()" style="padding: 0.35rem 0.6rem;">Remove</button>';
-  container.appendChild(row);
-}
-</script>
+<script src="/scripts/triple-editor.js"></script>

@@ -1,11 +1,11 @@
 <h1>Access Policy</h1>
 
 <div class="card">
-  <div class="text-muted" style="margin-bottom: 0.25rem;">
+  <div class="text-muted mb-025">
     Resource: <span class="mono">{{resourceIri}}</span>
   </div>
   {{#isDir}}
-  <div class="text-muted" style="font-size: 0.8rem;">This policy applies to the container and its contents (unless overridden).</div>
+  <div class="text-muted text-sm">This policy applies to the container and its contents (unless overridden).</div>
   {{/isDir}}
 </div>
 
@@ -14,20 +14,20 @@
   <form method="POST" action="/acp/{{{path}}}">
     <input type="hidden" name="action" value="save_policy">
 
-    <div style="display: flex; flex-direction: column; gap: 0.75rem; margin-bottom: 1rem;">
+    <div class="flex-col gap-075 mb-1">
       {{#modeOptions}}
-      <label style="display: flex; gap: 0.75rem; align-items: flex-start; cursor: pointer; padding: 0.5rem; border-radius: 4px; background: {{{bgColor}}};">
-        <input type="radio" name="mode" value="{{value}}" {{{checked}}} style="margin-top: 0.25rem;">
+      <label class="mode-option{{#isSelected}} mode-option-selected{{/isSelected}}">
+        <input type="radio" name="mode" value="{{value}}" {{{checked}}} class="mt-025">
         <div>
-          <div style="font-weight: 500;">{{label}}</div>
-          <div class="text-muted" style="font-size: 0.8rem;">{{description}}</div>
+          <div class="font-medium">{{label}}</div>
+          <div class="text-muted text-sm">{{description}}</div>
         </div>
       </label>
       {{/modeOptions}}
     </div>
 
     {{#isInheritMode}}
-    <div style="background: #f0f4ff; border-radius: 4px; padding: 0.75rem; margin-bottom: 1rem; font-size: 0.9rem;">
+    <div class="info-box">
       Effective policy: <strong>{{effectiveLabel}}</strong>
       {{#effectiveSource}}
       <span class="text-muted"> — inherited from <span class="mono">{{effectiveSource}}</span></span>
@@ -35,47 +35,45 @@
     </div>
     {{/isInheritMode}}
 
-    <div id="custom-agents" style="display: {{customDisplay}}; margin-bottom: 1rem;">
+    <div id="custom-agents" class="mb-1{{#customHidden}} hidden{{/customHidden}}">
       <div class="form-group">
         <label for="agents">Allowed WebIDs (one per line)</label>
-        <textarea id="agents" name="agents" rows="4" class="mono"
-          style="font-size: 0.85rem;" placeholder="https://alice.example/profile/card#me">{{agentsText}}</textarea>
+        <textarea id="agents" name="agents" rows="4" class="mono editor-textarea" placeholder="https://alice.example/profile/card#me">{{agentsText}}</textarea>
       </div>
     </div>
 
-    <div id="inherit-option" class="form-group" style="display: {{#showInheritCheckbox}}block{{/showInheritCheckbox}}{{^showInheritCheckbox}}none{{/showInheritCheckbox}};">
+    <div id="inherit-option" class="form-group{{^showInheritCheckbox}} hidden{{/showInheritCheckbox}}">
       <label>
         <input type="checkbox" name="inherit" value="1" {{{inheritChecked}}}>
         Allow children to inherit this policy
       </label>
-      <div class="text-muted" style="font-size: 0.8rem; margin-top: 0.15rem;">When unchecked, resources inside this container must set their own policy.</div>
+      <div class="text-muted text-sm mt-025">When unchecked, resources inside this container must set their own policy.</div>
     </div>
 
-    <div style="display: flex; gap: 0.5rem;">
+    <div class="flex gap-05">
       <button type="submit" class="btn">Save Policy</button>
       <a href="/storage/{{{path}}}" class="btn btn-secondary">Back</a>
     </div>
   </form>
 
-  <script>{{{clientScript}}}</script>
+  <script src="/scripts/acl-toggle.js"></script>
 </div>
 
 <div class="card">
   <h2>Friends List</h2>
-  <p class="text-muted" style="margin-bottom: 0.75rem;">
+  <p class="text-muted mb-075">
     WebIDs listed here are granted read access when a resource is set to "Friends" mode.
   </p>
   {{#hasFriends}}
-  <table style="margin-bottom: 0.75rem;">
+  <table class="mb-075">
     {{#friends}}
     <tr>
-      <td class="mono" style="font-size: 0.85rem;">{{.}}</td>
-      <td style="width: 3rem;">
-        <form method="POST" action="/acp/{{{path}}}" class="inline">
+      <td class="mono text-sm">{{.}}</td>
+      <td class="col-action">
+        <form method="POST" action="/acp/{{{path}}}" class="inline-form">
           <input type="hidden" name="action" value="remove_friend">
           <input type="hidden" name="webid" value="{{.}}">
-          <button type="submit" class="text-muted"
-            style="background:none;border:none;cursor:pointer;font-size:0.8rem;color:#dc3545;padding:0;">remove</button>
+          <button type="submit" class="link-btn">remove</button>
         </form>
       </td>
     </tr>
@@ -83,13 +81,13 @@
   </table>
   {{/hasFriends}}
   {{^hasFriends}}
-  <div class="text-muted" style="margin-bottom: 0.75rem;">No friends added yet.</div>
+  <div class="text-muted mb-075">No friends added yet.</div>
   {{/hasFriends}}
 
   <form method="POST" action="/acp/{{{path}}}">
     <input type="hidden" name="action" value="add_friend">
-    <div style="display: flex; gap: 0.5rem;">
-      <input type="url" name="webid" placeholder="https://alice.example/profile/card#me" required style="flex: 1;">
+    <div class="flex gap-05">
+      <input type="url" name="webid" placeholder="https://alice.example/profile/card#me" required class="flex-1">
       <button type="submit" class="btn">Add Friend</button>
     </div>
   </form>
@@ -98,26 +96,27 @@
 {{#isDir}}
 <div class="card">
   <h2>Storage Quota</h2>
-  <p class="text-muted" style="margin-bottom: 0.75rem; font-size: 0.85rem;">
+  <p class="text-muted mb-075 text-sm">
     Set a storage limit for this container and its contents.
   </p>
   {{#quotaData}}
-  <div style="margin-bottom: 0.75rem;">
-    <div style="font-size: 0.9rem; margin-bottom: 0.25rem;">
+  <div class="mb-075">
+    <div class="text-md mb-025">
       Used: <strong>{{usedFormatted}}</strong>{{#hasLimit}} / {{limitFormatted}}{{/hasLimit}}
     </div>
     {{#hasLimit}}
-    <div style="background: #e9ecef; border-radius: 4px; height: 8px; overflow: hidden;">
-      <div style="background: {{barColor}}; height: 100%; width: {{usedPercent}}%; transition: width 0.3s;"></div>
+    <div class="progress-track">
+      <div class="progress-fill {{barColorClass}}" data-percent="{{usedPercent}}"></div>
     </div>
+    <script>document.currentScript.previousElementSibling.querySelector('.progress-fill').style.width=document.currentScript.previousElementSibling.querySelector('.progress-fill').dataset.percent+'%';</script>
     {{/hasLimit}}
   </div>
   {{/quotaData}}
   <form method="POST" action="/acp/{{{path}}}">
     <input type="hidden" name="action" value="save_quota">
-    <div class="form-group" style="margin-bottom: 0.5rem;">
+    <div class="form-group mb-05">
       <label for="quota_limit">Limit (e.g., 500MB, 1GB, or empty for no limit)</label>
-      <input type="text" id="quota_limit" name="quota_limit" value="{{quotaLimitValue}}" placeholder="No limit" style="max-width: 200px;">
+      <input type="text" id="quota_limit" name="quota_limit" value="{{quotaLimitValue}}" placeholder="No limit" class="input-short">
     </div>
     <button type="submit" class="btn">Save Quota</button>
   </form>
@@ -127,7 +126,7 @@
 <div class="card">
   <h2>ACP Details</h2>
   <details>
-    <summary class="text-muted" style="cursor: pointer; font-size: 0.85rem;">View raw Access Control Policy (Turtle)</summary>
-    <pre class="mono" style="font-size: 0.8rem; background: #f8f8f8; padding: 0.75rem; border-radius: 4px; margin-top: 0.5rem; overflow-x: auto; white-space: pre-wrap;">{{turtlePolicy}}</pre>
+    <summary class="text-muted cursor-pointer text-sm">View raw Access Control Policy (Turtle)</summary>
+    <pre class="mono code-block mt-05">{{turtlePolicy}}</pre>
   </details>
 </div>

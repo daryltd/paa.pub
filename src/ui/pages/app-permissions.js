@@ -44,7 +44,7 @@ export async function renderAppPermissions(reqCtx) {
   return renderPage('App Permissions', template, {
     apps: appsData,
     hasApps: appsData.length > 0,
-  }, { user: username, nav: 'storage' });
+  }, { user: username, nav: 'storage', storage, baseUrl: config.baseUrl });
 }
 
 /**

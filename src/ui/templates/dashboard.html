@@ -12,35 +12,35 @@
 
 <!-- <div class="card">
   <h2>Quick Links</h2>
-  <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+  <div class="flex gap-05 flex-wrap">
     <a href="/activity" class="btn">Activity Feed</a>
     <a href="/storage/" class="btn btn-secondary">File Storage</a>
     <a href="/.well-known/webfinger?resource=acct:{{{webfingerParam}}}" class="btn btn-secondary">WebFinger</a>
   </div>
 </div> -->
 
-<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem;">
+<div class="stats-grid">
   <div class="card">
     <div class="text-muted">Followers</div>
-    <div style="font-size: 2rem; font-weight: 700;">{{followerCount}}</div>
+    <div class="stat-number">{{followerCount}}</div>
   </div>
   <div class="card">
     <div class="text-muted">Following</div>
-    <div style="font-size: 2rem; font-weight: 700;">{{followingCount}}</div>
+    <div class="stat-number">{{followingCount}}</div>
   </div>
   <div class="card">
     <div class="text-muted">Posts</div>
-    <div style="font-size: 2rem; font-weight: 700;">{{postCount}}</div>
+    <div class="stat-number">{{postCount}}</div>
   </div>
 </div>
 
 {{#hasPendingFollows}}
-<div class="card" style="border-left: 3px solid #ffc107;">
-  <div style="display: flex; justify-content: space-between; align-items: center;">
+<div class="card card-warning">
+  <div class="flex justify-between items-center">
     <div>
       <strong>{{pendingFollowCount}}</strong> pending follow request{{#pendingFollowCountPlural}}s{{/pendingFollowCountPlural}}
     </div>
-    <a href="/activity" class="btn" style="padding: 0.25rem 0.75rem; font-size: 0.85rem;">Review</a>
+    <a href="/activity" class="btn btn-narrow">Review</a>
   </div>
 </div>
 {{/hasPendingFollows}}
@@ -48,16 +48,16 @@
 
 <div class="card">
   <h2>Storage - {{{storageUsed}}} used</h2>
-  <p class="text-muted" style="margin-bottom: 0.75rem;">{{totalResources}} resource{{#totalResourcesPlural}}s{{/totalResourcesPlural}} across all containers</p>
+  <p class="text-muted mb-075">{{totalResources}} resource{{#totalResourcesPlural}}s{{/totalResourcesPlural}} across all containers</p>
   {{#hasBreakdown}}
   <table>
-    <thead><tr><th>Category</th><th style="text-align:right;">Size</th><th style="text-align:right;">Files</th></tr></thead>
+    <thead><tr><th>Category</th><th class="text-right">Size</th><th class="text-right">Files</th></tr></thead>
     <tbody>
       {{#storageBreakdown}}
       <tr>
         <td>{{name}}</td>
-        <td class="mono" style="text-align:right;">{{size}}</td>
-        <td class="text-muted" style="text-align:right;">{{label}}</td>
+        <td class="mono text-right">{{size}}</td>
+        <td class="text-muted text-right">{{label}}</td>
       </tr>
       {{/storageBreakdown}}
     </tbody>
@@ -76,17 +76,17 @@
       {{#passkeys}}
       <tr>
         <td>
-          <form method="POST" action="/webauthn/rename" style="display:inline-flex;gap:0.25rem;align-items:center;">
+          <form method="POST" action="/webauthn/rename" class="inline-flex gap-025 items-center">
             <input type="hidden" name="credId" value="{{id}}">
-            <input type="text" name="name" value="{{name}}" style="width:14ch;">
-            <button type="submit" class="btn btn-secondary" style="padding:0.15rem 0.4rem;font-size:0.85rem;">Rename</button>
+            <input type="text" name="name" value="{{name}}" class="input-name">
+            <button type="submit" class="btn btn-secondary btn-sm">Rename</button>
           </form>
         </td>
         <td class="text-muted">{{createdAt}}</td>
         <td>
           <form method="POST" action="/webauthn/delete">
             <input type="hidden" name="credId" value="{{id}}">
-            <button type="submit" class="btn btn-secondary" style="padding:0.15rem 0.4rem;font-size:0.85rem;" data-confirm="Delete this passkey?">Delete</button>
+            <button type="submit" class="btn btn-secondary btn-sm" data-confirm="Delete this passkey?">Delete</button>
           </form>
         </td>
       </tr>
@@ -97,9 +97,10 @@
   {{^hasPasskeys}}
   <p class="text-muted">No passkeys registered.</p>
   {{/hasPasskeys}}
-  <div id="passkey-section" style="margin-top:0.75rem;">
+  <div id="passkey-section" class="mt-075">
     <button class="btn btn-secondary" onclick="beginRegisterPasskey()">Register Passkey</button>
-    <div id="passkey-status" style="margin-top: 0.5rem;"></div>
+    <div id="passkey-status" class="mt-05"></div>
   </div>
-  <script>{{{clientScript}}}</script>
+  <script src="/scripts/webauthn-utils.js"></script>
+  <script src="/scripts/passkey-register.js"></script>
 </div>

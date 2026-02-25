@@ -3,12 +3,13 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{{title}} — paa.pub</title>
-  <style>{{{styles}}}</style>
+  <title>{{title}} — Kaiāulu Pa'a</title>
+  <link rel="stylesheet" href="/css/base.css">
+  {{#customThemeHref}}<link rel="stylesheet" href="{{customThemeHref}}">{{/customThemeHref}}
 </head>
 <body>
   {{{nav}}}
   <main>{{{body}}}</main>
-  <script>{{{dialogScript}}}</script>
+  <script src="/scripts/dialog.js"></script>
 </body>
 </html>

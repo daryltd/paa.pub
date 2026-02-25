@@ -21,7 +21,6 @@
  */
 import { renderPage } from '../shell.js';
 import template from '../templates/acl-editor.html';
-import aclToggleScript from '../client/acl-toggle.js';
 import { requireAuth } from '../../auth/middleware.js';
 import { getContainerQuota, setContainerQuotaLimit } from '../../storage/container-quota.js';
 
@@ -72,7 +71,7 @@ export async function renderAclEditor(reqCtx) {
   const modeOptions = allModes.map(opt => ({
     ...opt,
     checked: currentMode === opt.value ? 'checked' : '',
-    bgColor: currentMode === opt.value ? '#f0f0ff' : 'transparent',
+    isSelected: currentMode === opt.value,
   }));
 
   // Container quota data (only for containers)
@@ -88,7 +87,7 @@ export async function renderAclEditor(reqCtx) {
         limitFormatted: hasLimit ? formatBytes(cq.limitBytes) : '',
         hasLimit,
         usedPercent,
-        barColor: usedPercent > 90 ? '#dc3545' : usedPercent > 70 ? '#ffc107' : '#28a745',
+        barColorClass: usedPercent > 90 ? 'progress-danger' : usedPercent > 70 ? 'progress-warning' : 'progress-success',
       };
       if (hasLimit) {
         quotaLimitValue = formatBytesShort(cq.limitBytes);
@@ -101,7 +100,7 @@ export async function renderAclEditor(reqCtx) {
     isDir,
     path,
     modeOptions,
-    customDisplay: currentMode === 'custom' ? 'block' : 'none',
+    customHidden: currentMode !== 'custom',
     agentsText: (policy.agents || []).join('\n'),
     showInheritCheckbox: isDir && currentMode !== 'inherit',
     inheritChecked: policy.inherit !== false ? 'checked' : '',
@@ -111,10 +110,9 @@ export async function renderAclEditor(reqCtx) {
     friends,
     hasFriends: friends.length > 0,
     turtlePolicy: policyToTurtle(policy, resourceIri, config.webId, friends),
-    clientScript: aclToggleScript,
     quotaData,
     quotaLimitValue,
-  }, { user: username, nav: 'storage' });
+  }, { user: username, nav: 'storage', storage: reqCtx.storage, baseUrl: config.baseUrl });
 }
 
 /**

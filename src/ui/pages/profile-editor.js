@@ -25,7 +25,7 @@ import defaultIndexTemplate from '../templates/default-index.html';
 import { requireAuth } from '../../auth/middleware.js';
 import { readProfileTriples, writeTriplesToKV } from '../../solid/ldp.js';
 import { parseNTriples, iri, unwrapIri, unwrapLiteral, literal } from '../../rdf/ntriples.js';
-import { PREFIXES } from '../../rdf/prefixes.js';
+import { PREFIXES, shortenPredicate, loadMergedPrefixes } from '../../rdf/prefixes.js';
 
 /**
  * Editable predicate IRIs mapped to form field names.
@@ -64,15 +64,17 @@ function isSystemPredicate(predicateIri) {
 }
 
 /**
- * Shorten a full predicate IRI to a prefixed form.
+ * Convert a predicate IRI to the Mustache-safe key used in profile templates.
  */
-function shortenPredicate(predicateIri) {
-  for (const [prefix, ns] of Object.entries(PREFIXES)) {
+function predicateToKey(predicateIri, prefixes) {
+  const map = prefixes || PREFIXES;
+  for (const [prefix, ns] of Object.entries(map)) {
     if (predicateIri.startsWith(ns)) {
-      return `${prefix}:${predicateIri.slice(ns.length)}`;
+      return prefix + '_' + predicateIri.slice(ns.length);
     }
   }
-  return predicateIri;
+  const pos = Math.max(predicateIri.lastIndexOf('#'), predicateIri.lastIndexOf('/'));
+  return pos >= 0 ? predicateIri.slice(pos + 1) : predicateIri;
 }
 
 /**
@@ -94,7 +96,7 @@ export async function renderProfileEditor(reqCtx) {
     data.success = 'Profile page reset to default template.';
   }
 
-  return renderPage('Edit Profile', template, data, { user: config.username, nav: 'profile' });
+  return renderPage('Edit Profile', template, data, { user: config.username, nav: 'profile', storage, baseUrl: config.baseUrl });
 }
 
 /**
@@ -205,6 +207,7 @@ export async function handleProfileIndexReset(reqCtx) {
 async function buildEditorData(storage, config) {
   const allTriples = await readProfileTriples(storage, config);
   const webId = config.webId;
+  const mergedPrefixes = await loadMergedPrefixes(storage, config.baseUrl, config.username);
 
   const data = {
     username: config.username,
@@ -246,19 +249,22 @@ async function buildEditorData(storage, config) {
     } else if (isSystemPredicate(predicateIri)) {
       data.systemTriples.push({
         predicate: predicateIri,
-        predicateShort: shortenPredicate(predicateIri),
+        predicateShort: shortenPredicate(predicateIri, mergedPrefixes),
         object: objectValue,
       });
     } else {
       // Custom triple
       data.customTriples.push({
         predicate: predicateIri,
+        predicateShort: shortenPredicate(predicateIri, mergedPrefixes),
+        templateKey: predicateToKey(predicateIri, mergedPrefixes),
         object: objectValue,
       });
     }
   }
 
   data.hasSystemTriples = data.systemTriples.length > 0;
+  data.prefixesJson = JSON.stringify(mergedPrefixes);
 
   return data;
 }

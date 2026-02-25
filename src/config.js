@@ -1,3 +1,12 @@
+const RESERVED_NAMES = new Set([
+  'css', 'scripts', 'media',
+  'login', 'logout', 'dashboard', 'activity', 'storage', 'acp',
+  'profile', 'compose', 'follow', 'unfollow',
+  'authorize', 'token', 'register', 'userinfo', 'jwks',
+  'webauthn', 'app-permissions', 'follow-requests',
+  '.well-known',
+]);
+
 /**
  * Read configuration from Cloudflare Worker environment bindings.
  * @param {object} env - Cloudflare Worker env object
@@ -6,6 +15,10 @@
  */
 export function getConfig(env, request) {
   const username = env.PAA_USERNAME || 'admin';
+
+  if (RESERVED_NAMES.has(username)) {
+    throw new Error(`Username "${username}" is reserved (conflicts with system route). Choose a different PAA_USERNAME.`);
+  }
   const password = env.PAA_PASSWORD || '';
 
   let domain = env.PAA_DOMAIN || '';
