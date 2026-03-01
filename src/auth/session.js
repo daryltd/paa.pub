@@ -48,22 +48,25 @@ export async function handleLogin(reqCtx) {
   const { request, env, config } = reqCtx;
   const form = await request.formData();
   const password = form.get('password') || '';
+  const returnTo = form.get('return_to') || '';
 
   const userRecord = await env.APPDATA.get(`user:${config.username}`);
   if (!userRecord) {
-    return renderLoginPage({ ...reqCtx, error: 'User not configured' });
+    return renderLoginPage({ ...reqCtx, returnTo, error: 'User not configured' });
   }
 
   const valid = await verifyPassword(password, userRecord);
   if (!valid) {
-    return renderLoginPage({ ...reqCtx, error: 'Invalid password' });
+    return renderLoginPage({ ...reqCtx, returnTo, error: 'Invalid password' });
   }
 
+  // Redirect to return_to if it's a safe same-origin path, otherwise /dashboard
+  const location = returnTo && returnTo.startsWith('/') && !returnTo.startsWith('//') ? returnTo : '/dashboard';
   const token = await createSession(env.APPDATA, config.username);
   return new Response(null, {
     status: 302,
     headers: {
-      'Location': '/dashboard',
+      'Location': location,
       'Set-Cookie': `session=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${SESSION_TTL}${config.protocol === 'https' ? '; Secure' : ''}`,
     },
   });

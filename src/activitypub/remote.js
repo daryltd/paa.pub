@@ -49,6 +49,15 @@ export function getActorInbox(actor) {
 }
 
 /**
+ * Get the shared inbox URL for a remote actor.
+ * @param {object} actor
+ * @returns {string|null}
+ */
+export function getActorSharedInbox(actor) {
+  return actor?.endpoints?.sharedInbox || null;
+}
+
+/**
  * Get the public key PEM from a remote actor document.
  * @param {object} actor
  * @returns {string|null}

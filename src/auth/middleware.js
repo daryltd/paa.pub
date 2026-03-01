@@ -25,9 +25,11 @@ export async function extractUser(request, env) {
  */
 export function requireAuth(reqCtx) {
   if (!reqCtx.user) {
+    const returnTo = reqCtx.url ? reqCtx.url.pathname + reqCtx.url.search : '';
+    const loginUrl = returnTo ? `/login?return_to=${encodeURIComponent(returnTo)}` : '/login';
     return new Response(null, {
       status: 302,
-      headers: { 'Location': '/login' },
+      headers: { 'Location': loginUrl },
     });
   }
   return null;

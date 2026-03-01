@@ -2,7 +2,7 @@
  * Activity delivery via ctx.waitUntil().
  */
 import { signRequest } from './httpsig.js';
-import { fetchRemoteActor, getActorInbox } from './remote.js';
+import { fetchRemoteActor, getActorInbox, getActorSharedInbox } from './remote.js';
 import { validateExternalUrl } from '../security/ssrf.js';
 
 /**
@@ -67,7 +67,7 @@ export async function collectInboxes(actorUris, kv) {
   );
   for (const actor of actors) {
     if (actor) {
-      const inbox = getActorInbox(actor);
+      const inbox = getActorSharedInbox(actor) || getActorInbox(actor);
       if (inbox) inboxes.add(inbox);
     }
   }

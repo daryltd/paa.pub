@@ -189,11 +189,42 @@ export async function handleProfileIndexReset(reqCtx) {
   const authCheck = requireAuth(reqCtx);
   if (authCheck) return authCheck;
 
-  const { config, storage } = reqCtx;
+  const { config, storage, env } = reqCtx;
   const indexHtmlIri = `${config.baseUrl}/${config.username}/index.html`;
 
   const htmlBytes = new TextEncoder().encode(defaultIndexTemplate);
   await storage.putBlob(`blob:${indexHtmlIri}`, htmlBytes, 'text/html');
+
+  // Also delete paa_custom/index.html override if it exists
+  const customIndexIri = `${config.baseUrl}/${config.username}/paa_custom/index.html`;
+  const customBlob = await storage.getBlob(`blob:${customIndexIri}`);
+  if (customBlob) {
+    // Delete blob, idx, metadata, ACP
+    try { await storage.deleteBlob(`blob:${customIndexIri}`); } catch {}
+    const idx = await storage.get(`idx:${customIndexIri}`);
+    if (idx) {
+      const parsed = JSON.parse(idx);
+      for (const subj of parsed.subjects || []) {
+        await storage.delete(`doc:${customIndexIri}:${subj}`);
+      }
+      await storage.delete(`idx:${customIndexIri}`);
+    }
+    await storage.delete(`doc:${customIndexIri}.meta:${customIndexIri}`);
+    await env.APPDATA.delete(`acp:${customIndexIri}`);
+
+    // Remove containment from paa_custom/ container
+    const paaCustomIri = `${config.baseUrl}/${config.username}/paa_custom/`;
+    const docKey = `doc:${paaCustomIri}:${paaCustomIri}`;
+    const parentDoc = await storage.get(docKey);
+    if (parentDoc) {
+      const triples = parseNTriples(parentDoc);
+      const filtered = triples.filter(t =>
+        !(unwrapIri(t.predicate) === PREFIXES.ldp + 'contains' && unwrapIri(t.object) === customIndexIri)
+      );
+      const { serializeNTriples: serNT } = await import('../../rdf/ntriples.js');
+      await storage.put(docKey, serNT(filtered));
+    }
+  }
 
   return new Response(null, {
     status: 302,

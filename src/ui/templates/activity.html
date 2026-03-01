@@ -3,8 +3,8 @@
 <div class="error">{{error}}</div>
 {{/error}}
 
-<div class="card">
-  <h2>Compose</h2>
+<details class="card">
+  <summary><h2>Compose</h2></summary>
   <form method="POST" action="/compose">
     <div class="form-group">
       <textarea name="content" placeholder="What's on your mind?" required></textarea>
@@ -23,11 +23,11 @@
     </div>
     <button type="submit" class="btn">Post</button>
   </form>
-</div>
+</details>
 
 {{#hasPendingRequests}}
-<div class="card">
-  <h2>Follow Requests ({{pendingCount}})</h2>
+<details class="card">
+  <summary><h2>Follow Requests ({{pendingCount}})</h2></summary>
   <ul class="list-plain">
     {{#pendingRequests}}
     <li class="follow-request-item">
@@ -44,48 +44,48 @@
     </li>
     {{/pendingRequests}}
   </ul>
-</div>
+</details>
 {{/hasPendingRequests}}
 
-<div class="card">
-  <h2>Follow / Unfollow</h2>
+<details class="card">
+  <summary><h2>Follow / Unfollow</h2></summary>
   <form method="POST" action="/follow" class="flex gap-05 mb-05">
     <input type="text" name="target" placeholder="user@domain.com or actor URL" class="flex-1">
     <button type="submit" class="btn">Follow</button>
   </form>
-  {{#hasFollowing}}
-  <details>
-    <summary class="text-muted">{{followingCount}} following</summary>
-    <ul class="list-plain mt-05">
-      {{#following}}
-      <li class="list-row">
-        <a href="{{feedUrl}}" class="mono flex-1 text-sm truncate">{{uri}}</a>
-        <form method="POST" action="/unfollow" class="inline-form">
-          <input type="hidden" name="target" value="{{uri}}">
-          <button type="submit" class="btn btn-secondary btn-xs">Unfollow</button>
-        </form>
-      </li>
-      {{/following}}
-    </ul>
-  </details>
-  {{/hasFollowing}}
-  {{#hasFollowers}}
-  <details class="mt-05">
-    <summary class="text-muted">{{followerCount}} followers</summary>
-    <ul class="list-plain mt-05">
-      {{#followers}}
-      <li class="list-row">
-        <a href="{{feedUrl}}" class="mono text-sm truncate">{{uri}}</a>
-      </li>
-      {{/followers}}
-    </ul>
-  </details>
-  {{/hasFollowers}}
-</div>
+</details>
+{{#hasFollowing}}
+<details class="card">
+  <summary><h2>Following ( {{followingCount}} )</h2></summary>
+  <ul class="list-plain mt-05">
+    {{#following}}
+    <li class="list-row">
+      <a href="{{feedUrl}}" class="mono flex-1 text-sm truncate">{{uri}}</a>
+      <form method="POST" action="/unfollow" class="inline-form">
+        <input type="hidden" name="target" value="{{uri}}">
+        <button type="submit" class="btn btn-secondary btn-xs">Unfollow</button>
+      </form>
+    </li>
+    {{/following}}
+  </ul>
+</details>
+{{/hasFollowing}}
+{{#hasFollowers}}
+<details class="card mt-05">
+  <summary><h2>Followers ( {{followerCount}} )</h2></summary>
+  <ul class="list-plain mt-05">
+    {{#followers}}
+    <li class="list-row">
+      <a href="{{feedUrl}}" class="mono text-sm truncate">{{uri}}</a>
+    </li>
+    {{/followers}}
+  </ul>
+</details>
+{{/hasFollowers}}
 
-<div>
+<details>
+  <summary><h2>Activity Feed <span class="text-muted text-sm font-normal">(latest {{feedLimit}})</span></h2></summary>
   <div class="flex justify-between items-center">
-    <h2>Activity Feed <span class="text-muted text-sm font-normal">(latest {{feedLimit}})</span></h2>
     <div class="flex gap-05">
       {{#showAll}}
       <a href="/activity" class="btn btn-secondary btn-xs">Hide read</a>
@@ -136,4 +136,4 @@
     {{/isOther}}
   </div>
   {{/activities}}
-</div>
+</details>

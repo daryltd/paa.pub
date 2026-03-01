@@ -17,6 +17,20 @@
       <td class="col-action">
         <a href="/{{rawPath}}" class="text-muted text-sm" target="_blank">raw</a>
         <form method="POST" action="/storage/{{storagePath}}" class="inline-form ml-05">
+          <input type="hidden" name="action" value="move">
+          <input type="hidden" name="destination" value="">
+          <button type="submit" class="link-btn-neutral"
+            data-prompt="Move to:"
+            data-prompt-default="{{storagePath}}">move</button>
+        </form>
+        <form method="POST" action="/storage/{{storagePath}}" class="inline-form ml-05">
+          <input type="hidden" name="action" value="copy">
+          <input type="hidden" name="destination" value="">
+          <button type="submit" class="link-btn-neutral"
+            data-prompt="Copy to:"
+            data-prompt-default="{{copyDefault}}">copy</button>
+        </form>
+        <form method="POST" action="/storage/{{storagePath}}" class="inline-form ml-05">
           <input type="hidden" name="action" value="delete">
           <button type="submit" class="link-btn"
             data-confirm="Delete {{name}}?">delete</button>

@@ -123,6 +123,7 @@ function buildRouter() {
 
   // ActivityPub routes (content-negotiated)
   router.get('/:user/profile/card', handleActor);
+  router.post('/inbox', handleInbox);
   router.post('/:user/inbox', handleInbox);
   router.get('/:user/outbox', handleOutbox);
   router.get('/:user/followers', handleCollections);
@@ -146,7 +147,7 @@ function getRateLimitCategory(method, pathname, handler) {
   if (method === 'POST' && pathname.startsWith('/webauthn/login/')) return 'webauthn';
   if (method === 'POST' && pathname === '/token') return 'token';
   if (method === 'POST' && pathname === '/register') return 'register';
-  if (method === 'POST' && pathname.match(/^\/[^/]+\/inbox$/)) return 'inbox';
+  if (method === 'POST' && (pathname === '/inbox' || pathname.match(/^\/[^/]+\/inbox$/))) return 'inbox';
   // LDP write operations
   if (handler === handleLDP && ['PUT', 'POST', 'PATCH', 'DELETE'].includes(method)) return 'write';
   return null;
@@ -253,7 +254,7 @@ export default {
     }
    } catch (err) {
       console.error('Top-level error:', err);
-      return new Response('Internal Server Error', { status: 500 });
+      return applyCors(new Response('Internal Server Error', { status: 500 }), request);
    }
   },
 };

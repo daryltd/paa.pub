@@ -28,8 +28,8 @@ import breadcrumbsPartial from '../templates/partials/breadcrumbs.html';
 import { requireAuth } from '../../auth/middleware.js';
 import { parseNTriples, unwrapIri, serializeNTriples, iri, literal, typedLiteral } from '../../rdf/ntriples.js';
 import { PREFIXES, shortenPredicate, loadMergedPrefixes } from '../../rdf/prefixes.js';
-import { checkQuota, quotaExceededResponse, addQuota } from '../../storage/quota.js';
-import { checkContainerQuota, containerQuotaExceededResponse, addContainerBytes } from '../../storage/container-quota.js';
+import { checkQuota, quotaExceededResponse, addQuota, subtractQuota } from '../../storage/quota.js';
+import { checkContainerQuota, containerQuotaExceededResponse, addContainerBytes, subtractContainerBytes } from '../../storage/container-quota.js';
 
 const TEXT_EXTS = new Set([
   'ttl', 'txt', 'html', 'css', 'csv', 'xml', 'md', 'n3',
@@ -78,7 +78,7 @@ export async function renderStoragePage(reqCtx) {
 async function renderContainerPage(reqCtx, path, resourceIri, username) {
   const { config, storage } = reqCtx;
   const items = (await loadContainerItems(resourceIri, config, storage))
-    .map(item => ({ ...item, icon: item.isDir ? '📁' : '📄' }));
+    .map(item => ({ ...item, icon: item.isDir ? '📁' : '📄', copyDefault: computeCopyDefault(item.storagePath) }));
   const isRoot = path === `${username}/`;
   const crumbs = buildBreadcrumbs(path);
   const breadcrumbs = renderPartial(breadcrumbsPartial, { crumbs });
@@ -99,6 +99,7 @@ async function renderResourcePage(reqCtx, path, resourceIri, username, editMode,
   const { config, storage } = reqCtx;
   const { content, contentType, isBinary, size } = await loadResource(resourceIri, storage);
   const canEdit = isTextResource(path);
+  const isHtml = (path.split('.').pop() || '').toLowerCase() === 'html';
   const resourceUrl = `/${path}`;
   const fileName = path.split('/').pop();
   const crumbs = buildBreadcrumbs(path);
@@ -133,6 +134,12 @@ async function renderResourcePage(reqCtx, path, resourceIri, username, editMode,
     };
   });
 
+  // Compute dokieli URL — redirect root index.html to paa_custom/index.html
+  const isRootIndex = path === `${username}/index.html`;
+  const dokieliUrl = isRootIndex
+    ? `/${username}/paa_custom/index.html?edit=dokieli`
+    : `${resourceUrl}?edit=dokieli`;
+
   // Pre-compute mutually exclusive display flags for Mustache
   const isImage = isImageType(contentType);
   const showEditor = editMode && canEdit;
@@ -141,6 +148,7 @@ async function renderResourcePage(reqCtx, path, resourceIri, username, editMode,
   const showContent = !showEditor && !isBinary && content !== null;
   const showEmpty = !showEditor && !showImage && !showBinaryDownload && !showContent;
 
+  const copyDefault = computeCopyDefault(path);
   return renderPage('Storage', resourceTemplate, {
     path,
     displayPath: '/' + path,
@@ -148,6 +156,7 @@ async function renderResourcePage(reqCtx, path, resourceIri, username, editMode,
     resourceUrl,
     fullResourceUrl: config.baseUrl + resourceUrl,
     fileName,
+    copyDefault,
     content,
     contentType,
     sizeFormatted: formatBytes(size),
@@ -157,6 +166,8 @@ async function renderResourcePage(reqCtx, path, resourceIri, username, editMode,
     showContent,
     showEmpty,
     showEditButton: canEdit && !editMode,
+    showDokieliButton: isHtml && !editMode,
+    dokieliUrl,
     showMetaEditor: editMeta,
     hasMetaTriples: !editMeta && processedMeta.length > 0,
     showNoMeta: !editMeta && processedMeta.length === 0,
@@ -178,7 +189,7 @@ export async function handleStorageAction(reqCtx) {
   const path = url.pathname.replace(/^\/storage\/?/, '') || `${config.username}/`;
   const resourceIri = `${config.baseUrl}/${path}`;
   const ct = request.headers.get('Content-Type') || '';
-  let action, slug, name, content, metadata;
+  let action, slug, name, content, metadata, destination;
 
   if (ct.includes('multipart/form-data')) {
     const form = await request.formData();
@@ -189,12 +200,14 @@ export async function handleStorageAction(reqCtx) {
     name = form.get('name');
     content = form.get('content');
     metadata = form.get('metadata');
+    destination = form.get('destination');
   } else {
     const form = await request.formData();
     action = form.get('action');
     name = form.get('name');
     content = form.get('content');
     metadata = form.get('metadata');
+    destination = form.get('destination');
   }
 
   if (action === 'mkdir' && name) {
@@ -278,6 +291,14 @@ export async function handleStorageAction(reqCtx) {
     if (parent) await removeContainment(storage, parent, resourceIri);
     const parentPath = parent ? parent.replace(config.baseUrl + '/', '') : `${config.username}/`;
     return redirect(`/storage/${parentPath}`);
+  }
+
+  if (action === 'move' && destination) {
+    return handleMove(resourceIri, destination, path, config, storage, env);
+  }
+
+  if (action === 'copy' && destination) {
+    return handleCopy(resourceIri, destination, path, config, storage, env);
   }
 
   return redirect(`/storage/${path}`);
@@ -509,6 +530,398 @@ function formatBytes(bytes) {
   const sizes = ['B', 'KB', 'MB', 'GB'];
   const i = Math.floor(Math.log(bytes) / Math.log(k));
   return `${(bytes / Math.pow(k, i)).toFixed(1)} ${sizes[i]}`;
+}
+
+// ── Move & Copy helpers ──────────────────────────────
+
+function computeCopyDefault(storagePath) {
+  if (storagePath.endsWith('/')) {
+    return storagePath.slice(0, -1) + '-copy/';
+  }
+  const dot = storagePath.lastIndexOf('.');
+  const slash = storagePath.lastIndexOf('/');
+  if (dot > slash + 1) {
+    return storagePath.slice(0, dot) + '-copy' + storagePath.slice(dot);
+  }
+  return storagePath + '-copy';
+}
+
+function validateDestination(destination, config, sourceIri) {
+  if (!destination || !destination.trim()) return { error: 'Destination path is required.' };
+  let dest = destination.trim();
+  // Strip leading slash
+  if (dest.startsWith('/')) dest = dest.slice(1);
+  // Must start with username/
+  if (!dest.startsWith(config.username + '/')) return { error: 'Destination must be within your pod.' };
+  const destIri = `${config.baseUrl}/${dest}`;
+  // Cannot move/copy to self
+  if (destIri === sourceIri) return { error: 'Destination is the same as source.' };
+  // Source and destination must match type (both container or both non-container)
+  const sourceIsDir = sourceIri.endsWith('/');
+  const destIsDir = dest.endsWith('/');
+  if (sourceIsDir !== destIsDir) {
+    return { error: sourceIsDir ? 'Destination must end with / for containers.' : 'Destination must not end with / for resources.' };
+  }
+  return { destIri, destPath: dest };
+}
+
+async function computeResourceSize(storage, resourceIri) {
+  const metaDoc = await storage.get(`doc:${resourceIri}.meta:${resourceIri}`);
+  if (metaDoc) {
+    const match = metaDoc.match(/extent">\s*"(\d+)"/);
+    if (match) return parseInt(match[1], 10);
+    // Try typed literal format
+    const m2 = metaDoc.match(/"(\d+)"\^\^/);
+    if (m2) return parseInt(m2[1], 10);
+  }
+  // Fallback: estimate from stored docs
+  let size = 0;
+  const idx = await storage.get(`idx:${resourceIri}`);
+  if (idx) {
+    const parsed = JSON.parse(idx);
+    if (parsed.binary) {
+      const blob = await storage.getBlob(`blob:${resourceIri}`);
+      if (blob) size = blob.byteLength;
+    } else {
+      for (const subj of parsed.subjects || []) {
+        const doc = await storage.get(`doc:${resourceIri}:${subj}`);
+        if (doc) size += new TextEncoder().encode(doc).byteLength;
+      }
+    }
+  }
+  return size;
+}
+
+async function computeContainerSizeRecursive(storage, containerIri) {
+  let total = 0;
+  const ntData = await storage.get(`doc:${containerIri}:${containerIri}`);
+  if (ntData) {
+    const triples = parseNTriples(ntData);
+    for (const t of triples) {
+      if (unwrapIri(t.predicate) === PREFIXES.ldp + 'contains') {
+        const child = unwrapIri(t.object);
+        if (child.endsWith('/')) {
+          total += await computeContainerSizeRecursive(storage, child);
+        } else {
+          total += await computeResourceSize(storage, child);
+        }
+      }
+    }
+  }
+  return total;
+}
+
+async function ensureParentContainersLocal(storage, destIri) {
+  const parent = computeParent(destIri);
+  if (!parent) return;
+  const idx = await storage.get(`idx:${parent}`);
+  if (idx) return; // Parent already exists
+  // Recursively ensure ancestors first
+  await ensureParentContainersLocal(storage, parent);
+  // Create this container
+  const containerNt = [
+    `<${parent}> <${PREFIXES.rdf}type> <${PREFIXES.ldp}BasicContainer> .`,
+    `<${parent}> <${PREFIXES.rdf}type> <${PREFIXES.ldp}Container> .`,
+  ].join('\n');
+  await storage.put(`doc:${parent}:${parent}`, containerNt);
+  await storage.put(`idx:${parent}`, JSON.stringify({ subjects: [parent] }));
+  // Add containment in grandparent
+  const grandparent = computeParent(parent);
+  if (grandparent) await appendContainment(storage, grandparent, parent);
+}
+
+async function moveSingleResource(storage, sourceIri, destIri, appdata) {
+  const idx = await storage.get(`idx:${sourceIri}`);
+  if (!idx) return;
+  const parsed = JSON.parse(idx);
+
+  if (parsed.binary) {
+    // Copy blob
+    const blob = await storage.getBlob(`blob:${sourceIri}`);
+    if (blob) {
+      const metaDoc = await storage.get(`doc:${sourceIri}.meta:${sourceIri}`);
+      let ct = 'application/octet-stream';
+      if (metaDoc) {
+        const m = metaDoc.match(/"([^"]+)"/);
+        if (m) ct = m[1];
+      }
+      await storage.putBlob(`blob:${destIri}`, blob, ct);
+      await storage.deleteBlob(`blob:${sourceIri}`);
+    }
+  }
+
+  // Copy doc keys with subject remapping
+  const newSubjects = [];
+  for (const subj of parsed.subjects || []) {
+    const doc = await storage.get(`doc:${sourceIri}:${subj}`);
+    if (doc) {
+      const newSubj = subj === sourceIri ? destIri : subj;
+      const newDoc = subj === sourceIri ? doc.replaceAll(`<${sourceIri}>`, `<${destIri}>`) : doc;
+      await storage.put(`doc:${destIri}:${newSubj}`, newDoc);
+      newSubjects.push(newSubj);
+      await storage.delete(`doc:${sourceIri}:${subj}`);
+    }
+  }
+  await storage.put(`idx:${destIri}`, JSON.stringify({ subjects: newSubjects, ...(parsed.binary ? { binary: true } : {}) }));
+  await storage.delete(`idx:${sourceIri}`);
+
+  // Copy and rewrite metadata
+  const metaDoc = await storage.get(`doc:${sourceIri}.meta:${sourceIri}`);
+  if (metaDoc) {
+    const newMeta = metaDoc.replaceAll(`<${sourceIri}>`, `<${destIri}>`);
+    await storage.put(`doc:${destIri}.meta:${destIri}`, newMeta);
+    await storage.delete(`doc:${sourceIri}.meta:${sourceIri}`);
+  }
+
+  // Move ACL and ACP
+  const acl = await storage.get(`acl:${sourceIri}`);
+  if (acl) {
+    await storage.put(`acl:${destIri}`, acl);
+    await storage.delete(`acl:${sourceIri}`);
+  }
+  const acp = await appdata.get(`acp:${sourceIri}`);
+  if (acp) {
+    await appdata.put(`acp:${destIri}`, acp);
+    await appdata.delete(`acp:${sourceIri}`);
+  }
+}
+
+async function moveContainerRecursive(storage, sourceIri, destIri, appdata) {
+  // First, move all children
+  const ntData = await storage.get(`doc:${sourceIri}:${sourceIri}`);
+  if (ntData) {
+    const triples = parseNTriples(ntData);
+    for (const t of triples) {
+      if (unwrapIri(t.predicate) === PREFIXES.ldp + 'contains') {
+        const childIri = unwrapIri(t.object);
+        const childSuffix = childIri.slice(sourceIri.length);
+        const newChildIri = destIri + childSuffix;
+        if (childIri.endsWith('/')) {
+          await moveContainerRecursive(storage, childIri, newChildIri, appdata);
+        } else {
+          await moveSingleResource(storage, childIri, newChildIri, appdata);
+        }
+      }
+    }
+  }
+
+  // Move the container itself (its doc keys, metadata, ACL/ACP)
+  const idx = await storage.get(`idx:${sourceIri}`);
+  if (idx) {
+    const parsed = JSON.parse(idx);
+    const newSubjects = [];
+    for (const subj of parsed.subjects || []) {
+      const doc = await storage.get(`doc:${sourceIri}:${subj}`);
+      if (doc) {
+        const newSubj = subj === sourceIri ? destIri : subj;
+        // Rewrite containment triples: old child IRIs → new
+        let newDoc = doc.replaceAll(`<${sourceIri}>`, `<${destIri}>`);
+        // Also rewrite child references in containment triples
+        if (subj === sourceIri) {
+          // Replace all child IRI references that start with sourceIri
+          const childPrefix = sourceIri;
+          // Match <sourceIri...> patterns in containment triples
+          newDoc = newDoc.replaceAll(childPrefix, destIri);
+        }
+        await storage.put(`doc:${destIri}:${newSubj}`, newDoc);
+        newSubjects.push(newSubj);
+        await storage.delete(`doc:${sourceIri}:${subj}`);
+      }
+    }
+    await storage.put(`idx:${destIri}`, JSON.stringify({ subjects: newSubjects }));
+    await storage.delete(`idx:${sourceIri}`);
+  }
+
+  // Metadata
+  const metaDoc = await storage.get(`doc:${sourceIri}.meta:${sourceIri}`);
+  if (metaDoc) {
+    await storage.put(`doc:${destIri}.meta:${destIri}`, metaDoc.replaceAll(`<${sourceIri}>`, `<${destIri}>`));
+    await storage.delete(`doc:${sourceIri}.meta:${sourceIri}`);
+  }
+
+  // ACL/ACP
+  const acl = await storage.get(`acl:${sourceIri}`);
+  if (acl) { await storage.put(`acl:${destIri}`, acl); await storage.delete(`acl:${sourceIri}`); }
+  const acp = await appdata.get(`acp:${sourceIri}`);
+  if (acp) { await appdata.put(`acp:${destIri}`, acp); await appdata.delete(`acp:${sourceIri}`); }
+}
+
+async function copySingleResource(storage, sourceIri, destIri) {
+  const idx = await storage.get(`idx:${sourceIri}`);
+  if (!idx) return;
+  const parsed = JSON.parse(idx);
+
+  if (parsed.binary) {
+    const blob = await storage.getBlob(`blob:${sourceIri}`);
+    if (blob) {
+      const metaDoc = await storage.get(`doc:${sourceIri}.meta:${sourceIri}`);
+      let ct = 'application/octet-stream';
+      if (metaDoc) {
+        const m = metaDoc.match(/"([^"]+)"/);
+        if (m) ct = m[1];
+      }
+      await storage.putBlob(`blob:${destIri}`, blob, ct);
+    }
+  }
+
+  // Copy doc keys
+  const newSubjects = [];
+  for (const subj of parsed.subjects || []) {
+    const doc = await storage.get(`doc:${sourceIri}:${subj}`);
+    if (doc) {
+      const newSubj = subj === sourceIri ? destIri : subj;
+      const newDoc = subj === sourceIri ? doc.replaceAll(`<${sourceIri}>`, `<${destIri}>`) : doc;
+      await storage.put(`doc:${destIri}:${newSubj}`, newDoc);
+      newSubjects.push(newSubj);
+    }
+  }
+  await storage.put(`idx:${destIri}`, JSON.stringify({ subjects: newSubjects, ...(parsed.binary ? { binary: true } : {}) }));
+
+  // Copy and rewrite metadata (no ACP/ACL copy)
+  const metaDoc = await storage.get(`doc:${sourceIri}.meta:${sourceIri}`);
+  if (metaDoc) {
+    await storage.put(`doc:${destIri}.meta:${destIri}`, metaDoc.replaceAll(`<${sourceIri}>`, `<${destIri}>`));
+  }
+}
+
+async function copyContainerRecursive(storage, sourceIri, destIri) {
+  // Copy all children
+  const ntData = await storage.get(`doc:${sourceIri}:${sourceIri}`);
+  if (ntData) {
+    const triples = parseNTriples(ntData);
+    for (const t of triples) {
+      if (unwrapIri(t.predicate) === PREFIXES.ldp + 'contains') {
+        const childIri = unwrapIri(t.object);
+        const childSuffix = childIri.slice(sourceIri.length);
+        const newChildIri = destIri + childSuffix;
+        if (childIri.endsWith('/')) {
+          await copyContainerRecursive(storage, childIri, newChildIri);
+        } else {
+          await copySingleResource(storage, childIri, newChildIri);
+        }
+      }
+    }
+  }
+
+  // Copy the container itself
+  const idx = await storage.get(`idx:${sourceIri}`);
+  if (idx) {
+    const parsed = JSON.parse(idx);
+    const newSubjects = [];
+    for (const subj of parsed.subjects || []) {
+      const doc = await storage.get(`doc:${sourceIri}:${subj}`);
+      if (doc) {
+        const newSubj = subj === sourceIri ? destIri : subj;
+        let newDoc = doc.replaceAll(`<${sourceIri}>`, `<${destIri}>`);
+        if (subj === sourceIri) {
+          newDoc = newDoc.replaceAll(sourceIri, destIri);
+        }
+        await storage.put(`doc:${destIri}:${newSubj}`, newDoc);
+        newSubjects.push(newSubj);
+      }
+    }
+    await storage.put(`idx:${destIri}`, JSON.stringify({ subjects: newSubjects }));
+  }
+
+  // Copy metadata (no ACP/ACL)
+  const metaDoc = await storage.get(`doc:${sourceIri}.meta:${sourceIri}`);
+  if (metaDoc) {
+    await storage.put(`doc:${destIri}.meta:${destIri}`, metaDoc.replaceAll(`<${sourceIri}>`, `<${destIri}>`));
+  }
+}
+
+async function handleMove(resourceIri, destination, path, config, storage, env) {
+  const v = validateDestination(destination, config, resourceIri);
+  if (v.error) return errorResponse(v.error, 400);
+
+  const isDir = path.endsWith('/');
+
+  // Cycle detection for containers
+  if (isDir && v.destIri.startsWith(resourceIri)) {
+    return errorResponse('Cannot move a container into its own subtree.', 400);
+  }
+
+  // Check destination doesn't exist
+  const destIdx = await storage.get(`idx:${v.destIri}`);
+  if (destIdx) return errorResponse('Destination already exists.', 409);
+
+  // Compute size for quota adjustment
+  const size = isDir
+    ? await computeContainerSizeRecursive(storage, resourceIri)
+    : await computeResourceSize(storage, resourceIri);
+
+  // Ensure parent containers exist
+  await ensureParentContainersLocal(storage, v.destIri);
+
+  // Execute move
+  if (isDir) {
+    await moveContainerRecursive(storage, resourceIri, v.destIri, env.APPDATA);
+  } else {
+    await moveSingleResource(storage, resourceIri, v.destIri, env.APPDATA);
+  }
+
+  // Update containment: remove from old parent, add to new parent
+  const oldParent = computeParent(resourceIri);
+  if (oldParent) await removeContainment(storage, oldParent, resourceIri);
+  const newParent = computeParent(v.destIri);
+  if (newParent) await appendContainment(storage, newParent, v.destIri);
+
+  // Adjust container quotas: subtract from old hierarchy, add to new hierarchy
+  if (oldParent) await subtractContainerBytes(env.APPDATA, oldParent, size);
+  if (newParent) await addContainerBytes(env.APPDATA, newParent, size);
+
+  return redirect(`/storage/${v.destPath}`);
+}
+
+async function handleCopy(resourceIri, destination, path, config, storage, env) {
+  const v = validateDestination(destination, config, resourceIri);
+  if (v.error) return errorResponse(v.error, 400);
+
+  const isDir = path.endsWith('/');
+
+  // Check destination doesn't exist
+  const destIdx = await storage.get(`idx:${v.destIri}`);
+  if (destIdx) return errorResponse('Destination already exists.', 409);
+
+  // Compute size for quota check
+  const size = isDir
+    ? await computeContainerSizeRecursive(storage, resourceIri)
+    : await computeResourceSize(storage, resourceIri);
+
+  // Quota checks
+  const quotaResult = await checkQuota(env.APPDATA, config.username, size, config.storageLimit);
+  if (!quotaResult.allowed) return quotaExceededResponse(quotaResult.usedBytes, quotaResult.limitBytes);
+  const newParent = computeParent(v.destIri);
+  if (newParent) {
+    const cqResult = await checkContainerQuota(env.APPDATA, newParent, size);
+    if (!cqResult.allowed) return containerQuotaExceededResponse(cqResult.blockedBy, cqResult.usedBytes, cqResult.limitBytes);
+  }
+
+  // Ensure parent containers exist
+  await ensureParentContainersLocal(storage, v.destIri);
+
+  // Execute copy
+  if (isDir) {
+    await copyContainerRecursive(storage, resourceIri, v.destIri);
+  } else {
+    await copySingleResource(storage, resourceIri, v.destIri);
+  }
+
+  // Add containment in new parent
+  if (newParent) await appendContainment(storage, newParent, v.destIri);
+
+  // Update quotas
+  await addQuota(env.APPDATA, config.username, size);
+  if (newParent) await addContainerBytes(env.APPDATA, newParent, size);
+
+  return redirect(`/storage/${v.destPath}`);
+}
+
+function errorResponse(message, status) {
+  return new Response(JSON.stringify({ error: message }), {
+    status,
+    headers: { 'Content-Type': 'application/json' },
+  });
 }
 
 function redirect(location) {

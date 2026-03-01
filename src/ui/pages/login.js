@@ -6,5 +6,6 @@ import template from '../templates/login.html';
 
 export function renderLoginPage(reqCtx) {
   const error = reqCtx.error || '';
-  return renderPage('Login', template, { error });
+  const returnTo = reqCtx.returnTo || (reqCtx.url && reqCtx.url.searchParams.get('return_to')) || '';
+  return renderPage('Login', template, { error, returnTo });
 }

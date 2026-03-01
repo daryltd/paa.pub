@@ -44,6 +44,7 @@ export async function renderDashboard(reqCtx) {
     webId: config.webId,
     actorId: config.actorId,
     domain: config.domain,
+    baseUrl: config.baseUrl,
     followerCount: followers.length,
     followingCount: following.length,
     postCount: outbox.length,

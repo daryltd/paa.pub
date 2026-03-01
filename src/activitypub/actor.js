@@ -70,6 +70,9 @@ async function actorJson(reqCtx) {
       owner: config.actorId,
       publicKeyPem: publicPem,
     },
+    endpoints: {
+      sharedInbox: `${config.baseUrl}/inbox`,
+    },
   };
 
   return new Response(JSON.stringify(actor, null, 2), {

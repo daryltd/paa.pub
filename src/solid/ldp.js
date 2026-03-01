@@ -49,7 +49,7 @@ const RDF_TYPES = new Set([
 
 const BINARY_INDICATOR_TYPES = [
   'image/', 'video/', 'audio/', 'application/pdf', 'application/zip',
-  'application/octet-stream', 'application/gzip',
+  'application/octet-stream', 'application/gzip', 'text/html',
 ];
 
 /** Check if a Content-Type should be treated as a binary upload (not RDF). */
@@ -94,6 +94,33 @@ export async function handleLDP(reqCtx) {
   // Content negotiation for HTML — serve index.html from container if it exists
   const accept = request.headers.get('Accept') || '';
   if ((request.method === 'GET' || request.method === 'HEAD') && isContainer(resourceIri) && accept.includes('text/html') && !wantsActivityPub(accept)) {
+    const rootContainerIri = `${config.baseUrl}/${config.username}/`;
+
+    // For the root container, check for paa_custom/index.html override first
+    if (resourceIri === rootContainerIri) {
+      const customIndexIri = rootContainerIri + 'paa_custom/index.html';
+      const customBlob = await reqCtx.storage.getBlob(`blob:${customIndexIri}`);
+      if (customBlob) {
+        // Check ACP on the custom file
+        const agent = reqCtx.user ? config.webId : null;
+        const access = await checkAcpAccess(reqCtx.env.APPDATA, customIndexIri, agent, config.webId, config.username);
+        if (!access.readable) {
+          return denyAccess(agent, config.baseUrl);
+        }
+        // Serve as-is — no Mustache rendering (user-authored static HTML)
+        let htmlContent = new Uint8Array(customBlob);
+        if (url.searchParams.get('edit') === 'dokieli' && reqCtx.user === config.username) {
+          htmlContent = injectDokieli(htmlContent, config.webId);
+        }
+        const htmlHeaders = new Headers();
+        htmlHeaders.set('Content-Type', 'text/html; charset=utf-8');
+        htmlHeaders.set('Cache-Control', access.listed ? 'public, no-cache' : 'private, no-store');
+        htmlHeaders.set('X-Content-Type-Options', 'nosniff');
+        if (request.method === 'HEAD') return new Response(null, { status: 200, headers: htmlHeaders });
+        return new Response(htmlContent, { status: 200, headers: htmlHeaders });
+      }
+    }
+
     const indexIri = resourceIri + 'index.html';
     const indexBlob = await reqCtx.storage.getBlob(`blob:${indexIri}`);
     if (indexBlob) {
@@ -106,7 +133,6 @@ export async function handleLDP(reqCtx) {
       let htmlContent = new Uint8Array(indexBlob);
 
       // For the root container, render index.html through Mustache with profile data
-      const rootContainerIri = `${config.baseUrl}/${config.username}/`;
       if (resourceIri === rootContainerIri) {
         try {
           const profileData = await buildProfileTemplateData(reqCtx.storage, config);
@@ -117,6 +143,10 @@ export async function handleLDP(reqCtx) {
           console.error('Mustache render error for root index.html:', e);
           // Fall through to serve raw blob on error
         }
+      }
+
+      if (url.searchParams.get('edit') === 'dokieli' && reqCtx.user === config.username) {
+        htmlContent = injectDokieli(htmlContent, config.webId);
       }
 
       const htmlHeaders = new Headers();
@@ -152,7 +182,7 @@ export async function handleLDP(reqCtx) {
  *      content-negotiate (Turtle, JSON-LD, N-Triples), serialize and serve
  */
 async function handleGet(reqCtx, resourceIri) {
-  const { request, config, storage, env } = reqCtx;
+  const { request, config, storage, env, url } = reqCtx;
   const agent = reqCtx.user ? config.webId : null;
 
   // Check if the resource exists in KV
@@ -160,7 +190,30 @@ async function handleGet(reqCtx, resourceIri) {
   if (!idx) {
     // Also check for blobs without an idx entry
     const blob = await storage.getBlob(`blob:${resourceIri}`);
-    if (!blob) return new Response('Not Found', { status: 404 });
+    if (!blob) {
+      // First-time dokieli edit: paa_custom/index.html doesn't exist yet —
+      // serve the rendered default template with dokieli injected so the user
+      // can edit and save, which creates paa_custom/index.html.
+      const customIndexIri = `${config.baseUrl}/${config.username}/paa_custom/index.html`;
+      if (resourceIri === customIndexIri && url.searchParams.get('edit') === 'dokieli' && reqCtx.user === config.username) {
+        const rootIndexIri = `${config.baseUrl}/${config.username}/index.html`;
+        const templateBlob = await storage.getBlob(`blob:${rootIndexIri}`);
+        if (templateBlob) {
+          const profileData = await buildProfileTemplateData(storage, config);
+          const templateStr = new TextDecoder().decode(new Uint8Array(templateBlob));
+          const rendered = Mustache.render(templateStr, profileData);
+          let htmlContent = new TextEncoder().encode(rendered);
+          htmlContent = injectDokieli(htmlContent, config.webId);
+          const htmlHeaders = new Headers();
+          htmlHeaders.set('Content-Type', 'text/html; charset=utf-8');
+          htmlHeaders.set('Cache-Control', 'private, no-store');
+          htmlHeaders.set('X-Content-Type-Options', 'nosniff');
+          if (request.method === 'HEAD') return new Response(null, { status: 200, headers: htmlHeaders });
+          return new Response(htmlContent, { status: 200, headers: htmlHeaders });
+        }
+      }
+      return new Response('Not Found', { status: 404 });
+    }
 
     // Serve orphan blob — always check ACP (owner handled inside checkAcpAccess)
     const access = await checkAcpAccess(env.APPDATA, resourceIri, agent, config.webId, config.username);
@@ -177,6 +230,13 @@ async function handleGet(reqCtx, resourceIri) {
   // Check ACP access — always run (owner is handled inside checkAcpAccess)
   const access = await checkAcpAccess(env.APPDATA, resourceIri, agent, config.webId, config.username);
   if (!access.readable) {
+    // For ?edit=dokieli browser interactions, redirect to login instead of returning 401 JSON
+    if (!agent && url.searchParams.get('edit') === 'dokieli') {
+      return new Response(null, {
+        status: 302,
+        headers: { 'Location': `/login?return_to=${encodeURIComponent(url.pathname + url.search)}` },
+      });
+    }
     return denyAccess(agent, config.baseUrl);
   }
 
@@ -195,8 +255,18 @@ async function handleGet(reqCtx, resourceIri) {
     const metaDoc = await storage.get(`doc:${resourceIri}.meta:${resourceIri}`);
     let ct = 'application/octet-stream';
     if (metaDoc) {
-      const fmtMatch = metaDoc.match(/"([^"]+)"/);
+      const fmtMatch = metaDoc.match(/<http:\/\/purl\.org\/dc\/terms\/format>\s+"([^"]+)"/);
       if (fmtMatch) ct = fmtMatch[1];
+    }
+    if (ct.startsWith('text/html') && url.searchParams.get('edit') === 'dokieli' && isOwner) {
+      const htmlBytes = new Uint8Array(blob);
+      const injected = injectDokieli(htmlBytes, config.webId);
+      const dHeaders = solidHeaders(resourceIri, false);
+      dHeaders.set('Content-Type', 'text/html; charset=utf-8');
+      dHeaders.set('WAC-Allow', wacAllow);
+      dHeaders.set('Cache-Control', 'private, no-store');
+      if (request.method === 'HEAD') return new Response(null, { status: 200, headers: dHeaders });
+      return new Response(injected, { status: 200, headers: dHeaders });
     }
     const headers = solidHeaders(resourceIri, false);
     headers.set('Content-Type', ct);
@@ -216,7 +286,15 @@ async function handleGet(reqCtx, resourceIri) {
   }
 
   if (allTriples.length === 0) {
-    return new Response('Not Found', { status: 404 });
+    // Empty containers still return a valid representation with their type triples
+    if (isContainer(resourceIri)) {
+      allTriples.push(
+        { subject: `<${resourceIri}>`, predicate: `<${PREFIXES.rdf}type>`, object: `<${PREFIXES.ldp}BasicContainer>` },
+        { subject: `<${resourceIri}>`, predicate: `<${PREFIXES.rdf}type>`, object: `<${PREFIXES.ldp}Container>` },
+      );
+    } else {
+      return new Response('Not Found', { status: 404 });
+    }
   }
 
   const accept = request.headers.get('Accept') || 'text/turtle';
@@ -258,29 +336,47 @@ async function handlePut(reqCtx, resourceIri) {
     }
   }
 
+  // Protect root index.html from LDP writes — it's the system-managed Mustache template
+  const rootIndexIri = `${config.baseUrl}/${config.username}/index.html`;
+  if (resourceIri === rootIndexIri) {
+    return new Response('Forbidden — root index.html is managed by the system', { status: 403 });
+  }
+
   console.log(`[ldp] PUT ${resourceIri} by ${agent} ct=${contentType}`);
 
   if (isBinaryType(contentType)) {
     const binary = await request.arrayBuffer();
+    let binaryData = binary;
+    if (contentType.startsWith('text/html')) {
+      binaryData = stripDokieli(binary);
+    }
 
     // Quota checks
-    const quotaResult = await checkQuota(env.APPDATA, config.username, binary.byteLength, config.storageLimit);
+    const quotaResult = await checkQuota(env.APPDATA, config.username, binaryData.byteLength, config.storageLimit);
     if (!quotaResult.allowed) return quotaExceededResponse(quotaResult.usedBytes, quotaResult.limitBytes);
     const parent = parentContainer(resourceIri);
     if (parent) {
-      const cqResult = await checkContainerQuota(env.APPDATA, parent, binary.byteLength);
+      const cqResult = await checkContainerQuota(env.APPDATA, parent, binaryData.byteLength);
       if (!cqResult.allowed) return containerQuotaExceededResponse(cqResult.blockedBy, cqResult.usedBytes, cqResult.limitBytes);
     }
 
-    const metadataNquads = buildMetadataNQuads(resourceIri, contentType, binary.byteLength);
+    const metadataNquads = buildMetadataNQuads(resourceIri, contentType, binaryData.byteLength);
     const aclNt = defaultAclNTriples(resourceIri, config.webId);
-    const result = await orchestrator.uploadBinary(resourceIri, binary, contentType, metadataNquads, aclNt, agent);
+    const result = await orchestrator.uploadBinary(resourceIri, binaryData, contentType, metadataNquads, aclNt, agent);
     if (result.type === 'auth_error') return new Response('Forbidden', { status: 403 });
     if (result.type === 'validation_error') return new Response(result.report_json, { status: 422 });
 
     // Update quota tracking
-    await addQuota(env.APPDATA, config.username, binary.byteLength);
-    if (parent) await addContainerBytes(env.APPDATA, parent, binary.byteLength);
+    await addQuota(env.APPDATA, config.username, binaryData.byteLength);
+    if (parent) await addContainerBytes(env.APPDATA, parent, binaryData.byteLength);
+
+    // Auto-set public ACP on paa_custom/index.html so it's publicly readable (replaces the profile page)
+    const customIndexIri = `${config.baseUrl}/${config.username}/paa_custom/index.html`;
+    if (resourceIri === customIndexIri) {
+      await env.APPDATA.put(`acp:${customIndexIri}`, JSON.stringify({
+        mode: 'public', agents: [], inherit: false,
+      }));
+    }
 
     return new Response(null, { status: 201, headers: { 'Location': resourceIri } });
   }
@@ -465,6 +561,12 @@ async function handlePatch(reqCtx, resourceIri) {
     }
   }
 
+  // Protect root index.html from LDP writes
+  const rootIndexIri = `${config.baseUrl}/${config.username}/index.html`;
+  if (resourceIri === rootIndexIri) {
+    return new Response('Forbidden — root index.html is managed by the system', { status: 403 });
+  }
+
   const contentType = request.headers.get('Content-Type') || '';
   if (!contentType.includes('application/sparql-update')) {
     return new Response('Unsupported Media Type. Use application/sparql-update', { status: 415 });
@@ -604,6 +706,57 @@ function parseBody(body, contentType, baseIri) {
     return jsonLdToTriples(JSON.parse(body));
   }
   return parseTurtle(body, baseIri);
+}
+
+/**
+ * Inject dokieli WYSIWYG editor tags into an HTML document.
+ * Inserts CSS and JS references just before </head>, or wraps with <head> if absent.
+ * When webId is provided, pre-sets localStorage so dokieli auto-identifies the user.
+ * @param {Uint8Array} htmlBytes - The raw HTML content
+ * @param {string} [webId] - Optional WebID to pre-set for dokieli auto-login
+ * @returns {Uint8Array} - The modified HTML with dokieli tags injected
+ */
+function injectDokieli(htmlBytes, webId) {
+  const html = new TextDecoder().decode(htmlBytes);
+  const tagParts = [
+    '<link href="https://dokie.li/media/css/basic.css" media="all" rel="stylesheet" title="Basic" />',
+    '<link href="https://dokie.li/media/css/dokieli.css" media="all" rel="stylesheet" />',
+  ];
+  if (webId) {
+    const escaped = webId.replace(/'/g, "\\'");
+    tagParts.push(`<script>localStorage.setItem('DO.Config.User', JSON.stringify({ object: { describes: { IRI: '${escaped}', Role: 'social', UI: { Language: 'en' } } } }));<\/script>`);
+  }
+  // Disable remote autosave — must run before dokieli.js initialises
+  tagParts.push('<script>/* dokieli-no-autosave */(function(){var k=location.origin+location.pathname+(location.search||"");try{var v=JSON.parse(localStorage.getItem(k))||{}}catch(e){var v={}}v.autoSave=false;localStorage.setItem(k,JSON.stringify(v))})()<\/script>');
+  tagParts.push('<script src="https://dokie.li/scripts/dokieli.js"><\/script>');
+  const tags = tagParts.join('\n');
+
+  let result;
+  const headClose = html.indexOf('</head>');
+  if (headClose !== -1) {
+    result = html.slice(0, headClose) + tags + '\n' + html.slice(headClose);
+  } else {
+    result = '<head>\n' + tags + '\n</head>\n' + html;
+  }
+  return new TextEncoder().encode(result);
+}
+
+/**
+ * Strip dokieli CSS/JS tags and the localStorage auto-login script
+ * that injectDokieli() adds to <head>. Called on PUT so the saved HTML
+ * doesn't permanently embed dokieli.
+ */
+function stripDokieli(binary) {
+  let html = new TextDecoder().decode(new Uint8Array(binary));
+  // Strip dokie.li CSS links
+  html = html.replace(/<link [^>]*href="https:\/\/dokie\.li\/[^"]*"[^>]*\/?>[ \t]*\n?/g, '');
+  // Strip dokie.li script tag
+  html = html.replace(/<script [^>]*src="https:\/\/dokie\.li\/[^"]*"[^>]*><\/script>[ \t]*\n?/g, '');
+  // Strip our localStorage auto-login script
+  html = html.replace(/<script>localStorage\.setItem\('DO\.Config\.User'[^<]*<\/script>[ \t]*\n?/g, '');
+  // Strip our autosave-disable script
+  html = html.replace(/<script>\/\* dokieli-no-autosave \*\/[^<]*<\/script>[ \t]*\n?/g, '');
+  return new TextEncoder().encode(html).buffer;
 }
 
 /**

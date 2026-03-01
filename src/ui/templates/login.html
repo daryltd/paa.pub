@@ -4,6 +4,7 @@
   <div class="error">{{error}}</div>
   {{/error}}
   <form method="POST" action="/login">
+    {{#returnTo}}<input type="hidden" name="return_to" value="{{returnTo}}">{{/returnTo}}
     <div class="form-group">
       <label for="password">Password</label>
       <input type="password" id="password" name="password" autocomplete="current-password" required autofocus>

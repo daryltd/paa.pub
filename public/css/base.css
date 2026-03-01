@@ -35,6 +35,7 @@ dialog { border: none; border-radius: 8px; padding: 1.5rem; max-width: 420px; wi
 dialog::backdrop { background: rgba(0,0,0,0.4); }
 dialog p { margin-bottom: 1rem; line-height: 1.5; }
 dialog .dialog-actions { display: flex; gap: 0.5rem; justify-content: flex-end; }
+details > summary > h2 { display: inline; }
 
 /* ── Display & Flex ──────────────────────────────────── */
 .hidden { display: none; }
@@ -103,6 +104,7 @@ dialog .dialog-actions { display: flex; gap: 0.5rem; justify-content: flex-end; 
 
 /* ── Link button (destructive text link) ─────────────── */
 .link-btn { background: none; border: none; cursor: pointer; font-size: 0.8rem; color: #dc3545; padding: 0; }
+.link-btn-neutral { background: none; border: none; cursor: pointer; font-size: 0.8rem; color: #666; padding: 0; }
 
 /* ── Badges ──────────────────────────────────────────── */
 .badge { padding: 0.1rem 0.4rem; border-radius: 3px; font-size: 0.75rem; }

@@ -5,15 +5,15 @@
 
 <div class="card mt-1">
   <h2>Profile Page</h2>
-  <p class="text-muted mb-075">Your public profile page at <a href="/{{username}}/" class="mono">/{{username}}/</a> is rendered from an index.html template using your profile data. If you have customized it and want to start over, you can reset it to the default.</p>
+  <p class="text-muted mb-075">Your public profile page at <a href="/{{username}}/" class="mono">/{{username}}/</a> is rendered from an index.html template using your profile data. If you edit it with dokieli, your changes are saved to <span class="mono">paa_custom/index.html</span> and served instead of the default template. Resetting removes the custom page and restores the default template.</p>
   <form method="POST" action="/profile/reset-index">
     <button type="submit" class="btn btn-secondary" data-confirm="Reset your profile page to the default template? Any customizations to index.html will be lost.">Reset Profile Page to Default</button>
   </form>
 </div>
 
 <form method="POST" action="/profile">
-  <div class="card">
-    <h2>Profile Fields</h2>
+  <details class="card">
+    <summary><h2>Profile Fields</h2></summary>
 
     <div class="form-group">
       <label for="name">Name (foaf:name)</label>
@@ -54,10 +54,10 @@
       <label for="description">Description (schema:description)</label>
       <textarea id="description" name="description" placeholder="A longer description">{{description}}</textarea>
     </div>
-  </div>
+  </details>
 
-  <div class="card">
-    <h2>Custom Triples</h2>
+  <details class="card">
+    <summary><h2>Add/Edit Custom Triples</h2></summary>
     <p class="text-muted mb-075">Add custom predicate-object pairs for your WebID subject. Use the template key in your profile page template, e.g. <code>{{=<% %>=}}{{#foaf_knows}}...{{/foaf_knows}}<%={{ }}=%></code>.</p>
 
     <div class="triple-editor"
@@ -85,7 +85,7 @@
       {{/customTriples}}
       <div class="te-add-area"></div>
     </div>
-  </div>
+  </details>
 
   <div class="mt-1">
     <button type="submit" class="btn">Save Profile</button>
@@ -94,8 +94,8 @@
 </form>
 
 {{#hasSystemTriples}}
-<div class="card mt-1">
-  <h2>System Triples (read-only)</h2>
+<details class="card mt-1">
+  <summary><h2>System Triples (read-only)</h2></summary>
   <div class="triple-editor" data-subject="{{webId}}" data-output="none">
     {{#systemTriples}}
     <div class="te-row" data-readonly="true">
@@ -107,7 +107,7 @@
     </div>
     {{/systemTriples}}
   </div>
-</div>
+</details>
 {{/hasSystemTriples}}
 
 <script src="/scripts/triple-editor.js"></script>
