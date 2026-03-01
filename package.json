@@ -2,6 +2,7 @@
   "name": "paa-pub",
   "version": "0.1.0",
   "private": true,
+  "license": "MIT",
   "description": "Single-user Solid + ActivityPub server on Cloudflare Workers",
   "scripts": {
     "dev": "wrangler dev",
