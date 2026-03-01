@@ -383,7 +383,11 @@ async function handlePut(reqCtx, resourceIri) {
 
   // RDF content
   const body = await request.text();
-  const triples = parseBody(body, contentType, resourceIri);
+  let triples;
+  try { triples = parseBody(body, contentType, resourceIri); } catch (e) {
+    if (e.status === 400) return new Response(e.message, { status: 400 });
+    throw e;
+  }
 
   // For containers, ensure container type triples are present
   if (isContainer(resourceIri)) {
@@ -534,7 +538,11 @@ async function handlePost(reqCtx, resourceIri) {
 
   // RDF content — write directly to KV
   const body = await request.text();
-  const triples = parseBody(body, contentType, newResourceIri);
+  let triples;
+  try { triples = parseBody(body, contentType, newResourceIri); } catch (e) {
+    if (e.status === 400) return new Response(e.message, { status: 400 });
+    throw e;
+  }
   await writeTriplesToKV(storage, newResourceIri, triples);
   await appendContainment(storage, resourceIri, newResourceIri);
 
@@ -703,7 +711,13 @@ function parseBody(body, contentType, baseIri) {
   }
   if (contentType.includes('application/ld+json')) {
     // Basic JSON-LD to triples: handle flat objects
-    return jsonLdToTriples(JSON.parse(body));
+    let doc;
+    try { doc = JSON.parse(body); } catch (e) {
+      const err = new Error('Invalid JSON-LD: ' + e.message);
+      err.status = 400;
+      throw err;
+    }
+    return jsonLdToTriples(doc);
   }
   return parseTurtle(body, baseIri);
 }
