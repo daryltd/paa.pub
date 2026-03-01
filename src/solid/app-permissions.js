@@ -1,7 +1,7 @@
 /**
- * App write permission enforcement for OIDC-authenticated apps.
+ * App permission enforcement for OIDC-authenticated apps.
  *
- * OIDC-authenticated apps are restricted to writing only within containers
+ * OIDC-authenticated apps are restricted to accessing only containers
  * the owner has explicitly approved. Session-authenticated owner always
  * has unrestricted access.
  *
@@ -12,7 +12,7 @@
 import { simpleHash } from '../utils.js';
 
 /**
- * Check if an OIDC app has write permission for a resource.
+ * Check if an OIDC app has permission to access a resource.
  * Uses prefix matching: if `/alice/public/` is allowed, writes to
  * `/alice/public/photos/cat.jpg` are also allowed.
  *
@@ -22,7 +22,7 @@ import { simpleHash } from '../utils.js';
  * @param {string} resourceIri - Full resource IRI being written to
  * @returns {Promise<boolean>}
  */
-export async function checkAppWritePermission(kv, username, clientId, resourceIri) {
+export async function checkAppPermission(kv, username, clientId, resourceIri) {
   const hash = simpleHash(clientId);
   const data = await kv.get(`app_perm:${username}:${hash}`);
   if (!data) return false;
@@ -32,7 +32,9 @@ export async function checkAppWritePermission(kv, username, clientId, resourceIr
   if (perm.clientId !== clientId) return false;
 
   const containers = perm.allowedContainers || [];
-  return containers.some(containerIri => resourceIri.startsWith(containerIri));
+  return containers.some(containerIri =>
+    resourceIri.startsWith(containerIri) || containerIri.startsWith(resourceIri)
+  );
 }
 
 /**

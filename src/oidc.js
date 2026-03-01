@@ -623,29 +623,36 @@ async function rememberClient(kv, username, clientId) {
 }
 
 /**
- * Load top-level containers from the user's root container.
+ * Load all containers (recursively) from the user's root container.
  */
 async function loadTopLevelContainers(storage, config) {
   const rootIri = `${config.baseUrl}/${config.username}/`;
-  const ntData = await storage.get(`doc:${rootIri}:${rootIri}`);
-  if (!ntData) return [];
-
-  const triples = parseNTriples(ntData);
   const ldpContains = PREFIXES.ldp + 'contains';
   const containers = [];
 
-  for (const t of triples) {
-    if (unwrapIri(t.predicate) === ldpContains) {
-      const childIri = unwrapIri(t.object);
-      if (childIri.endsWith('/')) {
-        containers.push({
-          iri: childIri,
-          path: childIri.replace(config.baseUrl, ''),
-        });
+  async function collectContainers(containerIri) {
+    const ntData = await storage.get(`doc:${containerIri}:${containerIri}`);
+    if (!ntData) return;
+    const triples = parseNTriples(ntData);
+    const children = [];
+    for (const t of triples) {
+      if (unwrapIri(t.predicate) === ldpContains) {
+        const childIri = unwrapIri(t.object);
+        if (childIri.endsWith('/')) {
+          containers.push({
+            iri: childIri,
+            path: childIri.replace(config.baseUrl, ''),
+          });
+          children.push(childIri);
+        }
       }
     }
+    await Promise.all(children.map(c => collectContainers(c)));
   }
 
+  await collectContainers(rootIri);
   containers.sort((a, b) => a.path.localeCompare(b.path));
+  // Include the root container itself as the first option
+  containers.unshift({ iri: rootIri, path: `/${config.username}/` });
   return containers;
 }

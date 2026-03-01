@@ -37,7 +37,7 @@ import { checkAcpAccess } from '../ui/pages/acl-editor.js';
 import { PREFIXES } from '../rdf/prefixes.js';
 import { checkQuota, quotaExceededResponse, addQuota } from '../storage/quota.js';
 import { checkContainerQuota, containerQuotaExceededResponse, addContainerBytes } from '../storage/container-quota.js';
-import { checkAppWritePermission } from './app-permissions.js';
+import { checkAppPermission, getAppPermission } from './app-permissions.js';
 
 const RDF_TYPES = new Set([
   'text/turtle',
@@ -89,6 +89,14 @@ export async function handleLDP(reqCtx) {
       return new Response(null, { status: 302, headers: { 'Location': `/acp/${url.pathname.slice(1).replace(/\.acr$/, '')}` } });
     }
     return new Response('Method Not Allowed', { status: 405 });
+  }
+
+  // App read permission check (OIDC apps only)
+  if ((request.method === 'GET' || request.method === 'HEAD') && reqCtx.authMethod === 'oidc' && reqCtx.clientId) {
+    const allowed = await checkAppPermission(reqCtx.env.APPDATA, config.username, reqCtx.clientId, resourceIri);
+    if (!allowed) {
+      return new Response('Forbidden — app not authorized for this resource', { status: 403 });
+    }
   }
 
   // Content negotiation for HTML — serve index.html from container if it exists
@@ -297,6 +305,24 @@ async function handleGet(reqCtx, resourceIri) {
     }
   }
 
+  // For OIDC apps reading an ancestor container, filter ldp:contains to only
+  // show resources the app is authorized to access
+  if (reqCtx.authMethod === 'oidc' && reqCtx.clientId && isContainer(resourceIri)) {
+    const perm = await getAppPermission(env.APPDATA, config.username, reqCtx.clientId);
+    if (perm) {
+      const allowed = perm.allowedContainers || [];
+      const ldpContains = `<${PREFIXES.ldp}contains>`;
+      for (let i = allTriples.length - 1; i >= 0; i--) {
+        const t = allTriples[i];
+        if (t.predicate === ldpContains) {
+          const childIri = t.object.startsWith('<') ? t.object.slice(1, -1) : t.object;
+          const visible = allowed.some(c => childIri.startsWith(c) || c.startsWith(childIri));
+          if (!visible) allTriples.splice(i, 1);
+        }
+      }
+    }
+  }
+
   const accept = request.headers.get('Accept') || 'text/turtle';
   const contentType = negotiateType(accept);
   const body = serializeRdf(allTriples, contentType);
@@ -329,7 +355,7 @@ async function handlePut(reqCtx, resourceIri) {
 
   // App write permission check (OIDC apps only)
   if (reqCtx.authMethod === 'oidc' && reqCtx.clientId) {
-    const allowed = await checkAppWritePermission(env.APPDATA, config.username, reqCtx.clientId, resourceIri);
+    const allowed = await checkAppPermission(env.APPDATA, config.username, reqCtx.clientId, resourceIri);
     if (!allowed) {
       console.log(`[ldp] PUT ${resourceIri} rejected: app ${reqCtx.clientId} not authorized`);
       return new Response('Forbidden — app not authorized for this container', { status: 403 });
@@ -473,7 +499,7 @@ async function handlePost(reqCtx, resourceIri) {
 
   // App write permission check (OIDC apps only)
   if (reqCtx.authMethod === 'oidc' && reqCtx.clientId) {
-    const allowed = await checkAppWritePermission(env.APPDATA, config.username, reqCtx.clientId, resourceIri);
+    const allowed = await checkAppPermission(env.APPDATA, config.username, reqCtx.clientId, resourceIri);
     if (!allowed) {
       console.log(`[ldp] POST ${resourceIri} rejected: app ${reqCtx.clientId} not authorized`);
       return new Response('Forbidden — app not authorized for this container', { status: 403 });
@@ -562,7 +588,7 @@ async function handlePatch(reqCtx, resourceIri) {
 
   // App write permission check (OIDC apps only)
   if (reqCtx.authMethod === 'oidc' && reqCtx.clientId) {
-    const allowed = await checkAppWritePermission(env.APPDATA, config.username, reqCtx.clientId, resourceIri);
+    const allowed = await checkAppPermission(env.APPDATA, config.username, reqCtx.clientId, resourceIri);
     if (!allowed) {
       console.log(`[ldp] PATCH ${resourceIri} rejected: app ${reqCtx.clientId} not authorized`);
       return new Response('Forbidden — app not authorized for this container', { status: 403 });
@@ -630,7 +656,7 @@ async function handleDelete(reqCtx, resourceIri) {
 
   // App write permission check (OIDC apps only)
   if (reqCtx.authMethod === 'oidc' && reqCtx.clientId) {
-    const allowed = await checkAppWritePermission(env.APPDATA, config.username, reqCtx.clientId, resourceIri);
+    const allowed = await checkAppPermission(env.APPDATA, config.username, reqCtx.clientId, resourceIri);
     if (!allowed) {
       console.log(`[ldp] DELETE ${resourceIri} rejected: app ${reqCtx.clientId} not authorized`);
       return new Response('Forbidden — app not authorized for this container', { status: 403 });
