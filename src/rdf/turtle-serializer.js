@@ -13,14 +13,14 @@ const RDF_TYPE = 'http://www.w3.org/1999/02/22-rdf-syntax-ns#type';
  * @param {string[]} [prefixNames] - which prefixes to emit (e.g. ['acl', 'foaf'])
  * @returns {string}
  */
-export function serializeTurtle(triples, prefixNames = []) {
+export function serializeTurtle(triples, prefixNames = [], allPrefixes = PREFIXES) {
   if (triples.length === 0) return '';
 
   // Determine which prefixes are actually used
   const usedPrefixes = {};
   const prefixMap = {};
   for (const name of prefixNames) {
-    if (PREFIXES[name]) prefixMap[PREFIXES[name]] = name;
+    if (allPrefixes[name]) prefixMap[allPrefixes[name]] = name;
   }
 
   function shorten(term) {
@@ -51,8 +51,8 @@ export function serializeTurtle(triples, prefixNames = []) {
 
   // Emit prefix declarations
   for (const name of prefixNames) {
-    if (PREFIXES[name]) {
-      lines.push(`@prefix ${name}: <${PREFIXES[name]}> .`);
+    if (allPrefixes[name]) {
+      lines.push(`@prefix ${name}: <${allPrefixes[name]}> .`);
     }
   }
   if (lines.length > 0) lines.push('');

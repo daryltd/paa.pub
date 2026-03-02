@@ -99,7 +99,7 @@ bucket_name = "my-solid-blobs"
 
 [[rules]]
 type = "Text"
-globs = ["**/*.html", "**/*.css", "**/client/*.js"]
+globs = ["**/*.html"]
 fallthrough = true
 ```
 
@@ -166,7 +166,7 @@ Overview of your server: WebID, follower/following/post counts, pending follow r
 
 ### Profile editor (`/profile`)
 
-Edit your WebID profile fields (name, bio, avatar, homepage, etc.) and manage custom RDF triples. Reset your public profile page template if you've customized it.
+Edit your WebID profile fields (name, bio, avatar, homepage, etc.) and manage custom RDF triples. Use the Page Builder to customize your public profile page layout with a tree-based editor. Reset to the default layout if needed.
 
 ### Activity feed (`/activity`)
 
@@ -207,7 +207,7 @@ Session-authenticated access (via the web UI) always has unrestricted write acce
 
 ### Public profile page (`/{username}/`)
 
-Your root container serves a Mustache-rendered landing page showing your profile data. The template is editable through the Storage UI and resettable from the Profile editor.
+Your root container serves a dynamically rendered landing page built from your profile data and a JSON layout. Customize it with the Page Builder in the Profile editor, or reset to the default layout.
 
 ### Solid protocol
 
@@ -379,6 +379,7 @@ src/
 │   ├── acl.js            # .acl resource handling
 │   ├── headers.js        # Solid protocol headers
 │   ├── cors.js           # CORS
+│   ├── media-types.js    # Extension-to-media-type resolution
 │   └── app-permissions.js # OIDC app write permission enforcement
 ├── activitypub/
 │   ├── actor.js          # Actor JSON-LD document
@@ -399,12 +400,11 @@ src/
 │   ├── digest.js         # SHA-256 digest
 │   └── cbor.js           # CBOR decoder (WebAuthn)
 ├── storage/
-│   ├── binary.js         # Binary upload/download
-│   ├── metadata.js       # Dublin Core metadata
 │   ├── quota.js          # Global storage quota tracking + enforcement
 │   └── container-quota.js # Per-container hierarchical quota tracking
 └── ui/
     ├── shell.js          # Mustache template renderer + layout + security headers
+    ├── layout-renderer.js # JSON layout-based profile page renderer
     ├── styles/base.css   # Base stylesheet
     ├── templates/        # Mustache HTML templates
     ├── client/           # Client-side JS (dialogs, passkeys, etc.)

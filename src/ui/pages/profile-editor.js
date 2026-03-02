@@ -21,11 +21,11 @@
  */
 import { renderPage } from '../shell.js';
 import template from '../templates/profile-editor.html';
-import defaultIndexTemplate from '../templates/default-index.html';
+import { DEFAULT_LAYOUT } from '../layout-renderer.js';
 import { requireAuth } from '../../auth/middleware.js';
 import { readProfileTriples, writeTriplesToKV } from '../../solid/ldp.js';
-import { parseNTriples, iri, unwrapIri, unwrapLiteral, literal } from '../../rdf/ntriples.js';
-import { PREFIXES, shortenPredicate, loadMergedPrefixes } from '../../rdf/prefixes.js';
+import { iri, unwrapIri, unwrapLiteral, literal } from '../../rdf/ntriples.js';
+import { PREFIXES, shortenPredicate, loadCustomPrefixes, saveCustomPrefixes, loadPredicateCatalog, discoverNsPredicates, saveNsPredicates, BUILTIN_NS_PREDICATES } from '../../rdf/prefixes.js';
 
 /**
  * Editable predicate IRIs mapped to form field names.
@@ -64,7 +64,7 @@ function isSystemPredicate(predicateIri) {
 }
 
 /**
- * Convert a predicate IRI to the Mustache-safe key used in profile templates.
+ * Convert a predicate IRI to the template-safe key used in profile layouts.
  */
 function predicateToKey(predicateIri, prefixes) {
   const map = prefixes || PREFIXES;
@@ -84,10 +84,10 @@ export async function renderProfileEditor(reqCtx) {
   const authCheck = requireAuth(reqCtx);
   if (authCheck) return authCheck;
 
-  const { config, storage } = reqCtx;
+  const { config, storage, env } = reqCtx;
   const url = reqCtx.url;
 
-  const data = await buildEditorData(storage, config);
+  const data = await buildEditorData(storage, config, env);
 
   // Pass through flash messages from redirect
   if (url.searchParams.has('saved')) {
@@ -106,12 +106,53 @@ export async function handleProfileUpdate(reqCtx) {
   const authCheck = requireAuth(reqCtx);
   if (authCheck) return authCheck;
 
-  const { config, storage, request } = reqCtx;
+  const { config, storage, request, env } = reqCtx;
   const webId = config.webId;
   const profileIri = `${config.baseUrl}/${config.username}/profile/card`;
 
   // Parse form data
   const formData = await request.formData();
+
+  // Save layout JSON if submitted
+  const layoutJsonRaw = formData.get('layout_json');
+  if (layoutJsonRaw !== null) {
+    try {
+      const layout = JSON.parse(layoutJsonRaw);
+      if (layout && layout.version && Array.isArray(layout.head) && Array.isArray(layout.body)) {
+        await env.APPDATA.put(`profile_layout:${config.username}`, JSON.stringify(layout));
+      }
+    } catch (e) {
+      // Ignore invalid JSON — keep existing layout
+    }
+  }
+
+  // Save custom prefixes if submitted, and discover predicates for new namespaces
+  const customPrefixesRaw = formData.get('custom_prefixes_json');
+  if (customPrefixesRaw !== null) {
+    try {
+      const prefixMap = JSON.parse(customPrefixesRaw);
+      if (typeof prefixMap === 'object' && prefixMap !== null && !Array.isArray(prefixMap)) {
+        await saveCustomPrefixes(env.APPDATA, config.username, prefixMap);
+
+        // Discover predicates for custom namespaces that haven't been indexed yet
+        for (const nsIri of Object.values(prefixMap)) {
+          if (BUILTIN_NS_PREDICATES[nsIri]) continue;
+          const stored = await env.APPDATA.get(`ns_predicates:${nsIri}`);
+          if (stored) continue;
+          try {
+            const discovered = await discoverNsPredicates(nsIri);
+            if (discovered.length > 0) {
+              await saveNsPredicates(env.APPDATA, nsIri, discovered);
+            }
+          } catch (e) {
+            // Discovery failed — user can still type predicates manually
+          }
+        }
+      }
+    } catch (e) {
+      // Ignore invalid JSON — keep existing prefixes
+    }
+  }
 
   // Read existing triples for the entire profile document
   const allTriples = await readProfileTriples(storage, config);
@@ -183,48 +224,49 @@ export async function handleProfileUpdate(reqCtx) {
 }
 
 /**
+ * POST /profile/discover-ns — discover predicates for a namespace IRI (AJAX).
+ */
+export async function handleDiscoverNs(reqCtx) {
+  const authCheck = requireAuth(reqCtx);
+  if (authCheck) return authCheck;
+
+  const { config, env, request } = reqCtx;
+  const formData = await request.formData();
+  const nsIri = (formData.get('ns_iri') || '').trim();
+
+  if (!nsIri) {
+    return new Response(JSON.stringify({ error: 'Missing ns_iri' }), {
+      status: 400,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+
+  try {
+    const discovered = await discoverNsPredicates(nsIri);
+    if (discovered.length > 0) {
+      await saveNsPredicates(env.APPDATA, nsIri, discovered);
+    }
+    return new Response(JSON.stringify({ count: discovered.length, predicates: discovered }), {
+      headers: { 'Content-Type': 'application/json' },
+    });
+  } catch (e) {
+    return new Response(JSON.stringify({ error: e.message || 'Discovery failed', count: 0, predicates: [] }), {
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+}
+
+/**
  * POST /profile/reset-index — reset root container index.html to the default template.
  */
 export async function handleProfileIndexReset(reqCtx) {
   const authCheck = requireAuth(reqCtx);
   if (authCheck) return authCheck;
 
-  const { config, storage, env } = reqCtx;
-  const indexHtmlIri = `${config.baseUrl}/${config.username}/index.html`;
+  const { config, env } = reqCtx;
 
-  const htmlBytes = new TextEncoder().encode(defaultIndexTemplate);
-  await storage.putBlob(`blob:${indexHtmlIri}`, htmlBytes, 'text/html');
-
-  // Also delete paa_custom/index.html override if it exists
-  const customIndexIri = `${config.baseUrl}/${config.username}/paa_custom/index.html`;
-  const customBlob = await storage.getBlob(`blob:${customIndexIri}`);
-  if (customBlob) {
-    // Delete blob, idx, metadata, ACP
-    try { await storage.deleteBlob(`blob:${customIndexIri}`); } catch {}
-    const idx = await storage.get(`idx:${customIndexIri}`);
-    if (idx) {
-      const parsed = JSON.parse(idx);
-      for (const subj of parsed.subjects || []) {
-        await storage.delete(`doc:${customIndexIri}:${subj}`);
-      }
-      await storage.delete(`idx:${customIndexIri}`);
-    }
-    await storage.delete(`doc:${customIndexIri}.meta:${customIndexIri}`);
-    await env.APPDATA.delete(`acp:${customIndexIri}`);
-
-    // Remove containment from paa_custom/ container
-    const paaCustomIri = `${config.baseUrl}/${config.username}/paa_custom/`;
-    const docKey = `doc:${paaCustomIri}:${paaCustomIri}`;
-    const parentDoc = await storage.get(docKey);
-    if (parentDoc) {
-      const triples = parseNTriples(parentDoc);
-      const filtered = triples.filter(t =>
-        !(unwrapIri(t.predicate) === PREFIXES.ldp + 'contains' && unwrapIri(t.object) === customIndexIri)
-      );
-      const { serializeNTriples: serNT } = await import('../../rdf/ntriples.js');
-      await storage.put(docKey, serNT(filtered));
-    }
-  }
+  // Delete custom layout — profile page will render with DEFAULT_LAYOUT
+  await env.APPDATA.delete(`profile_layout:${config.username}`);
 
   return new Response(null, {
     status: 302,
@@ -235,10 +277,11 @@ export async function handleProfileIndexReset(reqCtx) {
 /**
  * Build the template data object for the profile editor.
  */
-async function buildEditorData(storage, config) {
+async function buildEditorData(storage, config, env) {
   const allTriples = await readProfileTriples(storage, config);
   const webId = config.webId;
-  const mergedPrefixes = await loadMergedPrefixes(storage, config.baseUrl, config.username);
+  const customPrefixes = await loadCustomPrefixes(env.APPDATA, config.username);
+  const mergedPrefixes = { ...PREFIXES, ...customPrefixes };
 
   const data = {
     username: config.username,
@@ -297,5 +340,211 @@ async function buildEditorData(storage, config) {
   data.hasSystemTriples = data.systemTriples.length > 0;
   data.prefixesJson = JSON.stringify(mergedPrefixes);
 
+  // Custom prefix management data
+  const customPrefixList = Object.entries(customPrefixes).map(([name, ns]) => ({ name, ns }));
+  data.customPrefixList = customPrefixList;
+  data.hasCustomPrefixes = customPrefixList.length > 0;
+  data.customPrefixesJson = JSON.stringify(customPrefixes);
+
+  // Predicate catalog for namespace browsing
+  const catalog = await loadPredicateCatalog(env.APPDATA, mergedPrefixes);
+  data.namespaceCatalogJson = JSON.stringify(catalog);
+
+  // Page builder: load layout JSON
+  const layoutRaw = await env.APPDATA.get(`profile_layout:${config.username}`);
+  data.layoutJson = layoutRaw || JSON.stringify(DEFAULT_LAYOUT);
+
+  // Available profile fields for binding picker
+  const profileFields = [
+    { key: 'name', label: 'Name (foaf:name)' },
+    { key: 'nick', label: 'Nickname (foaf:nick)' },
+    { key: 'img', label: 'Avatar URL (foaf:img)' },
+    { key: 'email', label: 'Email (foaf:mbox)' },
+    { key: 'homepage', label: 'Homepage (foaf:homepage)' },
+    { key: 'bio', label: 'Bio (vcard:note)' },
+    { key: 'role', label: 'Role (vcard:role)' },
+    { key: 'description', label: 'Description (schema:description)' },
+    { key: 'webId', label: 'WebID' },
+    { key: 'username', label: 'Username' },
+    { key: 'domain', label: 'Domain' },
+    { key: 'baseUrl', label: 'Base URL' },
+  ];
+  // Add custom triple keys dynamically
+  for (const ct of data.customTriples) {
+    if (ct.templateKey) {
+      profileFields.push({ key: ct.templateKey, label: ct.predicateShort + ' (scalar)' });
+      profileFields.push({ key: ct.templateKey + '_list', label: ct.predicateShort + ' (list)' });
+      profileFields.push({ key: 'has_' + ct.templateKey, label: ct.predicateShort + ' (conditional)' });
+    }
+  }
+  data.profileFieldsJson = JSON.stringify(profileFields);
+
   return data;
+}
+
+/**
+ * POST /profile/preview-layout — render a layout preview with current profile data.
+ */
+export async function handlePreviewLayout(reqCtx) {
+  const authCheck = requireAuth(reqCtx);
+  if (authCheck) return authCheck;
+
+  const { config, storage, env, request } = reqCtx;
+  const formData = await request.formData();
+  const layoutJsonRaw = formData.get('layout_json');
+
+  if (!layoutJsonRaw) {
+    return new Response('Missing layout_json', { status: 400 });
+  }
+
+  let layout;
+  try {
+    layout = JSON.parse(layoutJsonRaw);
+  } catch (e) {
+    return new Response('Invalid JSON', { status: 400 });
+  }
+
+  const { renderLayout } = await import('../layout-renderer.js');
+  const { buildProfileTemplateData } = await import('../../solid/ldp.js');
+  const profileData = await buildProfileTemplateData(storage, config, env.APPDATA);
+  const html = renderLayout(layout, profileData);
+
+  return new Response(html, {
+    status: 200,
+    headers: { 'Content-Type': 'text/html; charset=utf-8' },
+  });
+}
+
+/**
+ * GET /profile/components — list user's registered components (JSON).
+ */
+export async function handleListComponents(reqCtx) {
+  const authCheck = requireAuth(reqCtx);
+  if (authCheck) return authCheck;
+
+  const { config, env } = reqCtx;
+  const raw = await env.APPDATA.get(`component_registry:${config.username}`);
+  const components = raw ? JSON.parse(raw) : [];
+
+  return new Response(JSON.stringify(components), {
+    headers: { 'Content-Type': 'application/json' },
+  });
+}
+
+/**
+ * POST /profile/components — register or update a component.
+ */
+export async function handleSaveComponent(reqCtx) {
+  const authCheck = requireAuth(reqCtx);
+  if (authCheck) return authCheck;
+
+  const { config, env, request } = reqCtx;
+  const formData = await request.formData();
+  const name = (formData.get('name') || '').trim();
+  const description = (formData.get('description') || '').trim();
+  const file = (formData.get('file') || '').trim();
+  const published = formData.get('published') === 'true';
+
+  if (!name || !file) {
+    return new Response(JSON.stringify({ error: 'name and file are required' }), {
+      status: 400,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+
+  const raw = await env.APPDATA.get(`component_registry:${config.username}`);
+  const components = raw ? JSON.parse(raw) : [];
+
+  const existing = components.findIndex(c => c.name === name);
+  const entry = { name, description, file, published };
+  if (existing >= 0) {
+    components[existing] = entry;
+  } else {
+    components.push(entry);
+  }
+
+  await env.APPDATA.put(`component_registry:${config.username}`, JSON.stringify(components));
+
+  // If published, set ACP to public-read on the JS file
+  if (published) {
+    const fileIri = `${config.baseUrl}${file}`;
+    await env.APPDATA.put(`acp:${fileIri}`, JSON.stringify({
+      mode: 'public', agents: [], inherit: false,
+    }));
+  }
+
+  return new Response(JSON.stringify(entry), {
+    headers: { 'Content-Type': 'application/json' },
+  });
+}
+
+/**
+ * POST /profile/import-component — import a component from a remote URL.
+ */
+export async function handleImportComponent(reqCtx) {
+  const authCheck = requireAuth(reqCtx);
+  if (authCheck) return authCheck;
+
+  const { config, env, storage, request } = reqCtx;
+  const formData = await request.formData();
+  const url = (formData.get('url') || '').trim();
+
+  if (!url || (!url.startsWith('http://') && !url.startsWith('https://'))) {
+    return new Response(JSON.stringify({ error: 'Invalid URL' }), {
+      status: 400,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+
+  try {
+    // Fetch the remote component JS
+    const resp = await fetch(url);
+    if (!resp.ok) {
+      return new Response(JSON.stringify({ error: `Fetch failed: ${resp.status}` }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+    const jsContent = await resp.arrayBuffer();
+
+    // Extract component name from URL path
+    const urlPath = new URL(url).pathname;
+    const fileName = urlPath.split('/').pop() || 'component.js';
+    const componentName = fileName.replace(/\.js$/, '');
+
+    // Save to local paa_custom/components/
+    const localPath = `/${config.username}/paa_custom/components/${fileName}`;
+    const localIri = `${config.baseUrl}${localPath}`;
+
+    // Store as binary blob
+    const metaDoc = [
+      `<${localIri}> <http://purl.org/dc/terms/format> "application/javascript" .`,
+      `<${localIri}> <http://purl.org/dc/terms/extent> "${jsContent.byteLength}"^^<http://www.w3.org/2001/XMLSchema#integer> .`,
+    ].join('\n');
+
+    await storage.putBlob(`blob:${localIri}`, jsContent, 'application/javascript');
+    await storage.put(`idx:${localIri}`, JSON.stringify({ binary: true }));
+    await storage.put(`doc:${localIri}.meta:${localIri}`, metaDoc);
+
+    // Register locally
+    const raw = await env.APPDATA.get(`component_registry:${config.username}`);
+    const components = raw ? JSON.parse(raw) : [];
+    const existing = components.findIndex(c => c.name === componentName);
+    const entry = { name: componentName, description: `Imported from ${url}`, file: localPath, published: false };
+    if (existing >= 0) {
+      components[existing] = entry;
+    } else {
+      components.push(entry);
+    }
+    await env.APPDATA.put(`component_registry:${config.username}`, JSON.stringify(components));
+
+    return new Response(JSON.stringify({ name: componentName, file: localPath }), {
+      headers: { 'Content-Type': 'application/json' },
+    });
+  } catch (e) {
+    return new Response(JSON.stringify({ error: e.message || 'Import failed' }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
 }

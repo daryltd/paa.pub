@@ -24,9 +24,8 @@
  *   - `.acl` suffixed URLs → WAC ACL management (delegated to acl.js)
  *   - `.acr` suffixed URLs → ACP editor redirect
  *   - Container root + `Accept: text/html` → serves index.html blob if present
- *   - Root container index.html → Mustache-rendered with WebID profile data
+ *   - Root container → dynamically rendered from layout JSON with WebID profile data
  */
-import Mustache from 'mustache';
 import { negotiateType, serializeRdf, wantsActivityPub } from './conneg.js';
 import { solidHeaders, buildWacAllow } from './headers.js';
 import { parseTurtle } from '../rdf/turtle-parser.js';
@@ -34,10 +33,11 @@ import { parseNTriples, serializeNQuads, iri, unwrapIri, unwrapLiteral } from '.
 import { isContainer, slugToName, addContainment, containerTypeQuads, parentContainer } from './containers.js';
 import { handleAclGet, handleAclPut, handleAclPatch, handleAclDelete, defaultAclNTriples } from './acl.js';
 import { checkAcpAccess } from '../ui/pages/acl-editor.js';
-import { PREFIXES } from '../rdf/prefixes.js';
+import { PREFIXES, loadMergedPrefixes } from '../rdf/prefixes.js';
 import { checkQuota, quotaExceededResponse, addQuota } from '../storage/quota.js';
 import { checkContainerQuota, containerQuotaExceededResponse, addContainerBytes } from '../storage/container-quota.js';
 import { checkAppPermission, getAppPermission } from './app-permissions.js';
+import { resolveContentType } from './media-types.js';
 
 const RDF_TYPES = new Set([
   'text/turtle',
@@ -50,6 +50,9 @@ const RDF_TYPES = new Set([
 const BINARY_INDICATOR_TYPES = [
   'image/', 'video/', 'audio/', 'application/pdf', 'application/zip',
   'application/octet-stream', 'application/gzip', 'text/html',
+  'text/plain', 'text/markdown', 'text/css', 'text/csv', 'text/xml',
+  'application/javascript', 'application/json', 'application/xml',
+  'application/wasm', 'font/',
 ];
 
 /** Check if a Content-Type should be treated as a binary upload (not RDF). */
@@ -99,64 +102,47 @@ export async function handleLDP(reqCtx) {
     }
   }
 
-  // Content negotiation for HTML — serve index.html from container if it exists
+  // Content negotiation for HTML — serve rendered page or index.html from container
   const accept = request.headers.get('Accept') || '';
   if ((request.method === 'GET' || request.method === 'HEAD') && isContainer(resourceIri) && accept.includes('text/html') && !wantsActivityPub(accept)) {
     const rootContainerIri = `${config.baseUrl}/${config.username}/`;
 
-    // For the root container, check for paa_custom/index.html override first
+    // For the root container, render profile page from layout JSON
     if (resourceIri === rootContainerIri) {
-      const customIndexIri = rootContainerIri + 'paa_custom/index.html';
-      const customBlob = await reqCtx.storage.getBlob(`blob:${customIndexIri}`);
-      if (customBlob) {
-        // Check ACP on the custom file
-        const agent = reqCtx.user ? config.webId : null;
-        const access = await checkAcpAccess(reqCtx.env.APPDATA, customIndexIri, agent, config.webId, config.username);
-        if (!access.readable) {
-          return denyAccess(agent, config.baseUrl);
-        }
-        // Serve as-is — no Mustache rendering (user-authored static HTML)
-        let htmlContent = new Uint8Array(customBlob);
-        if (url.searchParams.get('edit') === 'dokieli' && reqCtx.user === config.username) {
-          htmlContent = injectDokieli(htmlContent, config.webId);
-        }
+      const agent = reqCtx.user ? config.webId : null;
+      // Check ACP on root container
+      const access = await checkAcpAccess(reqCtx.env.APPDATA, rootContainerIri, agent, config.webId, config.username);
+      if (!access.readable) {
+        return denyAccess(agent, config.baseUrl);
+      }
+      try {
+        const { renderLayout, DEFAULT_LAYOUT } = await import('../ui/layout-renderer.js');
+        const profileData = await buildProfileTemplateData(reqCtx.storage, config, reqCtx.env.APPDATA);
+        const layoutRaw = await reqCtx.env.APPDATA.get(`profile_layout:${config.username}`);
+        const layout = layoutRaw ? JSON.parse(layoutRaw) : DEFAULT_LAYOUT;
+        const htmlContent = new TextEncoder().encode(renderLayout(layout, profileData));
         const htmlHeaders = new Headers();
         htmlHeaders.set('Content-Type', 'text/html; charset=utf-8');
         htmlHeaders.set('Cache-Control', access.listed ? 'public, no-cache' : 'private, no-store');
         htmlHeaders.set('X-Content-Type-Options', 'nosniff');
         if (request.method === 'HEAD') return new Response(null, { status: 200, headers: htmlHeaders });
         return new Response(htmlContent, { status: 200, headers: htmlHeaders });
+      } catch (e) {
+        console.error('Layout render error for root container:', e);
+        // Fall through to container RDF listing
       }
     }
 
+    // For non-root containers, serve index.html blob if present
     const indexIri = resourceIri + 'index.html';
     const indexBlob = await reqCtx.storage.getBlob(`blob:${indexIri}`);
     if (indexBlob) {
-      // Check ACP on the index.html resource
       const agent = reqCtx.user ? config.webId : null;
       const access = await checkAcpAccess(reqCtx.env.APPDATA, indexIri, agent, config.webId, config.username);
       if (!access.readable) {
         return denyAccess(agent, config.baseUrl);
       }
-      let htmlContent = new Uint8Array(indexBlob);
-
-      // For the root container, render index.html through Mustache with profile data
-      if (resourceIri === rootContainerIri) {
-        try {
-          const profileData = await buildProfileTemplateData(reqCtx.storage, config);
-          const templateStr = new TextDecoder().decode(htmlContent);
-          const rendered = Mustache.render(templateStr, profileData);
-          htmlContent = new TextEncoder().encode(rendered);
-        } catch (e) {
-          console.error('Mustache render error for root index.html:', e);
-          // Fall through to serve raw blob on error
-        }
-      }
-
-      if (url.searchParams.get('edit') === 'dokieli' && reqCtx.user === config.username) {
-        htmlContent = injectDokieli(htmlContent, config.webId);
-      }
-
+      const htmlContent = new Uint8Array(indexBlob);
       const htmlHeaders = new Headers();
       htmlHeaders.set('Content-Type', 'text/html; charset=utf-8');
       htmlHeaders.set('Cache-Control', access.listed ? 'public, no-cache' : 'private, no-store');
@@ -199,28 +185,10 @@ async function handleGet(reqCtx, resourceIri) {
     // Also check for blobs without an idx entry
     const blob = await storage.getBlob(`blob:${resourceIri}`);
     if (!blob) {
-      // First-time dokieli edit: paa_custom/index.html doesn't exist yet —
-      // serve the rendered default template with dokieli injected so the user
-      // can edit and save, which creates paa_custom/index.html.
-      const customIndexIri = `${config.baseUrl}/${config.username}/paa_custom/index.html`;
-      if (resourceIri === customIndexIri && url.searchParams.get('edit') === 'dokieli' && reqCtx.user === config.username) {
-        const rootIndexIri = `${config.baseUrl}/${config.username}/index.html`;
-        const templateBlob = await storage.getBlob(`blob:${rootIndexIri}`);
-        if (templateBlob) {
-          const profileData = await buildProfileTemplateData(storage, config);
-          const templateStr = new TextDecoder().decode(new Uint8Array(templateBlob));
-          const rendered = Mustache.render(templateStr, profileData);
-          let htmlContent = new TextEncoder().encode(rendered);
-          htmlContent = injectDokieli(htmlContent, config.webId);
-          const htmlHeaders = new Headers();
-          htmlHeaders.set('Content-Type', 'text/html; charset=utf-8');
-          htmlHeaders.set('Cache-Control', 'private, no-store');
-          htmlHeaders.set('X-Content-Type-Options', 'nosniff');
-          if (request.method === 'HEAD') return new Response(null, { status: 200, headers: htmlHeaders });
-          return new Response(htmlContent, { status: 200, headers: htmlHeaders });
-        }
-      }
-      return new Response('Not Found', { status: 404 });
+      // Return 404 with Solid headers so clients know PUT is available
+      const notFoundHeaders = solidHeaders(resourceIri, isContainer(resourceIri));
+      notFoundHeaders.set('Content-Type', 'text/plain; charset=utf-8');
+      return new Response('Not Found', { status: 404, headers: notFoundHeaders });
     }
 
     // Serve orphan blob — always check ACP (owner handled inside checkAcpAccess)
@@ -238,13 +206,6 @@ async function handleGet(reqCtx, resourceIri) {
   // Check ACP access — always run (owner is handled inside checkAcpAccess)
   const access = await checkAcpAccess(env.APPDATA, resourceIri, agent, config.webId, config.username);
   if (!access.readable) {
-    // For ?edit=dokieli browser interactions, redirect to login instead of returning 401 JSON
-    if (!agent && url.searchParams.get('edit') === 'dokieli') {
-      return new Response(null, {
-        status: 302,
-        headers: { 'Location': `/login?return_to=${encodeURIComponent(url.pathname + url.search)}` },
-      });
-    }
     return denyAccess(agent, config.baseUrl);
   }
 
@@ -265,16 +226,6 @@ async function handleGet(reqCtx, resourceIri) {
     if (metaDoc) {
       const fmtMatch = metaDoc.match(/<http:\/\/purl\.org\/dc\/terms\/format>\s+"([^"]+)"/);
       if (fmtMatch) ct = fmtMatch[1];
-    }
-    if (ct.startsWith('text/html') && url.searchParams.get('edit') === 'dokieli' && isOwner) {
-      const htmlBytes = new Uint8Array(blob);
-      const injected = injectDokieli(htmlBytes, config.webId);
-      const dHeaders = solidHeaders(resourceIri, false);
-      dHeaders.set('Content-Type', 'text/html; charset=utf-8');
-      dHeaders.set('WAC-Allow', wacAllow);
-      dHeaders.set('Cache-Control', 'private, no-store');
-      if (request.method === 'HEAD') return new Response(null, { status: 200, headers: dHeaders });
-      return new Response(injected, { status: 200, headers: dHeaders });
     }
     const headers = solidHeaders(resourceIri, false);
     headers.set('Content-Type', ct);
@@ -323,9 +274,12 @@ async function handleGet(reqCtx, resourceIri) {
     }
   }
 
+  const mergedPrefixes = await loadMergedPrefixes(env.APPDATA, config.username);
+  const prefixNames = Object.keys(mergedPrefixes);
+
   const accept = request.headers.get('Accept') || 'text/turtle';
   const contentType = negotiateType(accept);
-  const body = serializeRdf(allTriples, contentType);
+  const body = serializeRdf(allTriples, contentType, prefixNames, mergedPrefixes);
 
   const headers = solidHeaders(resourceIri, isContainer(resourceIri));
   headers.set('Content-Type', contentType);
@@ -339,14 +293,15 @@ async function handleGet(reqCtx, resourceIri) {
 /**
  * Handle PUT — create or replace a resource.
  *
- * Binary content types → stored via orchestrator.uploadBinary() to R2.
+ * Binary content types → stored as blobs in R2 with metadata in KV.
  * RDF content types → parsed to triples, old triples deleted, new ones written to KV.
+ * Content type is resolved from the request header or inferred from extension.
  * Creates parent containers if they don't exist.
  */
 async function handlePut(reqCtx, resourceIri) {
   const { request, orchestrator, config, storage, env } = reqCtx;
   const agent = reqCtx.user ? config.webId : null;
-  const contentType = request.headers.get('Content-Type') || 'application/octet-stream';
+  const contentType = resolveContentType(request.headers.get('Content-Type'), resourceIri);
 
   if (!agent) {
     console.log(`[ldp] PUT ${resourceIri} rejected: no authenticated agent`);
@@ -362,20 +317,11 @@ async function handlePut(reqCtx, resourceIri) {
     }
   }
 
-  // Protect root index.html from LDP writes — it's the system-managed Mustache template
-  const rootIndexIri = `${config.baseUrl}/${config.username}/index.html`;
-  if (resourceIri === rootIndexIri) {
-    return new Response('Forbidden — root index.html is managed by the system', { status: 403 });
-  }
-
   console.log(`[ldp] PUT ${resourceIri} by ${agent} ct=${contentType}`);
 
   if (isBinaryType(contentType)) {
     const binary = await request.arrayBuffer();
-    let binaryData = binary;
-    if (contentType.startsWith('text/html')) {
-      binaryData = stripDokieli(binary);
-    }
+    const binaryData = binary;
 
     // Quota checks
     const quotaResult = await checkQuota(env.APPDATA, config.username, binaryData.byteLength, config.storageLimit);
@@ -386,25 +332,33 @@ async function handlePut(reqCtx, resourceIri) {
       if (!cqResult.allowed) return containerQuotaExceededResponse(cqResult.blockedBy, cqResult.usedBytes, cqResult.limitBytes);
     }
 
-    const metadataNquads = buildMetadataNQuads(resourceIri, contentType, binaryData.byteLength);
-    const aclNt = defaultAclNTriples(resourceIri, config.webId);
-    const result = await orchestrator.uploadBinary(resourceIri, binaryData, contentType, metadataNquads, aclNt, agent);
-    if (result.type === 'auth_error') return new Response('Forbidden', { status: 403 });
-    if (result.type === 'validation_error') return new Response(result.report_json, { status: 422 });
+    // Check if resource already exists (for correct status code)
+    const existingBinaryIdx = await storage.get(`idx:${resourceIri}`);
+
+    // Write blob directly to storage
+    await storage.putBlob(`blob:${resourceIri}`, binaryData, contentType);
+    await storage.put(`idx:${resourceIri}`, JSON.stringify({ binary: true }));
+
+    // Write metadata
+    const metaDoc = [
+      `<${resourceIri}> <${PREFIXES.dcterms}format> "${contentType}" .`,
+      `<${resourceIri}> <${PREFIXES.dcterms}extent> "${binaryData.byteLength}"^^<${PREFIXES.xsd}integer> .`,
+    ].join('\n');
+    await storage.put(`doc:${resourceIri}.meta:${resourceIri}`, metaDoc);
+
+    // For new resources, ensure parent containers exist
+    if (!existingBinaryIdx) {
+      await ensureParentContainers(storage, resourceIri);
+    }
 
     // Update quota tracking
     await addQuota(env.APPDATA, config.username, binaryData.byteLength);
     if (parent) await addContainerBytes(env.APPDATA, parent, binaryData.byteLength);
 
-    // Auto-set public ACP on paa_custom/index.html so it's publicly readable (replaces the profile page)
-    const customIndexIri = `${config.baseUrl}/${config.username}/paa_custom/index.html`;
-    if (resourceIri === customIndexIri) {
-      await env.APPDATA.put(`acp:${customIndexIri}`, JSON.stringify({
-        mode: 'public', agents: [], inherit: false,
-      }));
-    }
-
-    return new Response(null, { status: 201, headers: { 'Location': resourceIri } });
+    const status = existingBinaryIdx ? 204 : 201;
+    const headers = solidHeaders(resourceIri, false);
+    if (status === 201) headers.set('Location', resourceIri);
+    return new Response(null, { status, headers });
   }
 
   // RDF content
@@ -514,7 +468,7 @@ async function handlePost(reqCtx, resourceIri) {
   const name = slugToName(slug, wantsContainer);
   const newResourceIri = resourceIri + name;
 
-  const contentType = request.headers.get('Content-Type') || 'application/octet-stream';
+  const contentType = resolveContentType(request.headers.get('Content-Type'), newResourceIri);
 
   if (wantsContainer) {
     // Create container — write directly to KV
@@ -593,12 +547,6 @@ async function handlePatch(reqCtx, resourceIri) {
       console.log(`[ldp] PATCH ${resourceIri} rejected: app ${reqCtx.clientId} not authorized`);
       return new Response('Forbidden — app not authorized for this container', { status: 403 });
     }
-  }
-
-  // Protect root index.html from LDP writes
-  const rootIndexIri = `${config.baseUrl}/${config.username}/index.html`;
-  if (resourceIri === rootIndexIri) {
-    return new Response('Forbidden — root index.html is managed by the system', { status: 403 });
   }
 
   const contentType = request.headers.get('Content-Type') || '';
@@ -746,57 +694,6 @@ function parseBody(body, contentType, baseIri) {
     return jsonLdToTriples(doc);
   }
   return parseTurtle(body, baseIri);
-}
-
-/**
- * Inject dokieli WYSIWYG editor tags into an HTML document.
- * Inserts CSS and JS references just before </head>, or wraps with <head> if absent.
- * When webId is provided, pre-sets localStorage so dokieli auto-identifies the user.
- * @param {Uint8Array} htmlBytes - The raw HTML content
- * @param {string} [webId] - Optional WebID to pre-set for dokieli auto-login
- * @returns {Uint8Array} - The modified HTML with dokieli tags injected
- */
-function injectDokieli(htmlBytes, webId) {
-  const html = new TextDecoder().decode(htmlBytes);
-  const tagParts = [
-    '<link href="https://dokie.li/media/css/basic.css" media="all" rel="stylesheet" title="Basic" />',
-    '<link href="https://dokie.li/media/css/dokieli.css" media="all" rel="stylesheet" />',
-  ];
-  if (webId) {
-    const escaped = webId.replace(/'/g, "\\'");
-    tagParts.push(`<script>localStorage.setItem('DO.Config.User', JSON.stringify({ object: { describes: { IRI: '${escaped}', Role: 'social', UI: { Language: 'en' } } } }));<\/script>`);
-  }
-  // Disable remote autosave — must run before dokieli.js initialises
-  tagParts.push('<script>/* dokieli-no-autosave */(function(){var k=location.origin+location.pathname+(location.search||"");try{var v=JSON.parse(localStorage.getItem(k))||{}}catch(e){var v={}}v.autoSave=false;localStorage.setItem(k,JSON.stringify(v))})()<\/script>');
-  tagParts.push('<script src="https://dokie.li/scripts/dokieli.js"><\/script>');
-  const tags = tagParts.join('\n');
-
-  let result;
-  const headClose = html.indexOf('</head>');
-  if (headClose !== -1) {
-    result = html.slice(0, headClose) + tags + '\n' + html.slice(headClose);
-  } else {
-    result = '<head>\n' + tags + '\n</head>\n' + html;
-  }
-  return new TextEncoder().encode(result);
-}
-
-/**
- * Strip dokieli CSS/JS tags and the localStorage auto-login script
- * that injectDokieli() adds to <head>. Called on PUT so the saved HTML
- * doesn't permanently embed dokieli.
- */
-function stripDokieli(binary) {
-  let html = new TextDecoder().decode(new Uint8Array(binary));
-  // Strip dokie.li CSS links
-  html = html.replace(/<link [^>]*href="https:\/\/dokie\.li\/[^"]*"[^>]*\/?>[ \t]*\n?/g, '');
-  // Strip dokie.li script tag
-  html = html.replace(/<script [^>]*src="https:\/\/dokie\.li\/[^"]*"[^>]*><\/script>[ \t]*\n?/g, '');
-  // Strip our localStorage auto-login script
-  html = html.replace(/<script>localStorage\.setItem\('DO\.Config\.User'[^<]*<\/script>[ \t]*\n?/g, '');
-  // Strip our autosave-disable script
-  html = html.replace(/<script>\/\* dokieli-no-autosave \*\/[^<]*<\/script>[ \t]*\n?/g, '');
-  return new TextEncoder().encode(html).buffer;
 }
 
 /**
@@ -991,8 +888,9 @@ const PROFILE_PREDICATE_MAP = {
 /**
  * Shorten a full predicate IRI to a prefixed form (e.g. foaf:name).
  */
-function shortenPredicate(predicateIri) {
-  for (const [prefix, ns] of Object.entries(PREFIXES)) {
+function shortenPredicate(predicateIri, prefixes) {
+  const map = prefixes || PREFIXES;
+  for (const [prefix, ns] of Object.entries(map)) {
     if (predicateIri.startsWith(ns)) {
       return `${prefix}:${predicateIri.slice(ns.length)}`;
     }
@@ -1022,11 +920,12 @@ export async function readProfileTriples(storage, config) {
 }
 
 /**
- * Build Mustache template data from profile triples.
+ * Build template data from profile triples for layout rendering.
  */
-async function buildProfileTemplateData(storage, config) {
+export async function buildProfileTemplateData(storage, config, kv) {
   const allTriples = await readProfileTriples(storage, config);
   const webId = config.webId;
+  const mergedPrefixes = kv ? await loadMergedPrefixes(kv, config.username) : PREFIXES;
 
   const data = {
     username: config.username,
@@ -1064,24 +963,24 @@ async function buildProfileTemplateData(storage, config) {
       data[varName] = val;
     } else {
       // Group custom triples by predicate key
-      const key = predicateToKey(predicateIri);
+      const key = predicateToKey(predicateIri, mergedPrefixes);
       if (!customBuckets.has(key)) {
         customBuckets.set(key, {
           predicate: predicateIri,
-          predicateShort: shortenPredicate(predicateIri),
+          predicateShort: shortenPredicate(predicateIri, mergedPrefixes),
           key,
           values: [],
         });
       }
       const isLink = objectValue.startsWith('http://') || objectValue.startsWith('https://');
-      const short = shortenPredicate(predicateIri);
+      const short = shortenPredicate(predicateIri, mergedPrefixes);
       customBuckets.get(key).values.push({ value: objectValue, isLink, predicate: predicateIri, predicateShort: short });
     }
 
     // Always add to the raw triples array
     data.triples.push({
       predicate: predicateIri,
-      predicateShort: shortenPredicate(predicateIri),
+      predicateShort: shortenPredicate(predicateIri, mergedPrefixes),
       object: objectValue,
     });
   }
@@ -1104,11 +1003,12 @@ async function buildProfileTemplateData(storage, config) {
 }
 
 /**
- * Convert a predicate IRI to a Mustache-safe variable name.
+ * Convert a predicate IRI to a template-safe variable name.
  * e.g. "http://xmlns.com/foaf/0.1/knows" → "foaf_knows"
  */
-function predicateToKey(predicateIri) {
-  for (const [prefix, ns] of Object.entries(PREFIXES)) {
+function predicateToKey(predicateIri, prefixes) {
+  const map = prefixes || PREFIXES;
+  for (const [prefix, ns] of Object.entries(map)) {
     if (predicateIri.startsWith(ns)) {
       return prefix + '_' + predicateIri.slice(ns.length);
     }

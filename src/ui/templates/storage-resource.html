@@ -40,9 +40,6 @@
     {{#showEditButton}}
     <a href="/storage/{{{path}}}?edit=1" class="btn btn-small-text">Edit</a>
     {{/showEditButton}}
-    {{#showDokieliButton}}
-    <a href="{{dokieliUrl}}" class="btn btn-small-text" target="_blank">Edit with dokieli</a>
-    {{/showDokieliButton}}
     <form method="POST" action="/storage/{{{path}}}" class="inline-form">
       <input type="hidden" name="action" value="move">
       <input type="hidden" name="destination" value="">
@@ -74,14 +71,15 @@
          data-subject="{{resourceIri}}"
          data-output="ntriples"
          data-ntriples-name="metadata"
-         data-prefixes='{{{prefixesJson}}}'>
+         data-prefixes='{{{prefixesJson}}}'
+         data-ns-catalog='{{{namespaceCatalogJson}}}'>
       {{#metaTriplesEditable}}
       <div class="te-row">
         <div class="te-pred-cell">
           <span class="te-pred-display mono cursor-pointer">{{predicateShort}}</span>
           <input type="text" class="te-pred-input hidden"
                  value="{{predicate}}" placeholder="Predicate IRI">
-          <button type="button" class="te-search-btn btn btn-secondary btn-xs hidden">Search</button>
+          <button type="button" class="te-search-btn btn btn-secondary btn-xs hidden">Browse</button>
         </div>
         <div class="te-obj-cell">
           <input type="text" class="te-obj-input" value="{{object}}" placeholder="Object value">

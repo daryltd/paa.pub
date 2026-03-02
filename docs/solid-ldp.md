@@ -56,18 +56,18 @@ Reads a resource and returns it in the negotiated format.
 
 **Special case: Container + HTML Accept**
 
-When a browser requests a container with `Accept: text/html`, the handler looks for an `index.html` blob inside the container. If found:
-- The root container's `index.html` is rendered through Mustache with profile data (name, bio, avatar, etc.)
-- Other containers' `index.html` is served as-is
+When a browser requests a container with `Accept: text/html`, the handler checks for special cases:
+- The root container is dynamically rendered from a JSON layout with profile data (name, bio, avatar, etc.) via the layout renderer
+- Other containers' `index.html` blob is served as-is if present
 - If no `index.html` exists, falls through to the RDF container listing
 
 ## PUT
 
 Creates or replaces a resource.
 
-**Binary content** (detected by Content-Type prefix: `image/`, `video/`, `audio/`, `application/pdf`, `application/zip`, `application/octet-stream`, `application/gzip`):
-- Uploaded via `orchestrator.uploadBinary()` to R2
-- Metadata N-Quads generated with content-type and byte length
+**Binary content** (non-RDF types including `image/`, `video/`, `audio/`, `text/plain`, `text/html`, `application/json`, `application/javascript`, etc.):
+- Content type is resolved from the request header or inferred from the file extension
+- Stored as a blob in R2 with metadata (content-type, byte length) in KV
 
 **RDF content** (Turtle, N-Triples, JSON-LD):
 - Parsed into triples

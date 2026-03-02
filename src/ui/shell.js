@@ -10,8 +10,8 @@
  *   4. Body + nav are injected into layout.html
  *   5. Returns an HTML Response
  *
- * CSS and client-side JS are served as linked files via the static
- * handler (see `static.js`), not inlined into the HTML.
+ * CSS and client-side JS are served as static assets via Cloudflare's
+ * `[assets]` configuration (see `wrangler.toml`), linked from the HTML.
  *
  * Template files (imported as strings by wrangler's text rules):
  *   - `templates/layout.html` — outer HTML shell (head, linked CSS/JS, body wrapper)

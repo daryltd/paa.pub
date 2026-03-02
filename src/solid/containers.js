@@ -15,16 +15,6 @@ export function addContainment(containerIri, resourceIri) {
 }
 
 /**
- * Build N-Quads to remove a resource from a container.
- * @param {string} containerIri
- * @param {string} resourceIri
- * @returns {string} N-Quads line
- */
-export function removeContainment(containerIri, resourceIri) {
-  return `${iri(containerIri)} ${iri(PREFIXES.ldp + 'contains')} ${iri(resourceIri)} ${iri(containerIri)} .`;
-}
-
-/**
  * Build container type triples in N-Quads.
  * @param {string} containerIri
  * @returns {string}

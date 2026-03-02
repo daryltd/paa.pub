@@ -46,7 +46,7 @@ import { renderDashboard } from './ui/pages/dashboard.js';
 import { renderActivityPage, renderRemoteFeed, handleMarkRead, handleMarkAllRead } from './ui/pages/activity.js';
 import { renderStoragePage, handleStorageAction } from './ui/pages/storage.js';
 import { renderAclEditor, handleAclUpdate } from './ui/pages/acl-editor.js';  // ACP editor (file retains old name for git history)
-import { renderProfileEditor, handleProfileUpdate, handleProfileIndexReset } from './ui/pages/profile-editor.js';
+import { renderProfileEditor, handleProfileUpdate, handleProfileIndexReset, handleDiscoverNs, handlePreviewLayout, handleListComponents, handleSaveComponent, handleImportComponent } from './ui/pages/profile-editor.js';
 import { renderAppPermissions, handleAppPermissionsUpdate } from './ui/pages/app-permissions.js';
 import { handleDiscovery, handleJwks, handleRegister, handleAuthorize, handleToken, handleUserInfo, verifyAccessToken } from './oidc.js';
 import { checkRateLimit, rateLimitResponse } from './security/rate-limit.js';
@@ -107,6 +107,11 @@ function buildRouter() {
   router.get('/profile', renderProfileEditor);
   router.post('/profile', handleProfileUpdate);
   router.post('/profile/reset-index', handleProfileIndexReset);
+  router.post('/profile/discover-ns', handleDiscoverNs);
+  router.post('/profile/preview-layout', handlePreviewLayout);
+  router.get('/profile/components', handleListComponents);
+  router.post('/profile/components', handleSaveComponent);
+  router.post('/profile/import-component', handleImportComponent);
 
   // App permissions management
   router.get('/app-permissions', renderAppPermissions);

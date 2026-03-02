@@ -49,16 +49,16 @@ export function wantsActivityPub(accept) {
  * @param {string[]} [prefixes]
  * @returns {string}
  */
-export function serializeRdf(triples, contentType, prefixes = ['rdf', 'rdfs', 'ldp', 'foaf', 'acl', 'solid', 'dcterms', 'vcard', 'space']) {
+export function serializeRdf(triples, contentType, prefixes = ['rdf', 'rdfs', 'ldp', 'foaf', 'acl', 'solid', 'dcterms', 'vcard', 'space'], allPrefixes) {
   switch (contentType) {
     case 'text/turtle':
-      return serializeTurtle(triples, prefixes);
+      return allPrefixes ? serializeTurtle(triples, prefixes, allPrefixes) : serializeTurtle(triples, prefixes);
     case 'application/n-triples':
       return serializeNTriples(triples);
     case 'application/ld+json':
       return triplesToJsonLd(triples);
     default:
-      return serializeTurtle(triples, prefixes);
+      return allPrefixes ? serializeTurtle(triples, prefixes, allPrefixes) : serializeTurtle(triples, prefixes);
   }
 }
 

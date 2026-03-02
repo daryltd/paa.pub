@@ -5,9 +5,9 @@
 
 <div class="card mt-1">
   <h2>Profile Page</h2>
-  <p class="text-muted mb-075">Your public profile page at <a href="/{{username}}/" class="mono">/{{username}}/</a> is rendered from an index.html template using your profile data. If you edit it with dokieli, your changes are saved to <span class="mono">paa_custom/index.html</span> and served instead of the default template. Resetting removes the custom page and restores the default template.</p>
+  <p class="text-muted mb-075">Your public profile page at <a href="/{{username}}/" class="mono">/{{username}}/</a> is rendered from a layout using your profile data. Use the Page Builder below to customize it.</p>
   <form method="POST" action="/profile/reset-index">
-    <button type="submit" class="btn btn-secondary" data-confirm="Reset your profile page to the default template? Any customizations to index.html will be lost.">Reset Profile Page to Default</button>
+    <button type="submit" class="btn btn-secondary" data-confirm="Reset your profile page to the default layout? Any customizations will be lost.">Reset to Default Layout</button>
   </form>
 </div>
 
@@ -57,6 +57,27 @@
   </details>
 
   <details class="card">
+    <summary><h2>Custom Prefixes</h2></summary>
+    <p class="text-muted mb-075">Define namespace prefixes for custom triples. These are used for Turtle shorthand and template keys. Find ontologies: <a href="https://lov.linkeddata.es/dataset/lov/" target="_blank">LOV</a> &middot; <a href="https://www.ebi.ac.uk/ols4/" target="_blank">OLS</a> &middot; <a href="https://prefix.cc/" target="_blank">prefix.cc</a></p>
+    <div id="prefix-manager">
+      <table class="prefix-table">
+        <thead><tr><th>Prefix</th><th>Namespace IRI</th><th></th></tr></thead>
+        <tbody id="prefix-rows">
+          {{#customPrefixList}}
+          <tr>
+            <td><input type="text" class="pm-prefix" value="{{name}}" placeholder="ex"></td>
+            <td><input type="text" class="pm-ns" value="{{ns}}" placeholder="http://example.org/ns#"></td>
+            <td><button type="button" class="btn btn-secondary btn-compact pm-remove">Remove</button></td>
+          </tr>
+          {{/customPrefixList}}
+        </tbody>
+      </table>
+      <button type="button" class="btn btn-secondary mt-05" id="pm-add">Add Prefix</button>
+    </div>
+    <input type="hidden" name="custom_prefixes_json" id="custom-prefixes-json" value='{{{customPrefixesJson}}}'>
+  </details>
+
+  <details class="card">
     <summary><h2>Add/Edit Custom Triples</h2></summary>
     <p class="text-muted mb-075">Add custom predicate-object pairs for your WebID subject. Use the template key in your profile page template, e.g. <code>{{=<% %>=}}{{#foaf_knows}}...{{/foaf_knows}}<%={{ }}=%></code>.</p>
 
@@ -66,14 +87,15 @@
          data-predicate-name="custom_predicate[]"
          data-object-name="custom_object[]"
          data-show-template-key
-         data-prefixes='{{{prefixesJson}}}'>
+         data-prefixes='{{{prefixesJson}}}'
+         data-ns-catalog='{{{namespaceCatalogJson}}}'>
       {{#customTriples}}
       <div class="te-row">
         <div class="te-pred-cell">
           <span class="te-pred-display mono cursor-pointer">{{predicateShort}}</span>
           <input type="text" class="te-pred-input hidden" name="custom_predicate[]"
                  value="{{predicate}}" placeholder="Predicate IRI">
-          <button type="button" class="te-search-btn btn btn-secondary btn-xs hidden">Search</button>
+          <button type="button" class="te-search-btn btn btn-secondary btn-xs hidden">Browse</button>
         </div>
         <div class="te-obj-cell">
           <input type="text" class="te-obj-input" name="custom_object[]"
@@ -85,6 +107,31 @@
       {{/customTriples}}
       <div class="te-add-area"></div>
     </div>
+  </details>
+
+  <details class="card" id="page-builder-section">
+    <summary><h2>Page Builder</h2></summary>
+    <p class="text-muted mb-075">Build your profile page layout. Elements render in order. Click to edit.</p>
+
+    <div id="page-builder"
+         data-layout='{{{layoutJson}}}'
+         data-profile-fields='{{{profileFieldsJson}}}'
+         data-prefixes='{{{prefixesJson}}}'>
+
+      <div class="flex gap-05 mb-075">
+        <button type="button" class="btn btn-secondary btn-compact" id="pb-add-head">+ Head</button>
+        <button type="button" class="btn btn-secondary btn-compact" id="pb-add-body">+ Body</button>
+        <button type="button" class="btn btn-secondary btn-compact" id="pb-import-component">Import Component</button>
+        <button type="button" class="btn btn-secondary btn-compact" id="pb-preview">Preview</button>
+      </div>
+
+      <div class="flex gap-1">
+        <div id="pb-tree" class="pb-tree flex-1"></div>
+        <div id="pb-editor" class="pb-editor flex-1"></div>
+      </div>
+    </div>
+
+    <input type="hidden" name="layout_json" id="layout-json" value='{{{layoutJson}}}'>
   </details>
 
   <div class="mt-1">
@@ -111,3 +158,4 @@
 {{/hasSystemTriples}}
 
 <script src="/scripts/triple-editor.js"></script>
+<script src="/scripts/page-builder.js"></script>

@@ -41,11 +41,11 @@ bucket_name = "my-solid-blobs"
 
 [[rules]]
 type = "Text"
-globs = ["**/*.html", "**/*.css", "**/client/*.js"]
+globs = ["**/*.html"]
 fallthrough = true
 ```
 
-The `[[rules]]` section tells Wrangler to bundle HTML, CSS, and client JS files as text strings (imported by the template rendering system).
+The `[[rules]]` section tells Wrangler to bundle HTML files as text strings (imported by the Mustache template rendering system). CSS and client JS are served as static assets via the `[assets]` configuration.
 
 ### Local development
 
@@ -104,7 +104,7 @@ The server bootstraps automatically on the first request. Bootstrap is idempoten
 4. **Root containers** — `/{username}/`, `/profile/`, `/public/`, `/private/`, `/settings/`
 5. **WebID profile** — `/{username}/profile/card` with `foaf:Person` triples, OIDC issuer, storage root, inbox, public key
 6. **TypeIndex** — private and public type index documents in `/settings/`
-7. **Landing page** — default `index.html` in the root container (Mustache template rendered with profile data)
+7. **Landing page** — default profile page layout (dynamically rendered from profile data on each request)
 8. **Access policies** — ACP policies for all containers (root private, profile public, public public, private private)
 
 ### Domain changes

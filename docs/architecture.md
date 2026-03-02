@@ -123,6 +123,7 @@ src/
 |   +-- acl.js            WAC .acl resource management
 |   +-- headers.js        Solid protocol response headers
 |   +-- cors.js           CORS header injection
+|   +-- media-types.js    Extension-to-media-type resolution
 |
 +-- activitypub/          Federation
 |   +-- actor.js          Actor document (JSON-LD, content-negotiated)
@@ -147,13 +148,13 @@ src/
 |   +-- cbor.js           Minimal CBOR decoder (for WebAuthn)
 |
 +-- storage/              Storage helpers
-|   +-- binary.js         Binary upload/download via orchestrator
-|   +-- metadata.js       Dublin Core metadata generation
-|   +-- quota.js          Storage quota tracking
+|   +-- quota.js          Global storage quota tracking
+|   +-- container-quota.js Per-container hierarchical quota tracking
 |
 +-- ui/                   Server-rendered UI
     +-- shell.js          Mustache template rendering pipeline
-    +-- styles/base.css   All CSS (inlined into every page)
+    +-- layout-renderer.js JSON layout-based profile page renderer
+    +-- styles/base.css   CSS (served as static asset)
     +-- client/           Client-side JavaScript (dialogs, passkeys)
     +-- templates/        Mustache HTML templates
     +-- pages/            Page handlers (dashboard, storage, etc.)
@@ -163,9 +164,9 @@ src/
 
 **Single-user, single-worker**: One username, one pod, one ActivityPub actor. This simplifies access control (authenticated user = owner) and avoids multi-tenant complexity. KV eventual consistency is acceptable because write contention is rare.
 
-**Direct KV over orchestrator**: Most operations write to KV directly rather than going through the s20e orchestrator. The orchestrator is used for operations that need SPARQL queries or WAC enforcement (e.g., binary uploads via `uploadBinary()`). Direct KV writes are faster and avoid the overhead of the WASM kernel for simple read/write patterns.
+**Direct KV over orchestrator**: Most operations write to KV directly rather than going through the s20e orchestrator. The orchestrator is used for operations that need SPARQL queries. Direct KV writes are faster and avoid the overhead of the WASM kernel for simple read/write patterns.
 
-**Server-rendered HTML**: All UI is rendered server-side using Mustache templates. No client-side JavaScript framework. The only client-side JS is for progressive enhancement (dialog modals, passkey registration, ACP toggle).
+**Server-rendered HTML**: UI pages are rendered server-side using Mustache templates. The public profile page uses a JSON layout renderer with template variable substitution and RDFa support. No client-side JavaScript framework. Client-side JS is for progressive enhancement (dialog modals, passkey registration, page builder, ACP toggle).
 
 **Web Crypto API only**: All cryptography uses the Web Crypto API available in Cloudflare Workers. PBKDF2 for password hashing, RSA-2048 for HTTP Signatures and JWT signing, ECDSA/RSA for WebAuthn signature verification, SHA-256 for digests.
 

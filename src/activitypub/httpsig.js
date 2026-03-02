@@ -107,16 +107,6 @@ export async function verifyRequestSignature(request, publicPem) {
   }
 }
 
-/**
- * Extract keyId from a Signature header.
- * @param {string} sigHeader
- * @returns {string|null}
- */
-export function extractKeyId(sigHeader) {
-  const params = parseSignatureHeader(sigHeader);
-  return params?.keyId || null;
-}
-
 function parseSignatureHeader(header) {
   const params = {};
   const regex = /(\w+)="([^"]*)"/g;

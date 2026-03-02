@@ -27,8 +27,8 @@ import resourceTemplate from '../templates/storage-resource.html';
 import breadcrumbsPartial from '../templates/partials/breadcrumbs.html';
 import { requireAuth } from '../../auth/middleware.js';
 import { parseNTriples, unwrapIri, serializeNTriples, iri, literal, typedLiteral } from '../../rdf/ntriples.js';
-import { PREFIXES, shortenPredicate, loadMergedPrefixes } from '../../rdf/prefixes.js';
-import { checkQuota, quotaExceededResponse, addQuota, subtractQuota } from '../../storage/quota.js';
+import { PREFIXES, shortenPredicate, loadMergedPrefixes, loadPredicateCatalog } from '../../rdf/prefixes.js';
+import { checkQuota, quotaExceededResponse, addQuota } from '../../storage/quota.js';
 import { checkContainerQuota, containerQuotaExceededResponse, addContainerBytes, subtractContainerBytes } from '../../storage/container-quota.js';
 
 const TEXT_EXTS = new Set([
@@ -99,7 +99,6 @@ async function renderResourcePage(reqCtx, path, resourceIri, username, editMode,
   const { config, storage } = reqCtx;
   const { content, contentType, isBinary, size } = await loadResource(resourceIri, storage);
   const canEdit = isTextResource(path);
-  const isHtml = (path.split('.').pop() || '').toLowerCase() === 'html';
   const resourceUrl = `/${path}`;
   const fileName = path.split('/').pop();
   const crumbs = buildBreadcrumbs(path);
@@ -121,7 +120,7 @@ async function renderResourcePage(reqCtx, path, resourceIri, username, editMode,
   });
 
   // Editable metadata triples for the triple editor widget
-  const mergedPrefixes = await loadMergedPrefixes(storage, config.baseUrl, username);
+  const mergedPrefixes = await loadMergedPrefixes(reqCtx.env.APPDATA, config.username);
   const metaTriplesEditable = metaTriples.map(t => {
     const predicateIri = unwrapIri(t.predicate);
     let objectValue = t.object;
@@ -133,12 +132,6 @@ async function renderResourcePage(reqCtx, path, resourceIri, username, editMode,
       object: objectValue,
     };
   });
-
-  // Compute dokieli URL — redirect root index.html to paa_custom/index.html
-  const isRootIndex = path === `${username}/index.html`;
-  const dokieliUrl = isRootIndex
-    ? `/${username}/paa_custom/index.html?edit=dokieli`
-    : `${resourceUrl}?edit=dokieli`;
 
   // Pre-compute mutually exclusive display flags for Mustache
   const isImage = isImageType(contentType);
@@ -166,8 +159,6 @@ async function renderResourcePage(reqCtx, path, resourceIri, username, editMode,
     showContent,
     showEmpty,
     showEditButton: canEdit && !editMode,
-    showDokieliButton: isHtml && !editMode,
-    dokieliUrl,
     showMetaEditor: editMeta,
     hasMetaTriples: !editMeta && processedMeta.length > 0,
     showNoMeta: !editMeta && processedMeta.length === 0,
@@ -176,6 +167,7 @@ async function renderResourcePage(reqCtx, path, resourceIri, username, editMode,
     metaTriplesEditable,
     metaTurtle,
     prefixesJson: JSON.stringify(mergedPrefixes),
+    namespaceCatalogJson: JSON.stringify(await loadPredicateCatalog(reqCtx.env.APPDATA, mergedPrefixes)),
   }, { user: username, nav: 'storage', storage, baseUrl: config.baseUrl });
 }
 

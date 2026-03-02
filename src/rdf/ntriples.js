@@ -105,11 +105,6 @@ export function typedLiteral(value, datatype) {
   return `"${escapeNTriples(String(value))}"^^<${datatype}>`;
 }
 
-/** Create a language-tagged literal. */
-export function langLiteral(value, lang) {
-  return `"${escapeNTriples(String(value))}"@${lang}`;
-}
-
 /** Extract the IRI from <...> */
 export function unwrapIri(term) {
   if (term.startsWith('<') && term.endsWith('>')) {
