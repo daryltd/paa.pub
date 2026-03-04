@@ -107,14 +107,10 @@ export async function handleLDP(reqCtx) {
   if ((request.method === 'GET' || request.method === 'HEAD') && isContainer(resourceIri) && accept.includes('text/html') && !wantsActivityPub(accept)) {
     const rootContainerIri = `${config.baseUrl}/${config.username}/`;
 
-    // For the root container, render profile page from layout JSON
+    // For the root container, render profile page from layout JSON.
+    // Skip ACP check — the profile page renders public profile data
+    // (same as /profile/card which is already public).
     if (resourceIri === rootContainerIri) {
-      const agent = reqCtx.user ? config.webId : null;
-      // Check ACP on root container
-      const access = await checkAcpAccess(reqCtx.env.APPDATA, rootContainerIri, agent, config.webId, config.username);
-      if (!access.readable) {
-        return denyAccess(agent, config.baseUrl);
-      }
       try {
         const { renderLayout, DEFAULT_LAYOUT } = await import('../ui/layout-renderer.js');
         const profileData = await buildProfileTemplateData(reqCtx.storage, config, reqCtx.env.APPDATA);
@@ -123,7 +119,7 @@ export async function handleLDP(reqCtx) {
         const htmlContent = new TextEncoder().encode(renderLayout(layout, profileData));
         const htmlHeaders = new Headers();
         htmlHeaders.set('Content-Type', 'text/html; charset=utf-8');
-        htmlHeaders.set('Cache-Control', access.listed ? 'public, no-cache' : 'private, no-store');
+        htmlHeaders.set('Cache-Control', 'public, no-cache');
         htmlHeaders.set('X-Content-Type-Options', 'nosniff');
         if (request.method === 'HEAD') return new Response(null, { status: 200, headers: htmlHeaders });
         return new Response(htmlContent, { status: 200, headers: htmlHeaders });
