@@ -147,17 +147,21 @@ src/
 |   +-- digest.js         SHA-256 digest utilities
 |   +-- cbor.js           Minimal CBOR decoder (for WebAuthn)
 |
++-- i18n/                 Internationalization
+|   +-- index.js          Language resolution, translation lookup, caching
+|   +-- format.js         Locale-aware date/number/bytes formatting (Intl APIs)
+|   +-- strings.ttl       Translation store (Turtle RDF, 5 languages, ~325 keys)
+|
 +-- storage/              Storage helpers
 |   +-- quota.js          Global storage quota tracking
 |   +-- container-quota.js Per-container hierarchical quota tracking
 |
 +-- ui/                   Server-rendered UI
-    +-- shell.js          Mustache template rendering pipeline
+    +-- shell.js          Mustache template rendering + i18n integration
     +-- layout-renderer.js JSON layout-based profile page renderer
-    +-- styles/base.css   CSS (served as static asset)
     +-- client/           Client-side JavaScript (dialogs, passkeys)
-    +-- templates/        Mustache HTML templates
-    +-- pages/            Page handlers (dashboard, storage, etc.)
+    +-- templates/        Mustache HTML templates (all strings via {{t.*}} keys)
+    +-- pages/            Page handlers (dashboard, storage, settings, etc.)
 ```
 
 ## Design decisions
@@ -170,4 +174,6 @@ src/
 
 **Web Crypto API only**: All cryptography uses the Web Crypto API available in Cloudflare Workers. PBKDF2 for password hashing, RSA-2048 for HTTP Signatures and JWT signing, ECDSA/RSA for WebAuthn signature verification, SHA-256 for digests.
 
-**No build tools**: The project has no build step, bundler config, or transpiler. Wrangler's built-in esbuild handles bundling JavaScript and inlining `.html`, `.css`, and client `.js` files as text strings.
+**No build tools**: The project has no build step, bundler config, or transpiler. Wrangler's built-in esbuild handles bundling JavaScript and inlining `.html`, `.css`, `.ttl`, and client `.js` files as text strings.
+
+**RDF-based i18n**: UI strings are stored as Turtle RDF with language-tagged literals (`rdfs:label "text"@lang`) in `src/i18n/strings.ttl`. The file is parsed once at module load (per isolate cold start), building a `Map<key, Map<lang, text>>` that is cached per language. Template variables reference translations via `{{t.key}}` in Mustache. Language resolution follows: user preference > `Accept-Language` header > default (`en-US`). Locale-aware formatting uses the V8 `Intl` APIs. RTL layout for Hebrew uses CSS logical properties (`margin-inline-start/end`, etc.) with targeted `[dir="rtl"]` overrides for code blocks and navigation.

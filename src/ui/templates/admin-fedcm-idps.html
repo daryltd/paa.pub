@@ -1,0 +1,78 @@
+<div class="card">
+  <h1>{{t.adm_fedcm_title}}</h1>
+
+  {{#message}}
+  <div class="success">{{message}}</div>
+  {{/message}}
+  {{#error}}
+  <div class="error">{{error}}</div>
+  {{/error}}
+
+  {{#hasIdps}}
+  {{#idps}}
+  <div class="card mt-1">
+    <form method="POST" action="/admin/fedcm-idps">
+      <input type="hidden" name="action" value="edit">
+      <input type="hidden" name="id" value="{{id}}">
+      <div class="form-group">
+        <label>{{t.adm_id}}</label>
+        <input type="text" value="{{id}}" disabled>
+      </div>
+      <div class="form-group">
+        <label>{{t.adm_display_name}}</label>
+        <input type="text" name="name" value="{{name}}" required>
+      </div>
+      <div class="form-group">
+        <label>{{t.adm_fedcm_config_url}}</label>
+        <input type="url" name="configURL" value="{{configURL}}" required>
+      </div>
+      <div class="form-group">
+        <label>{{t.adm_client_id}}</label>
+        <input type="text" name="clientId" value="{{clientId}}" required>
+      </div>
+      <div class="form-group">
+        <label>{{t.adm_issuer_url}}</label>
+        <input type="url" name="issuer" value="{{issuer}}">
+      </div>
+      <button type="submit" class="btn btn-sm">{{t.adm_save}}</button>
+    </form>
+    <form method="POST" action="/admin/fedcm-idps" style="display:inline; margin-top:0.5em">
+      <input type="hidden" name="action" value="remove">
+      <input type="hidden" name="id" value="{{id}}">
+      <button type="submit" class="btn btn-sm btn-secondary">{{t.adm_delete}}</button>
+    </form>
+  </div>
+  {{/idps}}
+  {{/hasIdps}}
+  {{^hasIdps}}
+  <p class="text-muted">{{t.adm_no_idps}}</p>
+  {{/hasIdps}}
+
+  <h2 class="mt-1">{{t.adm_add_provider}}</h2>
+  <form method="POST" action="/admin/fedcm-idps" class="inline-form">
+    <input type="hidden" name="action" value="add">
+    <div class="form-group">
+      <label for="idp_id">{{t.adm_id_slug}}</label>
+      <input type="text" id="idp_id" name="id" pattern="[a-zA-Z0-9_\-]+" title="{{t.adm_id_pattern}}" required>
+    </div>
+    <div class="form-group">
+      <label for="idp_name">{{t.adm_display_name}}</label>
+      <input type="text" id="idp_name" name="name" required>
+    </div>
+    <div class="form-group">
+      <label for="idp_config_url">{{t.adm_fedcm_config_url}}</label>
+      <input type="url" id="idp_config_url" name="configURL" placeholder="https://idp.example.com/fedcm/config.json" required>
+    </div>
+    <div class="form-group">
+      <label for="idp_client_id">{{t.adm_client_id}}</label>
+      <input type="text" id="idp_client_id" name="clientId" required>
+    </div>
+    <div class="form-group">
+      <label for="idp_issuer">{{t.adm_issuer_optional}}</label>
+      <input type="url" id="idp_issuer" name="issuer" placeholder="https://idp.example.com">
+    </div>
+    <button type="submit" class="btn">{{t.adm_add_btn}}</button>
+  </form>
+
+  <p class="mt-1"><a href="/admin">&larr; {{t.adm_back_dashboard}}</a></p>
+</div>

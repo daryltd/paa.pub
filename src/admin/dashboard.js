@@ -5,6 +5,7 @@ import { requireAdmin } from './middleware.js';
 import { listUsers } from '../users.js';
 import { renderPage } from '../ui/shell.js';
 import template from '../ui/templates/admin-dashboard.html';
+import { formatBytes } from '../i18n/format.js';
 
 /**
  * GET /admin — admin dashboard.
@@ -42,18 +43,14 @@ export async function renderAdminDashboard(reqCtx) {
     };
   }));
 
+  const idps = JSON.parse(await env.APPDATA.get('fedcm_external_idps') || '[]');
+
   return renderPage('Admin Dashboard', template, {
     totalUsers: userList.length,
     totalStorage: formatBytes(totalStorage),
     totalPosts,
     users,
-  }, { user: reqCtx.user, nav: 'admin', config });
-}
-
-function formatBytes(bytes) {
-  if (bytes === 0) return '0 B';
-  const units = ['B', 'KB', 'MB', 'GB'];
-  const i = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
-  const val = bytes / Math.pow(1024, i);
-  return `${val < 10 ? val.toFixed(1) : Math.round(val)} ${units[i]}`;
+    idps,
+    hasIdps: idps.length > 0,
+  }, { user: reqCtx.user, nav: 'admin', config, lang: reqCtx.lang });
 }

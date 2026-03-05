@@ -24,6 +24,8 @@ import template from '../templates/acl-editor.html';
 import { requireAuth } from '../../auth/middleware.js';
 import { getContainerQuota, setContainerQuotaLimit } from '../../storage/container-quota.js';
 import { getUserConfig } from '../../config.js';
+import { formatBytes, formatBytesShort } from '../../i18n/format.js';
+import { getTranslations } from '../../i18n/index.js';
 
 /**
  * Handle GET /acp/**
@@ -32,9 +34,10 @@ export async function renderAclEditor(reqCtx) {
   const authCheck = requireAuth(reqCtx);
   if (authCheck) return authCheck;
 
-  const { config, env, url } = reqCtx;
+  const { config, env, url, lang } = reqCtx;
   const username = reqCtx.user;
   const uc = getUserConfig(config, username);
+  const t = getTranslations(lang);
   const path = url.pathname.replace(/^\/acp\/?/, '') || `${username}/`;
   const resourceIri = `${config.baseUrl}/${path}`;
   const isDir = path.endsWith('/');
@@ -46,27 +49,37 @@ export async function renderAclEditor(reqCtx) {
   const policy = await loadPolicy(env.APPDATA, resourceIri);
   const friends = await loadFriends(env.APPDATA, username);
 
+  // Build mode labels from translations
+  const modeLabelMap = {
+    public: t.acl_mode_public,
+    unlisted: t.acl_mode_unlisted,
+    friends: t.acl_mode_friends,
+    private: t.acl_mode_private,
+    custom: t.acl_mode_custom,
+    inherit: t.acl_mode_inherit,
+  };
+
   // Resolve the effective policy when in inherit mode (or no policy set)
   let effectiveLabel = '';
   let effectiveSource = '';
   if (!isRootContainer && (policy.mode === 'inherit' || !policy.mode)) {
     const resolved = await resolveInheritedPolicy(env.APPDATA, resourceIri);
     if (resolved) {
-      effectiveLabel = MODE_LABELS[resolved.policy.mode] || resolved.policy.mode;
+      effectiveLabel = modeLabelMap[resolved.policy.mode] || resolved.policy.mode;
       effectiveSource = resolved.source;
     } else {
-      effectiveLabel = 'Private';
-      effectiveSource = '(default)';
+      effectiveLabel = t.acl_mode_private;
+      effectiveSource = t.acl_default_source;
     }
   }
 
   const allModes = [
-    ...(!isRootContainer ? [{ value: 'inherit', label: 'Inherit from parent', description: 'Use the same access policy as the parent container.' }] : []),
-    { value: 'public', label: 'Public', description: 'Anyone can discover and read this resource.' },
-    { value: 'unlisted', label: 'Public (unlisted)', description: 'Anyone with the direct link can read, but not listed in container indexes.' },
-    { value: 'friends', label: 'Friends', description: 'Only people in your friends list can read.' },
-    { value: 'private', label: 'Private', description: 'Only you can access this resource.' },
-    { value: 'custom', label: 'Custom', description: 'Grant read access to specific WebIDs.' },
+    ...(!isRootContainer ? [{ value: 'inherit', label: t.acl_mode_inherit, description: t.acl_mode_inherit_desc }] : []),
+    { value: 'public', label: t.acl_mode_public, description: t.acl_mode_public_desc },
+    { value: 'unlisted', label: t.acl_mode_unlisted, description: t.acl_mode_unlisted_desc },
+    { value: 'friends', label: t.acl_mode_friends, description: t.acl_mode_friends_desc },
+    { value: 'private', label: t.acl_mode_private, description: t.acl_mode_private_desc },
+    { value: 'custom', label: t.acl_mode_custom, description: t.acl_mode_custom_desc },
   ];
 
   const currentMode = policy.mode || (isRootContainer ? 'private' : 'inherit');
@@ -114,7 +127,7 @@ export async function renderAclEditor(reqCtx) {
     turtlePolicy: policyToTurtle(policy, resourceIri, uc.webId, friends),
     quotaData,
     quotaLimitValue,
-  }, { user: username, config, nav: 'storage', storage: reqCtx.storage, baseUrl: config.baseUrl });
+  }, { user: username, config, nav: 'storage', storage: reqCtx.storage, baseUrl: config.baseUrl, lang });
 }
 
 /**
@@ -404,23 +417,6 @@ function policyToTurtle(policy, resourceIri, ownerWebId, friends) {
   }
 
   return lines.join('\n');
-}
-
-function formatBytes(bytes) {
-  if (!bytes || bytes === 0) return '0 B';
-  const k = 1024;
-  const sizes = ['B', 'KB', 'MB', 'GB'];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return `${(bytes / Math.pow(k, i)).toFixed(1)} ${sizes[i]}`;
-}
-
-function formatBytesShort(bytes) {
-  if (!bytes || bytes === 0) return '';
-  const k = 1024;
-  if (bytes >= k * k * k) return `${(bytes / (k * k * k)).toFixed(0)}GB`;
-  if (bytes >= k * k) return `${(bytes / (k * k)).toFixed(0)}MB`;
-  if (bytes >= k) return `${(bytes / k).toFixed(0)}KB`;
-  return `${bytes}B`;
 }
 
 function parseQuotaLimit(str) {

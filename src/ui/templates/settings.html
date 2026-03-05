@@ -1,0 +1,122 @@
+<div class="card">
+  <h1>{{t.settings_title}}</h1>
+  {{#message}}<div class="success">{{message}}</div>{{/message}}
+
+  <form method="POST" action="/settings">
+    <!-- Language & Locale -->
+    <details open>
+      <summary>{{t.settings_language}}</summary>
+      <div class="form-group">
+        <label for="language">{{t.settings_select_language}}</label>
+        <select id="language" name="language">
+          {{#languages}}
+          <option value="{{code}}" {{#selected}}selected{{/selected}}>{{nativeName}} ({{name}})</option>
+          {{/languages}}
+        </select>
+      </div>
+      <div class="form-group">
+        <label for="dateFormat">{{t.settings_date_format}}</label>
+        <select id="dateFormat" name="dateFormat">
+          <option value="short" {{#dateShort}}selected{{/dateShort}}>{{t.settings_date_short}}</option>
+          <option value="medium" {{#dateMedium}}selected{{/dateMedium}}>{{t.settings_date_medium}}</option>
+          <option value="long" {{#dateLong}}selected{{/dateLong}}>{{t.settings_date_long}}</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label for="timezone">{{t.settings_timezone}}</label>
+        <select id="timezone" name="timezone">
+          {{#timezones}}
+          <option value="{{value}}" {{#selected}}selected{{/selected}}>{{label}}</option>
+          {{/timezones}}
+        </select>
+      </div>
+    </details>
+
+    <!-- Appearance -->
+    <details>
+      <summary>{{t.settings_appearance}}</summary>
+      <div class="form-group">
+        <label for="themePath">{{t.settings_theme_path}}</label>
+        <input type="text" id="themePath" name="themePath" value="{{themePath}}" class="mono"
+               placeholder="/{{username}}/paa_custom/theme.css">
+      </div>
+    </details>
+
+    <!-- Notifications -->
+    <details>
+      <summary>{{t.settings_notifications}}</summary>
+      <div class="form-group">
+        <label class="container-label">
+          <input type="checkbox" name="showFollows" value="1" {{#showFollows}}checked{{/showFollows}}>
+          {{t.settings_show_follows}}
+        </label>
+      </div>
+      <div class="form-group">
+        <label class="container-label">
+          <input type="checkbox" name="showMentions" value="1" {{#showMentions}}checked{{/showMentions}}>
+          {{t.settings_show_mentions}}
+        </label>
+      </div>
+    </details>
+
+    <button type="submit" class="btn mt-075">{{t.settings_save}}</button>
+  </form>
+
+  <!-- App Management -->
+  <details class="mt-1">
+    <summary>{{t.settings_app_mgmt}}</summary>
+    <p class="text-muted text-sm mb-1">{{t.apps_description}}</p>
+    {{#hasApps}}
+    {{#apps}}
+    <div class="card mb-075">
+      <p class="client-name">{{displayName}}</p>
+      {{#displayOrigin}}<p class="mb-025"><a href="{{displayOrigin}}" target="_blank" rel="noopener" class="text-sm">{{displayOrigin}}</a></p>{{/displayOrigin}}
+      {{#isInternalClient}}<p class="text-muted text-sm mb-025">{{t.apps_registered_oidc}}</p>{{/isInternalClient}}
+      <p class="mono text-muted mb-05 text-sm break-all">{{clientId}}</p>
+      {{#grantedAt}}<p class="text-sm text-muted">{{t.apps_authorized}} {{grantedAt}}</p>{{/grantedAt}}
+
+      {{#hasContainers}}
+      <p class="text-sm font-medium mt-05">{{t.apps_allowed_containers}}</p>
+      <ul class="text-sm mono">
+        {{#containers}}<li>{{path}}</li>{{/containers}}
+      </ul>
+      {{/hasContainers}}
+      {{^hasContainers}}
+      <p class="text-sm text-muted">{{t.apps_no_write}}</p>
+      {{/hasContainers}}
+
+      <details class="mt-05">
+        <summary class="text-sm">{{t.apps_update_access}}</summary>
+        <form method="POST" action="/app-permissions">
+          <input type="hidden" name="action" value="update">
+          <input type="hidden" name="client_id" value="{{clientId}}">
+          <div class="checkbox-panel mt-05">
+            {{#allContainers}}
+            <label class="container-label">
+              <input type="checkbox" name="containers" value="{{iri}}" {{#checked}}checked{{/checked}}>
+              <span class="mono">{{path}}</span>
+            </label>
+            {{/allContainers}}
+          </div>
+          <div class="form-group mt-05">
+            <label for="custom_container_{{clientId}}" class="text-sm">{{t.apps_or_enter_path}}</label>
+            <input type="text" name="custom_container" placeholder="/{{username}}/path/" class="mono" id="custom_container_{{clientId}}">
+            <p class="text-muted text-sm mt-025">{{t.apps_grant_write}}</p>
+          </div>
+          <button type="submit" class="btn btn-secondary text-sm">{{t.apps_update}}</button>
+        </form>
+      </details>
+
+      <form method="POST" action="/app-permissions" class="mt-05">
+        <input type="hidden" name="action" value="revoke">
+        <input type="hidden" name="client_id" value="{{clientId}}">
+        <button type="submit" class="btn btn-danger text-sm">{{t.apps_revoke}}</button>
+      </form>
+    </div>
+    {{/apps}}
+    {{/hasApps}}
+    {{^hasApps}}
+    <p class="text-muted">{{t.apps_no_apps}}</p>
+    {{/hasApps}}
+  </details>
+</div>

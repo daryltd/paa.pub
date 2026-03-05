@@ -31,7 +31,7 @@ import { solidHeaders, buildWacAllow } from './headers.js';
 import { parseTurtle } from '../rdf/turtle-parser.js';
 import { parseNTriples, serializeNQuads, iri, unwrapIri, unwrapLiteral } from '../rdf/ntriples.js';
 import { isContainer, slugToName, addContainment, containerTypeQuads, parentContainer } from './containers.js';
-import { handleAclGet, handleAclPut, handleAclPatch, handleAclDelete, defaultAclNTriples } from './acl.js';
+import { handleAclPut, handleAclPatch, handleAclDelete, defaultAclNTriples } from './acl.js';
 import { checkAcpAccess } from '../ui/pages/acl-editor.js';
 import { PREFIXES, loadMergedPrefixes } from '../rdf/prefixes.js';
 import { checkQuota, quotaExceededResponse, addQuota } from '../storage/quota.js';
@@ -91,11 +91,16 @@ export async function handleLDP(reqCtx) {
   const { request, url, config } = reqCtx;
   const resourceIri = `${config.baseUrl}${url.pathname}`;
 
-  // Handle .acl resources (WAC compatibility)
+  // Handle .meta resources — auxiliary metadata, not directly browseable
+  if (url.pathname.endsWith('.meta')) {
+    return new Response('Not Found', { status: 404 });
+  }
+
+  // Handle .acl resources (WAC compatibility) — no direct GET, keep write methods
   if (url.pathname.endsWith('.acl')) {
     const baseIri = resourceIri.slice(0, -4);
     switch (request.method) {
-      case 'GET': case 'HEAD': return handleAclGet(reqCtx, baseIri);
+      case 'GET': case 'HEAD': return new Response('Not Found', { status: 404 });
       case 'PUT': return handleAclPut(reqCtx, baseIri);
       case 'PATCH': return handleAclPatch(reqCtx, baseIri);
       case 'DELETE': return handleAclDelete(reqCtx, baseIri);
@@ -103,19 +108,9 @@ export async function handleLDP(reqCtx) {
     }
   }
 
-  // Handle .acr resources (ACP)
+  // Handle .acr resources — auxiliary ACP metadata, not directly browseable
   if (url.pathname.endsWith('.acr')) {
-    const acrOwner = extractOwner(resourceIri, config.baseUrl);
-    if (reqCtx.user !== acrOwner) {
-      return new Response('Forbidden', { status: 403 });
-    }
-    const baseIri = resourceIri.slice(0, -4);
-    if (request.method === 'GET' || request.method === 'HEAD') {
-      const { checkAcpAccess: _, ...mod } = await import('../ui/pages/acl-editor.js');
-      // Redirect to the ACP editor UI
-      return new Response(null, { status: 302, headers: { 'Location': `/acp/${url.pathname.slice(1).replace(/\.acr$/, '')}` } });
-    }
-    return new Response('Method Not Allowed', { status: 405 });
+    return new Response('Not Found', { status: 404 });
   }
 
   // OIDC apps can read any resource the authenticated owner can read.
@@ -138,6 +133,7 @@ export async function handleLDP(reqCtx) {
         const { renderLayout, DEFAULT_LAYOUT } = await import('../ui/layout-renderer.js');
         const profileData = await buildProfileTemplateData(reqCtx.storage, { ...config, ...containerOwnerUc }, reqCtx.env.APPDATA);
         const layoutRaw = await reqCtx.env.APPDATA.get(`profile_layout:${containerOwner}`);
+        const layout = layoutRaw ? JSON.parse(layoutRaw) : DEFAULT_LAYOUT;
         const htmlContent = new TextEncoder().encode(renderLayout(layout, profileData));
         const htmlHeaders = new Headers();
         htmlHeaders.set('Content-Type', 'text/html; charset=utf-8');
@@ -264,16 +260,12 @@ async function handleGet(reqCtx, resourceIri) {
     if (nt) allTriples.push(...parseNTriples(nt));
   }
 
-  if (allTriples.length === 0) {
+  if (allTriples.length === 0 && isContainer(resourceIri)) {
     // Empty containers still return a valid representation with their type triples
-    if (isContainer(resourceIri)) {
-      allTriples.push(
-        { subject: `<${resourceIri}>`, predicate: `<${PREFIXES.rdf}type>`, object: `<${PREFIXES.ldp}BasicContainer>` },
-        { subject: `<${resourceIri}>`, predicate: `<${PREFIXES.rdf}type>`, object: `<${PREFIXES.ldp}Container>` },
-      );
-    } else {
-      return new Response('Not Found', { status: 404 });
-    }
+    allTriples.push(
+      { subject: `<${resourceIri}>`, predicate: `<${PREFIXES.rdf}type>`, object: `<${PREFIXES.ldp}BasicContainer>` },
+      { subject: `<${resourceIri}>`, predicate: `<${PREFIXES.rdf}type>`, object: `<${PREFIXES.ldp}Container>` },
+    );
   }
 
   // For OIDC apps reading an ancestor container, filter ldp:contains to only
@@ -441,6 +433,13 @@ async function handlePut(reqCtx, resourceIri) {
   }
   await storage.put(`idx:${resourceIri}`, JSON.stringify({ subjects: [...bySubject.keys()] }));
 
+  // Update metadata (content type + extent)
+  const metaDoc = [
+    `<${resourceIri}> <${PREFIXES.dcterms}format> "${contentType}" .`,
+    `<${resourceIri}> <${PREFIXES.dcterms}extent> "${new TextEncoder().encode(body).byteLength}"^^<${PREFIXES.xsd}integer> .`,
+  ].join('\n');
+  await storage.put(`doc:${resourceIri}.meta:${resourceIri}`, metaDoc);
+
   // For new resources, ensure parent containers exist and add containment
   if (!existingIdx) {
     await ensureParentContainers(storage, resourceIri);
@@ -493,6 +492,8 @@ async function handlePost(reqCtx, resourceIri) {
 
   const contentType = resolveContentType(request.headers.get('Content-Type'), newResourceIri);
 
+  console.log(`[ldp] POST resolved ct=${contentType} rawCT=${request.headers.get('Content-Type')} binary=${isBinaryType(contentType)} slug=${slug} iri=${newResourceIri}`);
+
   if (wantsContainer) {
     // Create container — write directly to KV
     const containerNt = [
@@ -521,16 +522,14 @@ async function handlePost(reqCtx, resourceIri) {
     const cqResult = await checkContainerQuota(env.APPDATA, resourceIri, binary.byteLength);
     if (!cqResult.allowed) return containerQuotaExceededResponse(cqResult.blockedBy, cqResult.usedBytes, cqResult.limitBytes);
 
-    const metadataNquads = buildMetadataNQuads(newResourceIri, contentType, binary.byteLength);
-    const aclNt = '';
-    try {
-      const result = await orchestrator.uploadBinary(newResourceIri, binary, contentType, metadataNquads, aclNt, agent);
-      if (result.type === 'auth_error') return new Response('Forbidden', { status: 403 });
-    } catch (e) {
-      // Fallback: store binary directly
-      console.error('uploadBinary error, falling back to direct KV:', e);
-      await storage.putBlob(`blob:${newResourceIri}`, binary, contentType);
-    }
+    // Write binary directly to KV (matching PUT handler for consistency)
+    await storage.putBlob(`blob:${newResourceIri}`, binary, contentType);
+    await storage.put(`idx:${newResourceIri}`, JSON.stringify({ binary: true }));
+    const metaDoc = [
+      `<${newResourceIri}> <${PREFIXES.dcterms}format> "${contentType}" .`,
+      `<${newResourceIri}> <${PREFIXES.dcterms}extent> "${binary.byteLength}"^^<${PREFIXES.xsd}integer> .`,
+    ].join('\n');
+    await storage.put(`doc:${newResourceIri}.meta:${newResourceIri}`, metaDoc);
 
     // Update quota tracking
     await addQuota(env.APPDATA, owner, binary.byteLength);
@@ -540,14 +539,23 @@ async function handlePost(reqCtx, resourceIri) {
     return new Response(null, { status: 201, headers: { 'Location': newResourceIri } });
   }
 
-  // RDF content — write directly to KV
+  // RDF content — parse and store, allowing empty documents
   const body = await request.text();
   let triples;
   try { triples = parseBody(body, contentType, newResourceIri); } catch (e) {
     if (e.status === 400) return new Response(e.message, { status: 400 });
     throw e;
   }
+
   await writeTriplesToKV(storage, newResourceIri, triples);
+
+  // Write metadata (content type + extent) so the resource is discoverable
+  const metaDoc = [
+    `<${newResourceIri}> <${PREFIXES.dcterms}format> "${contentType}" .`,
+    `<${newResourceIri}> <${PREFIXES.dcterms}extent> "${new TextEncoder().encode(body).byteLength}"^^<${PREFIXES.xsd}integer> .`,
+  ].join('\n');
+  await storage.put(`doc:${newResourceIri}.meta:${newResourceIri}`, metaDoc);
+
   await appendContainment(storage, resourceIri, newResourceIri);
 
   return new Response(null, { status: 201, headers: { 'Location': newResourceIri } });
@@ -606,6 +614,22 @@ async function handlePatch(reqCtx, resourceIri) {
 
   // Write back
   await writeTriplesToKV(storage, resourceIri, allTriples);
+
+  // Update metadata extent to reflect current size
+  const serialized = allTriples.map(t => `${t.subject} ${t.predicate} ${t.object} .`).join('\n');
+  const extent = new TextEncoder().encode(serialized).byteLength;
+  const existingMeta = await storage.get(`doc:${resourceIri}.meta:${resourceIri}`);
+  // Preserve format from existing metadata, default to text/turtle
+  let fmt = 'text/turtle';
+  if (existingMeta) {
+    const fmtMatch = existingMeta.match(/<http:\/\/purl\.org\/dc\/terms\/format>\s+"([^"]+)"/);
+    if (fmtMatch) fmt = fmtMatch[1];
+  }
+  const metaDoc = [
+    `<${resourceIri}> <${PREFIXES.dcterms}format> "${fmt}" .`,
+    `<${resourceIri}> <${PREFIXES.dcterms}extent> "${extent}"^^<${PREFIXES.xsd}integer> .`,
+  ].join('\n');
+  await storage.put(`doc:${resourceIri}.meta:${resourceIri}`, metaDoc);
 
   // If this created a new resource, ensure parent containers exist and add containment
   if (!idx) {

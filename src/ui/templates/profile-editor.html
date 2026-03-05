@@ -1,99 +1,99 @@
-<h1>Edit Profile</h1>
+<h1>{{t.prof_edit_title}}</h1>
 
 {{#success}}<div class="success">{{success}}</div>{{/success}}
 {{#error}}<div class="error">{{error}}</div>{{/error}}
 
 <div class="card mt-1">
-  <h2>Profile Page</h2>
-  <p class="text-muted mb-075">Your public profile page at <a href="/{{username}}/" class="mono">/{{username}}/</a> is rendered from a layout using your profile data. Use the Page Builder below to customize it.</p>
+  <h2>{{t.prof_page}}</h2>
+  <p class="text-muted mb-075">{{t.prof_page_desc}} <a href="/{{username}}/" class="mono">/{{username}}/</a></p>
   <form method="POST" action="/profile/reset-index">
-    <button type="submit" class="btn btn-secondary" data-confirm="Reset your profile page to the default layout? Any customizations will be lost.">Reset to Default Layout</button>
+    <button type="submit" class="btn btn-secondary" data-confirm="{{t.prof_confirm_reset}}">{{t.prof_reset_layout}}</button>
   </form>
 </div>
 
 <form method="POST" action="/profile">
   <details class="card">
-    <summary><h2>Profile Fields</h2></summary>
+    <summary><h2>{{t.prof_fields}}</h2></summary>
 
     <div class="form-group">
-      <label for="name">Name (foaf:name)</label>
-      <input type="text" id="name" name="name" value="{{name}}" placeholder="Your display name">
+      <label for="name">{{t.prof_name}}</label>
+      <input type="text" id="name" name="name" value="{{name}}" placeholder="{{t.prof_name_ph}}">
     </div>
 
     <div class="form-group">
-      <label for="nick">Nickname (foaf:nick)</label>
-      <input type="text" id="nick" name="nick" value="{{nick}}" placeholder="Short handle or alias">
+      <label for="nick">{{t.prof_nick}}</label>
+      <input type="text" id="nick" name="nick" value="{{nick}}" placeholder="{{t.prof_nick_ph}}">
     </div>
 
     <div class="form-group">
-      <label for="img">Avatar URL (foaf:img)</label>
+      <label for="img">{{t.prof_avatar}}</label>
       <input type="url" id="img" name="img" value="{{img}}" placeholder="https://example.com/photo.jpg">
     </div>
 
     <div class="form-group">
-      <label for="email">Email (foaf:mbox)</label>
+      <label for="email">{{t.prof_email}}</label>
       <input type="text" id="email" name="email" value="{{email}}" placeholder="you@example.com">
     </div>
 
     <div class="form-group">
-      <label for="homepage">Homepage (foaf:homepage)</label>
+      <label for="homepage">{{t.prof_homepage}}</label>
       <input type="url" id="homepage" name="homepage" value="{{homepage}}" placeholder="https://yoursite.com">
     </div>
 
     <div class="form-group">
-      <label for="bio">Bio (vcard:note)</label>
-      <textarea id="bio" name="bio" placeholder="A short bio about yourself">{{bio}}</textarea>
+      <label for="bio">{{t.prof_bio}}</label>
+      <textarea id="bio" name="bio" placeholder="{{t.prof_bio_ph}}">{{bio}}</textarea>
     </div>
 
     <div class="form-group">
-      <label for="role">Role (vcard:role)</label>
+      <label for="role">{{t.prof_role}}</label>
       <input type="text" id="role" name="role" value="{{role}}" placeholder="Developer, Artist, etc.">
     </div>
 
     <div class="form-group">
-      <label for="description">Description (schema:description)</label>
-      <textarea id="description" name="description" placeholder="A longer description">{{description}}</textarea>
+      <label for="description">{{t.prof_description}}</label>
+      <textarea id="description" name="description" placeholder="{{t.prof_description_ph}}">{{description}}</textarea>
     </div>
   </details>
 
   <details class="card">
-    <summary><h2>Custom Prefixes</h2></summary>
-    <p class="text-muted mb-075">Define namespace prefixes for custom triples. These are used for Turtle shorthand and template keys. Find ontologies: <a href="https://lov.linkeddata.es/dataset/lov/" target="_blank">LOV</a> &middot; <a href="https://www.ebi.ac.uk/ols4/" target="_blank">OLS</a> &middot; <a href="https://prefix.cc/" target="_blank">prefix.cc</a></p>
+    <summary><h2>{{t.prof_custom_prefixes}}</h2></summary>
+    <p class="text-muted mb-075">{{t.prof_prefix_desc}} {{t.prof_find_ontologies}} <a href="https://lov.linkeddata.es/dataset/lov/" target="_blank">LOV</a> &middot; <a href="https://www.ebi.ac.uk/ols4/" target="_blank">OLS</a> &middot; <a href="https://prefix.cc/" target="_blank">prefix.cc</a></p>
     <div id="prefix-manager">
       <table class="prefix-table">
-        <thead><tr><th>Prefix</th><th>Namespace IRI</th><th></th></tr></thead>
+        <thead><tr><th>{{t.prof_prefix}}</th><th>{{t.prof_namespace}}</th><th></th></tr></thead>
         <tbody id="prefix-rows">
           {{#customPrefixList}}
           <tr>
             <td><input type="text" class="pm-prefix" value="{{name}}" placeholder="ex"></td>
             <td><input type="text" class="pm-ns" value="{{ns}}" placeholder="http://example.org/ns#"></td>
-            <td><button type="button" class="btn btn-secondary btn-compact pm-remove">Remove</button></td>
+            <td><button type="button" class="btn btn-secondary btn-compact pm-remove">{{t.prof_remove}}</button></td>
           </tr>
           {{/customPrefixList}}
         </tbody>
       </table>
-      <button type="button" class="btn btn-secondary mt-05" id="pm-add">Add Prefix</button>
+      <button type="button" class="btn btn-secondary mt-05" id="pm-add">{{t.prof_add_prefix}}</button>
     </div>
     <input type="hidden" name="custom_prefixes_json" id="custom-prefixes-json" value='{{{customPrefixesJson}}}'>
   </details>
 
   <details class="card">
-    <summary><h2>Connections</h2></summary>
-    <p class="text-muted mb-075">People you know (<code>foaf:knows</code>). Add WebIDs or profile URIs. ActivityPub followers and following are included automatically.</p>
+    <summary><h2>{{t.prof_connections}}</h2></summary>
+    <p class="text-muted mb-075">{{t.prof_connections_desc}}</p>
 
     <h3 class="mb-05">foaf:knows</h3>
     <div id="foaf-knows-editor">
       {{#foafKnowsList}}
       <div class="fk-row flex gap-05 items-center mb-025">
         <input type="url" name="foaf_knows_uri[]" value="{{uri}}" placeholder="https://example.com/profile#me" class="flex-1 mono">
-        <button type="button" class="btn btn-secondary btn-compact fk-remove">Remove</button>
+        <button type="button" class="btn btn-secondary btn-compact fk-remove">{{t.prof_remove}}</button>
       </div>
       {{/foafKnowsList}}
     </div>
-    <button type="button" class="btn btn-secondary mt-05" id="fk-add">Add Connection</button>
+    <button type="button" class="btn btn-secondary mt-05" id="fk-add">{{t.prof_add_connection}}</button>
 
     {{#hasApFollowing}}
-    <h3 class="mt-1 mb-05">Following ({{apFollowingCount}})</h3>
+    <h3 class="mt-1 mb-05">{{t.act_following}} ({{apFollowingCount}})</h3>
     <ul class="list-plain">
       {{#apFollowing}}
       <li class="list-row"><span class="mono flex-1 text-sm truncate">{{uri}}</span></li>
@@ -102,7 +102,7 @@
     {{/hasApFollowing}}
 
     {{#hasApFollowers}}
-    <h3 class="mt-1 mb-05">Followers ({{apFollowersCount}})</h3>
+    <h3 class="mt-1 mb-05">{{t.act_followers}} ({{apFollowersCount}})</h3>
     <ul class="list-plain">
       {{#apFollowers}}
       <li class="list-row"><span class="mono flex-1 text-sm truncate">{{uri}}</span></li>
@@ -112,8 +112,8 @@
   </details>
 
   <details class="card">
-    <summary><h2>Add/Edit Custom Triples</h2></summary>
-    <p class="text-muted mb-075">Add custom predicate-object pairs for your WebID subject. Use the template key in your profile page template, e.g. <code>{{=<% %>=}}{{#foaf_knows}}...{{/foaf_knows}}<%={{ }}=%></code>.</p>
+    <summary><h2>{{t.prof_custom_triples}}</h2></summary>
+    <p class="text-muted mb-075">{{t.prof_custom_triples_desc}}</p>
 
     <div class="triple-editor"
          data-subject="{{webId}}"
@@ -128,15 +128,15 @@
         <div class="te-pred-cell">
           <span class="te-pred-display mono cursor-pointer">{{predicateShort}}</span>
           <input type="text" class="te-pred-input hidden" name="custom_predicate[]"
-                 value="{{predicate}}" placeholder="Predicate IRI">
-          <button type="button" class="te-search-btn btn btn-secondary btn-xs hidden">Browse</button>
+                 value="{{predicate}}" placeholder="{{t.prof_predicate}}">
+          <button type="button" class="te-search-btn btn btn-secondary btn-xs hidden">{{t.stor_browse}}</button>
         </div>
         <div class="te-obj-cell">
           <input type="text" class="te-obj-input" name="custom_object[]"
-                 value="{{object}}" placeholder="Object value">
+                 value="{{object}}" placeholder="{{t.prof_object}}">
         </div>
-        <span class="te-template-key text-muted mono text-sm nowrap" title="Template key">{{templateKey}}</span>
-        <button type="button" class="btn btn-secondary btn-compact te-remove">Remove</button>
+        <span class="te-template-key text-muted mono text-sm nowrap" title="{{t.prof_template_key}}">{{templateKey}}</span>
+        <button type="button" class="btn btn-secondary btn-compact te-remove">{{t.prof_remove}}</button>
       </div>
       {{/customTriples}}
       <div class="te-add-area"></div>
@@ -144,8 +144,8 @@
   </details>
 
   <details class="card" id="page-builder-section">
-    <summary><h2>Page Builder</h2></summary>
-    <p class="text-muted mb-075">Build your profile page layout. Elements render in order. Click to edit.</p>
+    <summary><h2>{{t.prof_page_builder}}</h2></summary>
+    <p class="text-muted mb-075">{{t.prof_page_builder_desc}}</p>
 
     <div id="page-builder"
          data-layout='{{{layoutJson}}}'
@@ -153,10 +153,10 @@
          data-prefixes='{{{prefixesJson}}}'>
 
       <div class="flex gap-05 mb-075">
-        <button type="button" class="btn btn-secondary btn-compact" id="pb-add-head">+ Head</button>
-        <button type="button" class="btn btn-secondary btn-compact" id="pb-add-body">+ Body</button>
-        <button type="button" class="btn btn-secondary btn-compact" id="pb-import-component">Import Component</button>
-        <button type="button" class="btn btn-secondary btn-compact" id="pb-preview">Preview</button>
+        <button type="button" class="btn btn-secondary btn-compact" id="pb-add-head">{{t.prof_head}}</button>
+        <button type="button" class="btn btn-secondary btn-compact" id="pb-add-body">{{t.prof_body}}</button>
+        <button type="button" class="btn btn-secondary btn-compact" id="pb-import-component">{{t.prof_import_component}}</button>
+        <button type="button" class="btn btn-secondary btn-compact" id="pb-preview">{{t.prof_preview}}</button>
       </div>
 
       <div class="flex gap-1">
@@ -169,14 +169,14 @@
   </details>
 
   <div class="mt-1">
-    <button type="submit" class="btn">Save Profile</button>
-    <a href="/dashboard" class="btn btn-secondary ml-05">Cancel</a>
+    <button type="submit" class="btn">{{t.prof_save}}</button>
+    <a href="/dashboard" class="btn btn-secondary ml-05">{{t.prof_cancel}}</a>
   </div>
 </form>
 
 {{#hasSystemTriples}}
 <details class="card mt-1">
-  <summary><h2>System Triples (read-only)</h2></summary>
+  <summary><h2>{{t.prof_system_triples}}</h2></summary>
   <div class="triple-editor" data-subject="{{webId}}" data-output="none">
     {{#systemTriples}}
     <div class="te-row" data-readonly="true">

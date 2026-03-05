@@ -1,0 +1,17 @@
+<div class="card login-card">
+  <h1>{{t.fedcm_complete_reg}}</h1>
+  <p>{{t.fedcm_signing_in_via}} <strong>{{idpName}}</strong> {{t.fedcm_as}} {{email}}</p>
+  {{#error}}
+  <div class="error">{{error}}</div>
+  {{/error}}
+  <form method="POST" action="/signup/fedcm">
+    <input type="hidden" name="token" value="{{token}}">
+    <div class="form-group">
+      <label for="username">{{t.fedcm_choose_username}}</label>
+      <input type="text" id="username" name="username" pattern="[a-zA-Z0-9_\-]+"
+             title="{{t.land_username_pattern}}"
+             required autofocus value="{{suggestedUsername}}">
+    </div>
+    <button type="submit" class="btn">{{t.land_create_account}}</button>
+  </form>
+</div>

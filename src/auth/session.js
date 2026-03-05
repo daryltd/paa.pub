@@ -72,14 +72,31 @@ export async function handleLogin(reqCtx) {
     return renderLoginPage({ ...reqCtx, returnTo, error: 'Invalid credentials' });
   }
 
+  const token = await createSession(env.APPDATA, username);
+  const cookieHeader = `session=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${SESSION_TTL}${config.protocol === 'https' ? '; Secure' : ''}`;
+
+  // FedCM popup: close the popup so the browser retries the accounts fetch
+  if (form.get('fedcm') === '1') {
+    return new Response(
+      `<!DOCTYPE html><html><head><title>Logged in</title></head><body><script>IdentityProvider.close();</script></body></html>`,
+      {
+        status: 200,
+        headers: {
+          'Content-Type': 'text/html; charset=utf-8',
+          'Set-Cookie': cookieHeader,
+          'Set-Login': 'logged-in',
+        },
+      },
+    );
+  }
+
   // Redirect to return_to if it's a safe same-origin path, otherwise /dashboard
   const location = returnTo && returnTo.startsWith('/') && !returnTo.startsWith('//') ? returnTo : '/dashboard';
-  const token = await createSession(env.APPDATA, username);
   return new Response(null, {
     status: 302,
     headers: {
       'Location': location,
-      'Set-Cookie': `session=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${SESSION_TTL}${config.protocol === 'https' ? '; Secure' : ''}`,
+      'Set-Cookie': cookieHeader,
       'Set-Login': 'logged-in',
     },
   });

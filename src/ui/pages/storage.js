@@ -30,6 +30,8 @@ import { parseNTriples, unwrapIri, serializeNTriples, iri, literal, typedLiteral
 import { PREFIXES, shortenPredicate, loadMergedPrefixes, loadPredicateCatalog } from '../../rdf/prefixes.js';
 import { checkQuota, quotaExceededResponse, addQuota } from '../../storage/quota.js';
 import { checkContainerQuota, containerQuotaExceededResponse, addContainerBytes, subtractContainerBytes } from '../../storage/container-quota.js';
+import { formatBytes } from '../../i18n/format.js';
+import { getTranslations } from '../../i18n/index.js';
 
 const TEXT_EXTS = new Set([
   'ttl', 'txt', 'html', 'css', 'csv', 'xml', 'md', 'n3',
@@ -76,9 +78,15 @@ export async function renderStoragePage(reqCtx) {
 // ── Container page ───────────────────────────────────
 
 async function renderContainerPage(reqCtx, path, resourceIri, username) {
-  const { config, storage } = reqCtx;
+  const { config, storage, lang } = reqCtx;
+  const t = getTranslations(lang);
   const items = (await loadContainerItems(resourceIri, config, storage))
-    .map(item => ({ ...item, icon: item.isDir ? '📁' : '📄', copyDefault: computeCopyDefault(item.storagePath) }));
+    .map(item => ({
+      ...item,
+      icon: item.isDir ? '📁' : '📄',
+      copyDefault: computeCopyDefault(item.storagePath),
+      deleteConfirm: (t.stor_delete_confirm || 'Delete {{name}}?').replace('{{name}}', item.name),
+    }));
   const isRoot = path === `${username}/`;
   const crumbs = buildBreadcrumbs(path);
   const breadcrumbs = renderPartial(breadcrumbsPartial, { crumbs });
@@ -90,7 +98,7 @@ async function renderContainerPage(reqCtx, path, resourceIri, username) {
     items,
     hasItems: items.length > 0,
     isRoot,
-  }, { user: username, config, nav: 'storage', storage, baseUrl: config.baseUrl });
+  }, { user: username, config, nav: 'storage', storage, baseUrl: config.baseUrl, lang });
 }
 
 // ── Resource page ────────────────────────────────────
@@ -168,7 +176,7 @@ async function renderResourcePage(reqCtx, path, resourceIri, username, editMode,
     metaTurtle,
     prefixesJson: JSON.stringify(mergedPrefixes),
     namespaceCatalogJson: JSON.stringify(await loadPredicateCatalog(reqCtx.env.APPDATA, mergedPrefixes)),
-  }, { user: username, config, nav: 'storage', storage, baseUrl: config.baseUrl });
+  }, { user: username, config, nav: 'storage', storage, baseUrl: config.baseUrl, lang: reqCtx.lang });
 }
 
 // ── POST /storage/** ─────────────────────────────────
@@ -515,14 +523,6 @@ function buildBreadcrumbs(path) {
     if (i === parts.length - 1 && !path.endsWith('/')) current = current.slice(0, -1);
     return { href: current, label: part, notFirst: i > 0 };
   });
-}
-
-function formatBytes(bytes) {
-  if (!bytes || bytes === 0) return '0 B';
-  const k = 1024;
-  const sizes = ['B', 'KB', 'MB', 'GB'];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return `${(bytes / Math.pow(k, i)).toFixed(1)} ${sizes[i]}`;
 }
 
 // ── Move & Copy helpers ──────────────────────────────

@@ -1,0 +1,56 @@
+<div class="card login-card-wide">
+  <h1>{{t.auth_title}}</h1>
+  <p class="client-name">{{displayName}}</p>
+  {{#clientUri}}<p class="mb-025"><a href="{{clientUri}}" target="_blank" rel="noopener" class="text-sm">{{displayOrigin}}</a></p>{{/clientUri}}
+  {{#isInternalClient}}<p class="text-muted text-sm mb-025">{{t.auth_registered_dynamic}}</p>{{/isInternalClient}}
+  <p class="mono text-muted mb-1 text-sm break-all">{{clientId}}</p>
+  <p class="text-muted mb-1">
+    {{t.auth_wants_access}}
+  </p>
+  <form method="POST" action="/authorize">
+    <input type="hidden" name="client_id" value="{{clientId}}">
+    <input type="hidden" name="redirect_uri" value="{{redirectUri}}">
+    <input type="hidden" name="scope" value="{{scope}}">
+    <input type="hidden" name="state" value="{{state}}">
+    <input type="hidden" name="code_challenge" value="{{codeChallenge}}">
+    <input type="hidden" name="code_challenge_method" value="{{codeChallengeMethod}}">
+    <input type="hidden" name="response_type" value="{{responseType}}">
+    <input type="hidden" name="nonce" value="{{nonce}}">
+    {{^isLoggedIn}}
+      <div class="form-group">
+        <label for="username">{{t.lbl_username}}</label>
+        <input type="text" id="username" name="username" required autofocus>
+      </div>
+      <div class="form-group">
+        <label for="password">{{t.lbl_password}}</label>
+        <input type="password" id="password" name="password" required>
+      </div>
+    {{/isLoggedIn}}
+    {{#hasContainers}}
+      <div class="form-group mt-075">
+        <label class="font-medium text-md mb-05">{{t.auth_allow_write}}</label>
+        <div class="checkbox-panel">
+          {{{containerCheckboxes}}}
+        </div>
+      </div>
+    {{/hasContainers}}
+    <div class="form-group mt-05">
+      <label for="custom_container">{{t.auth_or_enter_path}}</label>
+      <input type="text" name="custom_container" placeholder="/{{userPlaceholder}}/path/"
+             class="mono" id="custom_container">
+      <p class="text-muted text-sm mt-025">
+        {{t.auth_grant_write}}
+      </p>
+    </div>
+    <div class="form-group mt-075">
+      <label class="container-label">
+        <input type="checkbox" name="remember" value="1">
+        {{t.auth_remember}}
+      </label>
+    </div>
+    <div class="flex gap-05">
+      <button type="submit" name="approve" value="yes" class="btn">{{t.auth_approve}}</button>
+      <button type="submit" name="approve" value="no" class="btn btn-secondary">{{t.auth_deny}}</button>
+    </div>
+  </form>
+</div>

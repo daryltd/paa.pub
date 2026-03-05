@@ -23,6 +23,7 @@ import { PREFIXES } from './rdf/prefixes.js';
 import { getUserConfig } from './config.js';
 import { userExists, getUser } from './users.js';
 import { validateExternalUrl } from './security/ssrf.js';
+import { verifyJwtWithJwks } from './crypto/jwks.js';
 
 // ── Internal helpers ─────────────────────────────────
 
@@ -109,7 +110,7 @@ export function handleFedCMConfig(reqCtx) {
     client_metadata_endpoint: `${config.baseUrl}/fedcm/client-metadata`,
     id_assertion_endpoint: `${config.baseUrl}/fedcm/assertion`,
     disconnect_endpoint: `${config.baseUrl}/fedcm/disconnect`,
-    login_url: `${config.baseUrl}/login`,
+    login_url: `${config.baseUrl}/login?fedcm=1`,
     branding: {
       background_color: '#1a1a2e',
       color: '#e0e0e0',
@@ -334,4 +335,129 @@ export async function handleFedCMVerify(reqCtx) {
     console.error('FedCM verify error:', e);
     return jsonResponse({ error: 'Token verification failed' }, 401);
   }
+}
+
+// ── External IdP Verification ────────────────────────
+
+/**
+ * POST /fedcm/external-verify
+ * Verifies a JWT token from an external FedCM identity provider,
+ * links or creates a local account.
+ *
+ * Request body: { token, idpId }
+ */
+export async function handleFedCMExternalVerify(reqCtx) {
+  const { request, env, config } = reqCtx;
+
+  let body;
+  try {
+    body = await request.json();
+  } catch {
+    return jsonResponse({ error: 'Invalid JSON' }, 400);
+  }
+
+  const { token, idpId } = body;
+  if (!token || !idpId) {
+    return jsonResponse({ error: 'Missing token or idpId' }, 400);
+  }
+
+  // Look up IdP config
+  const idpList = JSON.parse(await env.APPDATA.get('fedcm_external_idps') || '[]');
+  const idp = idpList.find(p => p.id === idpId);
+  if (!idp) {
+    return jsonResponse({ error: 'Unknown identity provider' }, 400);
+  }
+
+  // Determine issuer
+  const issuer = idp.issuer || new URL(idp.configURL).origin;
+
+  // Discover JWKS URI from OpenID configuration
+  let jwksUri;
+  try {
+    const oidcRes = await fetch(`${issuer}/.well-known/openid-configuration`, {
+      headers: { 'Accept': 'application/json' },
+      signal: AbortSignal.timeout(5000),
+    });
+    if (!oidcRes.ok) {
+      throw new Error(`OpenID config fetch failed: ${oidcRes.status}`);
+    }
+    const oidcConfig = await oidcRes.json();
+    jwksUri = oidcConfig.jwks_uri;
+    if (!jwksUri) {
+      throw new Error('No jwks_uri in OpenID configuration');
+    }
+  } catch (e) {
+    console.error('OIDC discovery error:', e);
+    return jsonResponse({ error: 'Failed to discover IdP JWKS' }, 502);
+  }
+
+  // Verify the JWT against the IdP's JWKS
+  let payload;
+  try {
+    payload = await verifyJwtWithJwks(token, jwksUri, idp.clientId, issuer);
+  } catch (e) {
+    console.error('External JWT verification error:', e);
+    return jsonResponse({ error: 'Token verification failed: ' + e.message }, 401);
+  }
+
+  // Extract identity from token
+  const sub = payload.sub;
+  if (!sub) {
+    return jsonResponse({ error: 'Token missing sub claim' }, 401);
+  }
+  const email = payload.email || '';
+  const name = payload.name || '';
+  const picture = payload.picture || '';
+
+  // Check for existing linked identity
+  const linkedUsername = await env.APPDATA.get(`fedcm_link:${idpId}:${sub}`);
+
+  if (linkedUsername) {
+    // User already linked — log them in
+    if (!await userExists(env.APPDATA, linkedUsername)) {
+      return jsonResponse({ error: 'Linked account no longer exists' }, 401);
+    }
+
+    const meta = await getUser(env.APPDATA, linkedUsername);
+    if (meta && meta.disabled) {
+      return jsonResponse({ error: 'Account disabled' }, 403);
+    }
+
+    const sessionToken = await createSession(env.APPDATA, linkedUsername);
+
+    return new Response(JSON.stringify({ success: true, username: linkedUsername }), {
+      status: 200,
+      headers: {
+        'Content-Type': 'application/json',
+        'Cache-Control': 'no-store',
+        'Set-Cookie': `session=${sessionToken}; Path=/; HttpOnly; SameSite=Lax; Max-Age=86400${config.protocol === 'https' ? '; Secure' : ''}`,
+        'Set-Login': 'logged-in',
+      },
+    });
+  }
+
+  // Not linked — check if registration is open
+  if (config.registrationMode === 'closed') {
+    return jsonResponse({ error: 'Registration is closed' }, 403);
+  }
+
+  // Create a pending registration token
+  const regToken = generatePendingToken();
+  await env.APPDATA.put(`fedcm_pending:${regToken}`, JSON.stringify({
+    idpId,
+    sub,
+    email,
+    name,
+    picture,
+  }), { expirationTtl: 600 }); // 10 minutes
+
+  return jsonResponse({ needsRegistration: true, registrationToken: regToken });
+}
+
+/**
+ * Generate a cryptographically random token for pending registrations.
+ */
+function generatePendingToken() {
+  const bytes = crypto.getRandomValues(new Uint8Array(32));
+  return Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('');
 }

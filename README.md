@@ -10,7 +10,8 @@ Own your identity and data. Your server provides:
 - A **WebID profile** — a standards-based decentralized identity for each user
 - **OIDC provider** — authenticate with Solid apps using your server as the identity provider
 - **FedCM identity provider** — browser-native account picker for streamlined login on third-party sites and re-authentication on your own server
-- A **web UI** — dashboard, profile editor, activity feed, file browser, access control editor, and admin panel
+- A **web UI** — dashboard, profile editor, activity feed, file browser, access control editor, settings, and admin panel
+- **Internationalization** — 5 languages (English, French, Spanish, Hebrew, Chinese) with full RTL support for Hebrew, locale-aware date/number formatting, and per-user language preferences
 - **Security hardening** — rate limiting, request size limits, per-user storage quotas, SSRF protection, app write restrictions, and HTTP Signature verification
 
 Uses [s20e](https://github.com/chapeaux/s20e) as the RDF/SPARQL engine (Oxigraph compiled to WASM). Everything else — authentication, federation, LDP, UI — is vanilla JavaScript using only Web APIs.
@@ -101,7 +102,7 @@ bucket_name = "my-solid-blobs"
 
 [[rules]]
 type = "Text"
-globs = ["**/*.html"]
+globs = ["**/*.html", "**/*.ttl"]
 fallthrough = true
 ```
 
@@ -206,9 +207,14 @@ Container policies propagate to their contents unless overridden. You can disabl
 
 **Per-container storage quotas**: For containers, the ACP editor includes a storage quota card where you can set a byte limit (e.g. `500MB`). Quotas are hierarchical — a write must satisfy every ancestor container's quota.
 
-### App permissions (`/app-permissions`)
+### Settings (`/settings`)
 
-Manage which OIDC-authenticated Solid apps can write to your pod. When you authorize an app via the OIDC consent flow, you select which containers it may write to. The app permissions page lets you review, update, or revoke access for each app.
+Language, locale, appearance, notifications, and app management in one page:
+
+- **Language & locale** — choose from 5 supported languages (English, French, Spanish, Hebrew, Chinese), set date format and timezone
+- **Appearance** — custom theme CSS path
+- **Notifications** — toggle follow and mention notifications in the activity feed
+- **App management** — review, update container access, or revoke OIDC-authenticated Solid apps
 
 Session-authenticated access (via the web UI) always has unrestricted write access to the user's own pod.
 
@@ -218,6 +224,7 @@ Available to the admin user only. Provides:
 
 - **Dashboard** — aggregate stats: total users, total storage, total posts, and a per-user breakdown table
 - **User management** (`/admin/users`) — disable/enable accounts, set per-user storage quotas, and create new accounts (useful when registration is closed)
+- **FedCM IdP management** (`/admin/fedcm-idps`) — add, edit, or remove external FedCM identity providers for cross-server authentication
 
 ### Public profile page (`/{username}/`)
 
@@ -391,6 +398,8 @@ Cloudflare Worker (single fetch handler)
 | `app_perm:{user}:{hash}` | App write permission `{ clientId, allowedContainers[] }` |
 | `app_perms_index:{user}` | App permission index |
 | `fedcm_connected:{user}` | JSON array of connected FedCM RP client_id strings |
+| `fedcm_external_idps` | JSON array of external FedCM IdP configs |
+| `user_prefs:{username}` | User preferences JSON (language, timezone, theme, notifications) |
 
 **BLOBS R2**: Binary file data keyed by `blob:{resource_iri}`.
 
@@ -414,7 +423,8 @@ src/
 ├── admin/
 │   ├── middleware.js      # Admin-only route guard
 │   ├── dashboard.js       # Admin stats dashboard
-│   └── users.js           # User management (disable, quota, create)
+│   ├── users.js           # User management (disable, quota, create)
+│   └── fedcm-idps.js     # External FedCM IdP management
 ├── security/
 │   ├── rate-limit.js     # KV-backed sliding window rate limiter
 │   ├── size-limit.js     # Request Content-Length enforcement
@@ -438,6 +448,10 @@ src/
 │   ├── delivery.js       # Activity fan-out with SSRF protection
 │   ├── activities.js     # Activity processors (pending follow requests)
 │   └── remote.js         # Remote actor fetch with SSRF protection
+├── i18n/
+│   ├── index.js          # Language resolution, translation lookup, caching
+│   ├── format.js         # Locale-aware date/number/bytes formatting (Intl APIs)
+│   └── strings.ttl       # Translation store (Turtle RDF, 5 languages, ~325 keys)
 ├── rdf/
 │   ├── turtle-parser.js  # Turtle parser
 │   ├── ntriples.js       # N-Triples parser/serializer
@@ -450,10 +464,9 @@ src/
 │   ├── quota.js          # Global storage quota tracking + enforcement
 │   └── container-quota.js # Per-container hierarchical quota tracking
 └── ui/
-    ├── shell.js          # Mustache template renderer + layout + security headers
+    ├── shell.js          # Mustache template renderer + layout + i18n integration
     ├── layout-renderer.js # JSON layout-based profile page renderer
-    ├── styles/base.css   # Base stylesheet
-    ├── templates/        # Mustache HTML templates
+    ├── templates/        # Mustache HTML templates (all strings via {{t.*}} keys)
     ├── client/           # Client-side JS (dialogs, passkeys, etc.)
     └── pages/
         ├── login.js
@@ -462,7 +475,8 @@ src/
         ├── storage.js        # Storage browser with quota enforcement
         ├── acl-editor.js     # ACP editor + per-container quota UI
         ├── profile-editor.js
-        └── app-permissions.js # App write permission management
+        ├── settings.js       # Settings (language, appearance, notifications, apps)
+        └── app-permissions.js # App write permission POST handler
 ```
 
 ## Design decisions
@@ -477,6 +491,8 @@ src/
 - **Local following** — users on the same server can follow each other directly without WebFinger resolution or HTTP signature delivery, with the same pending-approval flow as remote follows.
 - **Manual follow approval** — incoming Follow requests (remote or local) are stored as pending until the user accepts or rejects them. Accept/Reject activities are delivered back to the requesting actor.
 - **App sandboxing** — OIDC-authenticated apps are restricted to writing only within containers the owner approved during the consent flow, preventing unauthorized writes.
+- **RDF-based i18n** — UI strings are stored as Turtle RDF with language-tagged literals (`rdfs:label "text"@lang`), parsed once at module load and cached per language per isolate. No external translation service or build step. Locale-aware formatting uses the V8 `Intl` APIs available in Cloudflare Workers.
+- **CSS logical properties** — layout uses `margin-inline-start/end`, `padding-inline-start/end`, etc. for automatic RTL mirroring without duplicate stylesheets.
 
 ## Troubleshooting
 
@@ -492,7 +508,7 @@ src/
 
 **507 Insufficient Storage** — Storage quota exceeded. Either increase `PAA_STORAGE_LIMIT` (default limit), have the admin set a higher per-user quota at `/admin/users`, or delete unused resources. For container quotas, adjust the limit in the ACP editor.
 
-**403 on OIDC app writes** — The app doesn't have permission to write to the target container. Update its allowed containers at `/app-permissions` or re-authorize the app.
+**403 on OIDC app writes** — The app doesn't have permission to write to the target container. Update its allowed containers at `/settings` (App Management section) or re-authorize the app.
 
 **Registration page returns 403** — Registration is closed (`PAA_REGISTRATION=closed`). The admin can create accounts from the admin panel at `/admin/users`, or change to `PAA_REGISTRATION=open` to allow self-service signup.
 

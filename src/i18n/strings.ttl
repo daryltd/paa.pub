@@ -1,0 +1,1665 @@
+@prefix paa: <http://paa.pub/i18n#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+
+# ── Navigation ────────────────────────────────────────
+paa:nav_brand rdfs:label "Kaiāulu Pa'a"@en-US ;
+    rdfs:label "Kaiāulu Pa'a"@fr ;
+    rdfs:label "Kaiāulu Pa'a"@es ;
+    rdfs:label "Kaiāulu Pa'a"@he ;
+    rdfs:label "Kaiāulu Pa'a"@zh .
+paa:nav_dashboard rdfs:label "Dashboard"@en-US ;
+    rdfs:label "Tableau de bord"@fr ;
+    rdfs:label "Panel"@es ;
+    rdfs:label "לוח בקרה"@he ;
+    rdfs:label "仪表板"@zh .
+paa:nav_profile rdfs:label "Profile"@en-US ;
+    rdfs:label "Profil"@fr ;
+    rdfs:label "Perfil"@es ;
+    rdfs:label "פרופיל"@he ;
+    rdfs:label "个人资料"@zh .
+paa:nav_activity rdfs:label "Activity"@en-US ;
+    rdfs:label "Activité"@fr ;
+    rdfs:label "Actividad"@es ;
+    rdfs:label "פעילות"@he ;
+    rdfs:label "动态"@zh .
+paa:nav_storage rdfs:label "Storage"@en-US ;
+    rdfs:label "Stockage"@fr ;
+    rdfs:label "Almacenamiento"@es ;
+    rdfs:label "אחסון"@he ;
+    rdfs:label "存储"@zh .
+paa:nav_settings rdfs:label "Settings"@en-US ;
+    rdfs:label "Paramètres"@fr ;
+    rdfs:label "Configuración"@es ;
+    rdfs:label "הגדרות"@he ;
+    rdfs:label "设置"@zh .
+paa:nav_admin rdfs:label "Admin"@en-US ;
+    rdfs:label "Administration"@fr ;
+    rdfs:label "Administración"@es ;
+    rdfs:label "ניהול"@he ;
+    rdfs:label "管理"@zh .
+paa:nav_logout rdfs:label "Logout"@en-US ;
+    rdfs:label "Déconnexion"@fr ;
+    rdfs:label "Cerrar sesión"@es ;
+    rdfs:label "התנתקות"@he ;
+    rdfs:label "退出"@zh .
+
+# ── Landing page ──────────────────────────────────────
+paa:land_tagline rdfs:label "A Solid + ActivityPub server"@en-US ;
+    rdfs:label "Un serveur Solid + ActivityPub"@fr ;
+    rdfs:label "Un servidor Solid + ActivityPub"@es ;
+    rdfs:label "שרת Solid + ActivityPub"@he ;
+    rdfs:label "Solid + ActivityPub 服务器"@zh .
+paa:land_sign_in rdfs:label "Sign In"@en-US ;
+    rdfs:label "Connexion"@fr ;
+    rdfs:label "Iniciar sesión"@es ;
+    rdfs:label "התחברות"@he ;
+    rdfs:label "登录"@zh .
+paa:land_username rdfs:label "Username"@en-US ;
+    rdfs:label "Nom d'utilisateur"@fr ;
+    rdfs:label "Nombre de usuario"@es ;
+    rdfs:label "שם משתמש"@he ;
+    rdfs:label "用户名"@zh .
+paa:land_password rdfs:label "Password"@en-US ;
+    rdfs:label "Mot de passe"@fr ;
+    rdfs:label "Contraseña"@es ;
+    rdfs:label "סיסמה"@he ;
+    rdfs:label "密码"@zh .
+paa:land_passkey rdfs:label "Sign in with Passkey"@en-US ;
+    rdfs:label "Se connecter avec une clé d'accès"@fr ;
+    rdfs:label "Iniciar sesión con clave de acceso"@es ;
+    rdfs:label "התחברות עם מפתח גישה"@he ;
+    rdfs:label "使用通行密钥登录"@zh .
+paa:land_fedcm rdfs:label "Sign in with FedCM"@en-US ;
+    rdfs:label "Se connecter avec FedCM"@fr ;
+    rdfs:label "Iniciar sesión con FedCM"@es ;
+    rdfs:label "התחברות עם FedCM"@he ;
+    rdfs:label "使用 FedCM 登录"@zh .
+paa:land_or_sign_in_with rdfs:label "Or sign in with:"@en-US ;
+    rdfs:label "Ou se connecter avec :"@fr ;
+    rdfs:label "O iniciar sesión con:"@es ;
+    rdfs:label "או התחברות עם:"@he ;
+    rdfs:label "或使用以下方式登录："@zh .
+paa:land_create_account rdfs:label "Create Account"@en-US ;
+    rdfs:label "Créer un compte"@fr ;
+    rdfs:label "Crear cuenta"@es ;
+    rdfs:label "יצירת חשבון"@he ;
+    rdfs:label "创建账户"@zh .
+paa:land_confirm_password rdfs:label "Confirm Password"@en-US ;
+    rdfs:label "Confirmer le mot de passe"@fr ;
+    rdfs:label "Confirmar contraseña"@es ;
+    rdfs:label "אימות סיסמה"@he ;
+    rdfs:label "确认密码"@zh .
+paa:land_username_pattern rdfs:label "Letters, numbers, hyphens, and underscores only"@en-US ;
+    rdfs:label "Lettres, chiffres, tirets et underscores uniquement"@fr ;
+    rdfs:label "Solo letras, números, guiones y guiones bajos"@es ;
+    rdfs:label "אותיות, מספרים, מקפים וקווים תחתונים בלבד"@he ;
+    rdfs:label "仅限字母、数字、连字符和下划线"@zh .
+
+# ── Login page ────────────────────────────────────────
+paa:login_title rdfs:label "Login"@en-US ;
+    rdfs:label "Connexion"@fr ;
+    rdfs:label "Iniciar sesión"@es ;
+    rdfs:label "התחברות"@he ;
+    rdfs:label "登录"@zh .
+
+# ── Signup page ───────────────────────────────────────
+paa:signup_title rdfs:label "Sign Up"@en-US ;
+    rdfs:label "Inscription"@fr ;
+    rdfs:label "Registrarse"@es ;
+    rdfs:label "הרשמה"@he ;
+    rdfs:label "注册"@zh .
+paa:signup_already_have rdfs:label "Already have an account?"@en-US ;
+    rdfs:label "Vous avez déjà un compte ?"@fr ;
+    rdfs:label "¿Ya tiene una cuenta?"@es ;
+    rdfs:label "כבר יש לך חשבון?"@he ;
+    rdfs:label "已有账户？"@zh .
+paa:signup_sign_in rdfs:label "Sign in"@en-US ;
+    rdfs:label "Se connecter"@fr ;
+    rdfs:label "Iniciar sesión"@es ;
+    rdfs:label "התחברות"@he ;
+    rdfs:label "登录"@zh .
+
+# ── FedCM signup ──────────────────────────────────────
+paa:fedcm_complete_reg rdfs:label "Complete Registration"@en-US ;
+    rdfs:label "Finaliser l'inscription"@fr ;
+    rdfs:label "Completar registro"@es ;
+    rdfs:label "השלמת הרשמה"@he ;
+    rdfs:label "完成注册"@zh .
+paa:fedcm_signing_in_via rdfs:label "Signing in via"@en-US ;
+    rdfs:label "Connexion via"@fr ;
+    rdfs:label "Iniciando sesión vía"@es ;
+    rdfs:label "התחברות דרך"@he ;
+    rdfs:label "通过以下方式登录"@zh .
+paa:fedcm_as rdfs:label "as"@en-US ;
+    rdfs:label "en tant que"@fr ;
+    rdfs:label "como"@es ;
+    rdfs:label "בתור"@he ;
+    rdfs:label "身份"@zh .
+paa:fedcm_choose_username rdfs:label "Choose a username"@en-US ;
+    rdfs:label "Choisissez un nom d'utilisateur"@fr ;
+    rdfs:label "Elija un nombre de usuario"@es ;
+    rdfs:label "בחירת שם משתמש"@he ;
+    rdfs:label "选择用户名"@zh .
+
+# ── Dashboard ─────────────────────────────────────────
+paa:dash_title rdfs:label "Dashboard"@en-US ;
+    rdfs:label "Tableau de bord"@fr ;
+    rdfs:label "Panel"@es ;
+    rdfs:label "לוח בקרה"@he ;
+    rdfs:label "仪表板"@zh .
+paa:dash_profile rdfs:label "Profile"@en-US ;
+    rdfs:label "Profil"@fr ;
+    rdfs:label "Perfil"@es ;
+    rdfs:label "פרופיל"@he ;
+    rdfs:label "个人资料"@zh .
+paa:dash_username rdfs:label "Username"@en-US ;
+    rdfs:label "Nom d'utilisateur"@fr ;
+    rdfs:label "Nombre de usuario"@es ;
+    rdfs:label "שם משתמש"@he ;
+    rdfs:label "用户名"@zh .
+paa:dash_webid rdfs:label "WebID"@en-US ;
+    rdfs:label "WebID"@fr ;
+    rdfs:label "WebID"@es ;
+    rdfs:label "WebID"@he ;
+    rdfs:label "WebID"@zh .
+paa:dash_actor rdfs:label "Actor"@en-US ;
+    rdfs:label "Acteur"@fr ;
+    rdfs:label "Actor"@es ;
+    rdfs:label "שחקן"@he ;
+    rdfs:label "参与者"@zh .
+paa:dash_domain rdfs:label "Domain"@en-US ;
+    rdfs:label "Domaine"@fr ;
+    rdfs:label "Dominio"@es ;
+    rdfs:label "דומיין"@he ;
+    rdfs:label "域名"@zh .
+paa:dash_quick_links rdfs:label "Quick Links"@en-US ;
+    rdfs:label "Liens rapides"@fr ;
+    rdfs:label "Enlaces rápidos"@es ;
+    rdfs:label "קישורים מהירים"@he ;
+    rdfs:label "快捷链接"@zh .
+paa:dash_settings rdfs:label "Settings"@en-US ;
+    rdfs:label "Paramètres"@fr ;
+    rdfs:label "Configuración"@es ;
+    rdfs:label "הגדרות"@he ;
+    rdfs:label "设置"@zh .
+paa:dash_edit_profile rdfs:label "Edit Profile"@en-US ;
+    rdfs:label "Modifier le profil"@fr ;
+    rdfs:label "Editar perfil"@es ;
+    rdfs:label "עריכת פרופיל"@he ;
+    rdfs:label "编辑资料"@zh .
+paa:dash_public_profile rdfs:label "Public Profile"@en-US ;
+    rdfs:label "Profil public"@fr ;
+    rdfs:label "Perfil público"@es ;
+    rdfs:label "פרופיל ציבורי"@he ;
+    rdfs:label "公开资料"@zh .
+paa:dash_webfinger rdfs:label "WebFinger"@en-US ;
+    rdfs:label "WebFinger"@fr ;
+    rdfs:label "WebFinger"@es ;
+    rdfs:label "WebFinger"@he ;
+    rdfs:label "WebFinger"@zh .
+paa:dash_followers rdfs:label "Followers"@en-US ;
+    rdfs:label "Abonnés"@fr ;
+    rdfs:label "Seguidores"@es ;
+    rdfs:label "עוקבים"@he ;
+    rdfs:label "关注者"@zh .
+paa:dash_following rdfs:label "Following"@en-US ;
+    rdfs:label "Abonnements"@fr ;
+    rdfs:label "Siguiendo"@es ;
+    rdfs:label "נעקבים"@he ;
+    rdfs:label "正在关注"@zh .
+paa:dash_posts rdfs:label "Posts"@en-US ;
+    rdfs:label "Publications"@fr ;
+    rdfs:label "Publicaciones"@es ;
+    rdfs:label "פרסומים"@he ;
+    rdfs:label "帖子"@zh .
+paa:dash_pending_follow_one rdfs:label "{{count}} pending follow request"@en-US ;
+    rdfs:label "{{count}} demande d'abonnement en attente"@fr ;
+    rdfs:label "{{count}} solicitud de seguimiento pendiente"@es ;
+    rdfs:label "בקשת מעקב ממתינה {{count}}"@he ;
+    rdfs:label "{{count}} 条待处理的关注请求"@zh .
+paa:dash_pending_follow_other rdfs:label "{{count}} pending follow requests"@en-US ;
+    rdfs:label "{{count}} demandes d'abonnement en attente"@fr ;
+    rdfs:label "{{count}} solicitudes de seguimiento pendientes"@es ;
+    rdfs:label "{{count}} בקשות מעקב ממתינות"@he ;
+    rdfs:label "{{count}} 条待处理的关注请求"@zh .
+paa:dash_review rdfs:label "Review"@en-US ;
+    rdfs:label "Examiner"@fr ;
+    rdfs:label "Revisar"@es ;
+    rdfs:label "סקירה"@he ;
+    rdfs:label "查看"@zh .
+paa:dash_storage rdfs:label "Storage"@en-US ;
+    rdfs:label "Stockage"@fr ;
+    rdfs:label "Almacenamiento"@es ;
+    rdfs:label "אחסון"@he ;
+    rdfs:label "存储"@zh .
+paa:dash_used rdfs:label "used"@en-US ;
+    rdfs:label "utilisé"@fr ;
+    rdfs:label "utilizado"@es ;
+    rdfs:label "בשימוש"@he ;
+    rdfs:label "已使用"@zh .
+paa:dash_resources_one rdfs:label "{{count}} resource across all containers"@en-US ;
+    rdfs:label "{{count}} ressource dans tous les conteneurs"@fr ;
+    rdfs:label "{{count}} recurso en todos los contenedores"@es ;
+    rdfs:label "משאב {{count}} בכל המכולות"@he ;
+    rdfs:label "所有容器中共 {{count}} 个资源"@zh .
+paa:dash_resources_other rdfs:label "{{count}} resources across all containers"@en-US ;
+    rdfs:label "{{count}} ressources dans tous les conteneurs"@fr ;
+    rdfs:label "{{count}} recursos en todos los contenedores"@es ;
+    rdfs:label "{{count}} משאבים בכל המכולות"@he ;
+    rdfs:label "所有容器中共 {{count}} 个资源"@zh .
+paa:dash_category rdfs:label "Category"@en-US ;
+    rdfs:label "Catégorie"@fr ;
+    rdfs:label "Categoría"@es ;
+    rdfs:label "קטגוריה"@he ;
+    rdfs:label "类别"@zh .
+paa:dash_size rdfs:label "Size"@en-US ;
+    rdfs:label "Taille"@fr ;
+    rdfs:label "Tamaño"@es ;
+    rdfs:label "גודל"@he ;
+    rdfs:label "大小"@zh .
+paa:dash_files rdfs:label "Files"@en-US ;
+    rdfs:label "Fichiers"@fr ;
+    rdfs:label "Archivos"@es ;
+    rdfs:label "קבצים"@he ;
+    rdfs:label "文件"@zh .
+paa:dash_passkeys rdfs:label "Passkeys"@en-US ;
+    rdfs:label "Clés d'accès"@fr ;
+    rdfs:label "Claves de acceso"@es ;
+    rdfs:label "מפתחות גישה"@he ;
+    rdfs:label "通行密钥"@zh .
+paa:dash_name rdfs:label "Name"@en-US ;
+    rdfs:label "Nom"@fr ;
+    rdfs:label "Nombre"@es ;
+    rdfs:label "שם"@he ;
+    rdfs:label "名称"@zh .
+paa:dash_created rdfs:label "Created"@en-US ;
+    rdfs:label "Créé"@fr ;
+    rdfs:label "Creado"@es ;
+    rdfs:label "נוצר"@he ;
+    rdfs:label "创建时间"@zh .
+paa:dash_actions rdfs:label "Actions"@en-US ;
+    rdfs:label "Actions"@fr ;
+    rdfs:label "Acciones"@es ;
+    rdfs:label "פעולות"@he ;
+    rdfs:label "操作"@zh .
+paa:dash_rename rdfs:label "Rename"@en-US ;
+    rdfs:label "Renommer"@fr ;
+    rdfs:label "Renombrar"@es ;
+    rdfs:label "שינוי שם"@he ;
+    rdfs:label "重命名"@zh .
+paa:dash_delete rdfs:label "Delete"@en-US ;
+    rdfs:label "Supprimer"@fr ;
+    rdfs:label "Eliminar"@es ;
+    rdfs:label "מחיקה"@he ;
+    rdfs:label "删除"@zh .
+paa:dash_confirm_delete_passkey rdfs:label "Delete this passkey?"@en-US ;
+    rdfs:label "Supprimer cette clé d'accès ?"@fr ;
+    rdfs:label "¿Eliminar esta clave de acceso?"@es ;
+    rdfs:label "למחוק מפתח גישה זה?"@he ;
+    rdfs:label "删除此通行密钥？"@zh .
+paa:dash_no_passkeys rdfs:label "No passkeys registered."@en-US ;
+    rdfs:label "Aucune clé d'accès enregistrée."@fr ;
+    rdfs:label "No hay claves de acceso registradas."@es ;
+    rdfs:label "לא נרשמו מפתחות גישה."@he ;
+    rdfs:label "未注册通行密钥。"@zh .
+paa:dash_register_passkey rdfs:label "Register Passkey"@en-US ;
+    rdfs:label "Enregistrer une clé d'accès"@fr ;
+    rdfs:label "Registrar clave de acceso"@es ;
+    rdfs:label "רישום מפתח גישה"@he ;
+    rdfs:label "注册通行密钥"@zh .
+paa:dash_n_files_one rdfs:label "{{count}} file"@en-US ;
+    rdfs:label "{{count}} fichier"@fr ;
+    rdfs:label "{{count}} archivo"@es ;
+    rdfs:label "קובץ {{count}}"@he ;
+    rdfs:label "{{count}} 个文件"@zh .
+paa:dash_n_files_other rdfs:label "{{count}} files"@en-US ;
+    rdfs:label "{{count}} fichiers"@fr ;
+    rdfs:label "{{count}} archivos"@es ;
+    rdfs:label "{{count}} קבצים"@he ;
+    rdfs:label "{{count}} 个文件"@zh .
+paa:dash_everything_else rdfs:label "Everything Else"@en-US ;
+    rdfs:label "Autres"@fr ;
+    rdfs:label "Todo lo demás"@es ;
+    rdfs:label "הכל אחר"@he ;
+    rdfs:label "其他"@zh .
+paa:dash_system_data rdfs:label "system data"@en-US ;
+    rdfs:label "données système"@fr ;
+    rdfs:label "datos del sistema"@es ;
+    rdfs:label "נתוני מערכת"@he ;
+    rdfs:label "系统数据"@zh .
+
+# ── Activity page ─────────────────────────────────────
+paa:act_title rdfs:label "Activity"@en-US ;
+    rdfs:label "Activité"@fr ;
+    rdfs:label "Actividad"@es ;
+    rdfs:label "פעילות"@he ;
+    rdfs:label "动态"@zh .
+paa:act_compose rdfs:label "Compose"@en-US ;
+    rdfs:label "Rédiger"@fr ;
+    rdfs:label "Redactar"@es ;
+    rdfs:label "חיבור"@he ;
+    rdfs:label "撰写"@zh .
+paa:act_placeholder rdfs:label "What's on your mind?"@en-US ;
+    rdfs:label "Qu'avez-vous en tête ?"@fr ;
+    rdfs:label "¿Qué está pensando?"@es ;
+    rdfs:label "מה עובר לך בראש?"@he ;
+    rdfs:label "在想什么？"@zh .
+paa:act_audience rdfs:label "Audience"@en-US ;
+    rdfs:label "Audience"@fr ;
+    rdfs:label "Audiencia"@es ;
+    rdfs:label "קהל"@he ;
+    rdfs:label "受众"@zh .
+paa:aud_public rdfs:label "Public"@en-US ;
+    rdfs:label "Public"@fr ;
+    rdfs:label "Público"@es ;
+    rdfs:label "ציבורי"@he ;
+    rdfs:label "公开"@zh .
+paa:aud_unlisted rdfs:label "Unlisted"@en-US ;
+    rdfs:label "Non répertorié"@fr ;
+    rdfs:label "No listado"@es ;
+    rdfs:label "לא ברשימה"@he ;
+    rdfs:label "不公开列出"@zh .
+paa:aud_followers rdfs:label "Followers Only"@en-US ;
+    rdfs:label "Abonnés uniquement"@fr ;
+    rdfs:label "Solo seguidores"@es ;
+    rdfs:label "עוקבים בלבד"@he ;
+    rdfs:label "仅关注者"@zh .
+paa:aud_private rdfs:label "Private"@en-US ;
+    rdfs:label "Privé"@fr ;
+    rdfs:label "Privado"@es ;
+    rdfs:label "פרטי"@he ;
+    rdfs:label "私密"@zh .
+paa:act_cw rdfs:label "Content warning (optional)"@en-US ;
+    rdfs:label "Avertissement de contenu (facultatif)"@fr ;
+    rdfs:label "Advertencia de contenido (opcional)"@es ;
+    rdfs:label "אזהרת תוכן (אופציונלי)"@he ;
+    rdfs:label "内容警告（可选）"@zh .
+paa:act_post rdfs:label "Post"@en-US ;
+    rdfs:label "Publier"@fr ;
+    rdfs:label "Publicar"@es ;
+    rdfs:label "פרסום"@he ;
+    rdfs:label "发布"@zh .
+paa:act_follow_requests rdfs:label "Follow Requests"@en-US ;
+    rdfs:label "Demandes d'abonnement"@fr ;
+    rdfs:label "Solicitudes de seguimiento"@es ;
+    rdfs:label "בקשות מעקב"@he ;
+    rdfs:label "关注请求"@zh .
+paa:act_accept rdfs:label "Accept"@en-US ;
+    rdfs:label "Accepter"@fr ;
+    rdfs:label "Aceptar"@es ;
+    rdfs:label "אישור"@he ;
+    rdfs:label "接受"@zh .
+paa:act_reject rdfs:label "Reject"@en-US ;
+    rdfs:label "Rejeter"@fr ;
+    rdfs:label "Rechazar"@es ;
+    rdfs:label "דחייה"@he ;
+    rdfs:label "拒绝"@zh .
+paa:act_follow_unfollow rdfs:label "Follow / Unfollow"@en-US ;
+    rdfs:label "Suivre / Ne plus suivre"@fr ;
+    rdfs:label "Seguir / Dejar de seguir"@es ;
+    rdfs:label "מעקב / ביטול מעקב"@he ;
+    rdfs:label "关注 / 取消关注"@zh .
+paa:act_follow_placeholder rdfs:label "user@domain.com or actor URL"@en-US ;
+    rdfs:label "utilisateur@domaine.com ou URL de l'acteur"@fr ;
+    rdfs:label "usuario@dominio.com o URL del actor"@es ;
+    rdfs:label "user@domain.com או כתובת שחקן"@he ;
+    rdfs:label "user@domain.com 或参与者网址"@zh .
+paa:act_follow rdfs:label "Follow"@en-US ;
+    rdfs:label "Suivre"@fr ;
+    rdfs:label "Seguir"@es ;
+    rdfs:label "מעקב"@he ;
+    rdfs:label "关注"@zh .
+paa:act_following rdfs:label "Following"@en-US ;
+    rdfs:label "Abonnements"@fr ;
+    rdfs:label "Siguiendo"@es ;
+    rdfs:label "נעקבים"@he ;
+    rdfs:label "正在关注"@zh .
+paa:act_unfollow rdfs:label "Unfollow"@en-US ;
+    rdfs:label "Ne plus suivre"@fr ;
+    rdfs:label "Dejar de seguir"@es ;
+    rdfs:label "ביטול מעקב"@he ;
+    rdfs:label "取消关注"@zh .
+paa:act_followers rdfs:label "Followers"@en-US ;
+    rdfs:label "Abonnés"@fr ;
+    rdfs:label "Seguidores"@es ;
+    rdfs:label "עוקבים"@he ;
+    rdfs:label "关注者"@zh .
+paa:act_feed rdfs:label "Activity Feed"@en-US ;
+    rdfs:label "Fil d'activité"@fr ;
+    rdfs:label "Feed de actividad"@es ;
+    rdfs:label "פיד פעילות"@he ;
+    rdfs:label "动态流"@zh .
+paa:act_latest rdfs:label "latest"@en-US ;
+    rdfs:label "récent"@fr ;
+    rdfs:label "reciente"@es ;
+    rdfs:label "אחרון"@he ;
+    rdfs:label "最新"@zh .
+paa:act_hide_read rdfs:label "Hide read"@en-US ;
+    rdfs:label "Masquer les lus"@fr ;
+    rdfs:label "Ocultar leídos"@es ;
+    rdfs:label "הסתרת נקראו"@he ;
+    rdfs:label "隐藏已读"@zh .
+paa:act_show_all rdfs:label "Show all"@en-US ;
+    rdfs:label "Tout afficher"@fr ;
+    rdfs:label "Mostrar todo"@es ;
+    rdfs:label "הצגת הכל"@he ;
+    rdfs:label "显示全部"@zh .
+paa:act_mark_all_read rdfs:label "Mark all as read"@en-US ;
+    rdfs:label "Tout marquer comme lu"@fr ;
+    rdfs:label "Marcar todo como leído"@es ;
+    rdfs:label "סימון הכל כנקרא"@he ;
+    rdfs:label "全部标为已读"@zh .
+paa:act_no_activities rdfs:label "No activities yet."@en-US ;
+    rdfs:label "Aucune activité pour le moment."@fr ;
+    rdfs:label "Aún no hay actividades."@es ;
+    rdfs:label "עדיין אין פעילות."@he ;
+    rdfs:label "暂无动态。"@zh .
+paa:act_mark_read rdfs:label "Mark as read"@en-US ;
+    rdfs:label "Marquer comme lu"@fr ;
+    rdfs:label "Marcar como leído"@es ;
+    rdfs:label "סימון כנקרא"@he ;
+    rdfs:label "标为已读"@zh .
+paa:act_source_received rdfs:label "Received"@en-US ;
+    rdfs:label "Reçu"@fr ;
+    rdfs:label "Recibido"@es ;
+    rdfs:label "התקבל"@he ;
+    rdfs:label "收到"@zh .
+paa:act_source_sent rdfs:label "Sent"@en-US ;
+    rdfs:label "Envoyé"@fr ;
+    rdfs:label "Enviado"@es ;
+    rdfs:label "נשלח"@he ;
+    rdfs:label "已发送"@zh .
+paa:act_type_unknown rdfs:label "Unknown"@en-US ;
+    rdfs:label "Inconnu"@fr ;
+    rdfs:label "Desconocido"@es ;
+    rdfs:label "לא ידוע"@he ;
+    rdfs:label "未知"@zh .
+paa:act_cw_prefix rdfs:label "CW:"@en-US ;
+    rdfs:label "CW :"@fr ;
+    rdfs:label "CW:"@es ;
+    rdfs:label "CW:"@he ;
+    rdfs:label "CW："@zh .
+paa:act_follow_arrow rdfs:label "Follow \\u2192"@en-US ;
+    rdfs:label "Suivre \\u2192"@fr ;
+    rdfs:label "Seguir \\u2192"@es ;
+    rdfs:label "מעקב \\u2192"@he ;
+    rdfs:label "关注 \\u2192"@zh .
+paa:act_accepted rdfs:label "Accepted activity"@en-US ;
+    rdfs:label "Activité acceptée"@fr ;
+    rdfs:label "Actividad aceptada"@es ;
+    rdfs:label "פעילות אושרה"@he ;
+    rdfs:label "已接受的活动"@zh .
+paa:act_undid rdfs:label "Undid activity"@en-US ;
+    rdfs:label "Activité annulée"@fr ;
+    rdfs:label "Actividad deshecha"@es ;
+    rdfs:label "פעילות בוטלה"@he ;
+    rdfs:label "已撤销的活动"@zh .
+paa:act_type_activity rdfs:label "activity"@en-US ;
+    rdfs:label "activité"@fr ;
+    rdfs:label "actividad"@es ;
+    rdfs:label "פעילות"@he ;
+    rdfs:label "活动"@zh .
+paa:act_remote_feed rdfs:label "Remote Feed"@en-US ;
+    rdfs:label "Fil distant"@fr ;
+    rdfs:label "Feed remoto"@es ;
+    rdfs:label "פיד מרוחק"@he ;
+    rdfs:label "远程动态"@zh .
+paa:act_feed_prefix rdfs:label "Feed:"@en-US ;
+    rdfs:label "Fil :"@fr ;
+    rdfs:label "Feed:"@es ;
+    rdfs:label "פיד:"@he ;
+    rdfs:label "动态："@zh .
+paa:act_back_to_activity rdfs:label "Back to Activity"@en-US ;
+    rdfs:label "Retour à l'activité"@fr ;
+    rdfs:label "Volver a actividad"@es ;
+    rdfs:label "חזרה לפעילות"@he ;
+    rdfs:label "返回动态"@zh .
+paa:act_no_public rdfs:label "No public activities found."@en-US ;
+    rdfs:label "Aucune activité publique trouvée."@fr ;
+    rdfs:label "No se encontraron actividades públicas."@es ;
+    rdfs:label "לא נמצאו פעילויות ציבוריות."@he ;
+    rdfs:label "未找到公开动态。"@zh .
+paa:act_could_not_load rdfs:label "Could not load actor or outbox."@en-US ;
+    rdfs:label "Impossible de charger l'acteur ou la boîte d'envoi."@fr ;
+    rdfs:label "No se pudo cargar el actor o la bandeja de salida."@es ;
+    rdfs:label "לא ניתן לטעון שחקן או תיבת דואר יוצא."@he ;
+    rdfs:label "无法加载参与者或发件箱。"@zh .
+paa:act_back rdfs:label "Back"@en-US ;
+    rdfs:label "Retour"@fr ;
+    rdfs:label "Volver"@es ;
+    rdfs:label "חזרה"@he ;
+    rdfs:label "返回"@zh .
+
+# ── App permissions ───────────────────────────────────
+paa:apps_title rdfs:label "App Permissions"@en-US ;
+    rdfs:label "Autorisations des applications"@fr ;
+    rdfs:label "Permisos de aplicaciones"@es ;
+    rdfs:label "הרשאות אפליקציות"@he ;
+    rdfs:label "应用权限"@zh .
+paa:apps_description rdfs:label "Manage which Solid apps can write to your pod and which containers they can access."@en-US ;
+    rdfs:label "Gérez les applications Solid autorisées à écrire dans votre pod et les conteneurs auxquels elles peuvent accéder."@fr ;
+    rdfs:label "Administre qué aplicaciones Solid pueden escribir en su pod y a qué contenedores pueden acceder."@es ;
+    rdfs:label "ניהול אילו אפליקציות Solid יכולות לכתוב ל-pod שלך ולאילו מכולות יש להן גישה."@he ;
+    rdfs:label "管理哪些 Solid 应用可以写入您的 pod 以及可以访问哪些容器。"@zh .
+paa:apps_registered_oidc rdfs:label "Registered via OIDC"@en-US ;
+    rdfs:label "Enregistré via OIDC"@fr ;
+    rdfs:label "Registrado vía OIDC"@es ;
+    rdfs:label "נרשם דרך OIDC"@he ;
+    rdfs:label "通过 OIDC 注册"@zh .
+paa:apps_authorized rdfs:label "Authorized:"@en-US ;
+    rdfs:label "Autorisé :"@fr ;
+    rdfs:label "Autorizado:"@es ;
+    rdfs:label "אושר:"@he ;
+    rdfs:label "授权时间："@zh .
+paa:apps_allowed_containers rdfs:label "Allowed containers:"@en-US ;
+    rdfs:label "Conteneurs autorisés :"@fr ;
+    rdfs:label "Contenedores permitidos:"@es ;
+    rdfs:label "מכולות מורשות:"@he ;
+    rdfs:label "允许的容器："@zh .
+paa:apps_no_write rdfs:label "No write access granted."@en-US ;
+    rdfs:label "Aucun accès en écriture accordé."@fr ;
+    rdfs:label "No se otorgó acceso de escritura."@es ;
+    rdfs:label "לא ניתנה גישת כתיבה."@he ;
+    rdfs:label "未授予写入权限。"@zh .
+paa:apps_update_access rdfs:label "Update container access"@en-US ;
+    rdfs:label "Modifier l'accès aux conteneurs"@fr ;
+    rdfs:label "Actualizar acceso a contenedores"@es ;
+    rdfs:label "עדכון גישה למכולות"@he ;
+    rdfs:label "更新容器访问权限"@zh .
+paa:apps_or_enter_path rdfs:label "Or enter a container path:"@en-US ;
+    rdfs:label "Ou saisissez un chemin de conteneur :"@fr ;
+    rdfs:label "O ingrese una ruta de contenedor:"@es ;
+    rdfs:label "או הזינו נתיב מכולה:"@he ;
+    rdfs:label "或输入容器路径："@zh .
+paa:apps_grant_write rdfs:label "Grant write access to a specific path, even if it doesn't exist yet"@en-US ;
+    rdfs:label "Accorder l'accès en écriture à un chemin spécifique, même s'il n'existe pas encore"@fr ;
+    rdfs:label "Otorgar acceso de escritura a una ruta específica, incluso si aún no existe"@es ;
+    rdfs:label "מתן גישת כתיבה לנתיב ספציפי, גם אם הוא עדיין לא קיים"@he ;
+    rdfs:label "授予特定路径的写入权限，即使该路径尚不存在"@zh .
+paa:apps_update rdfs:label "Update Access"@en-US ;
+    rdfs:label "Modifier l'accès"@fr ;
+    rdfs:label "Actualizar acceso"@es ;
+    rdfs:label "עדכון גישה"@he ;
+    rdfs:label "更新权限"@zh .
+paa:apps_revoke rdfs:label "Revoke Access"@en-US ;
+    rdfs:label "Révoquer l'accès"@fr ;
+    rdfs:label "Revocar acceso"@es ;
+    rdfs:label "ביטול גישה"@he ;
+    rdfs:label "撤销权限"@zh .
+paa:apps_no_apps rdfs:label "No apps have been authorized yet."@en-US ;
+    rdfs:label "Aucune application n'a encore été autorisée."@fr ;
+    rdfs:label "Aún no se han autorizado aplicaciones."@es ;
+    rdfs:label "עדיין לא אושרו אפליקציות."@he ;
+    rdfs:label "尚未授权任何应用。"@zh .
+
+# ── Profile editor ────────────────────────────────────
+paa:prof_edit_title rdfs:label "Edit Profile"@en-US ;
+    rdfs:label "Modifier le profil"@fr ;
+    rdfs:label "Editar perfil"@es ;
+    rdfs:label "עריכת פרופיל"@he ;
+    rdfs:label "编辑资料"@zh .
+paa:prof_page rdfs:label "Profile Page"@en-US ;
+    rdfs:label "Page de profil"@fr ;
+    rdfs:label "Página de perfil"@es ;
+    rdfs:label "דף פרופיל"@he ;
+    rdfs:label "个人主页"@zh .
+paa:prof_page_desc rdfs:label "Your public profile page is rendered from a layout using your profile data. Use the Page Builder below to customize it."@en-US ;
+    rdfs:label "Votre page de profil publique est générée à partir d'un modèle utilisant vos données de profil. Utilisez le constructeur de page ci-dessous pour la personnaliser."@fr ;
+    rdfs:label "Su página de perfil pública se genera a partir de una plantilla con sus datos de perfil. Use el constructor de página a continuación para personalizarla."@es ;
+    rdfs:label "דף הפרופיל הציבורי שלך מוצג מתבנית באמצעות נתוני הפרופיל שלך. השתמשו בבונה העמודים למטה כדי להתאים אותו."@he ;
+    rdfs:label "您的公开个人主页根据布局模板和个人资料数据生成。使用下方的页面构建器进行自定义。"@zh .
+paa:prof_reset_layout rdfs:label "Reset to Default Layout"@en-US ;
+    rdfs:label "Réinitialiser la mise en page"@fr ;
+    rdfs:label "Restablecer diseño predeterminado"@es ;
+    rdfs:label "איפוס לתבנית ברירת מחדל"@he ;
+    rdfs:label "重置为默认布局"@zh .
+paa:prof_confirm_reset rdfs:label "Reset your profile page to the default layout? Any customizations will be lost."@en-US ;
+    rdfs:label "Réinitialiser votre page de profil ? Toutes les personnalisations seront perdues."@fr ;
+    rdfs:label "¿Restablecer su página de perfil al diseño predeterminado? Se perderán todas las personalizaciones."@es ;
+    rdfs:label "לאפס את דף הפרופיל לתבנית ברירת מחדל? כל ההתאמות יאבדו."@he ;
+    rdfs:label "将个人主页重置为默认布局？所有自定义内容将丢失。"@zh .
+paa:prof_fields rdfs:label "Profile Fields"@en-US ;
+    rdfs:label "Champs du profil"@fr ;
+    rdfs:label "Campos del perfil"@es ;
+    rdfs:label "שדות פרופיל"@he ;
+    rdfs:label "资料字段"@zh .
+paa:prof_name rdfs:label "Name (foaf:name)"@en-US ;
+    rdfs:label "Nom (foaf:name)"@fr ;
+    rdfs:label "Nombre (foaf:name)"@es ;
+    rdfs:label "שם (foaf:name)"@he ;
+    rdfs:label "姓名 (foaf:name)"@zh .
+paa:prof_name_ph rdfs:label "Your display name"@en-US ;
+    rdfs:label "Votre nom d'affichage"@fr ;
+    rdfs:label "Su nombre para mostrar"@es ;
+    rdfs:label "שם התצוגה שלך"@he ;
+    rdfs:label "您的显示名称"@zh .
+paa:prof_nick rdfs:label "Nickname (foaf:nick)"@en-US ;
+    rdfs:label "Pseudonyme (foaf:nick)"@fr ;
+    rdfs:label "Apodo (foaf:nick)"@es ;
+    rdfs:label "כינוי (foaf:nick)"@he ;
+    rdfs:label "昵称 (foaf:nick)"@zh .
+paa:prof_nick_ph rdfs:label "Short handle or alias"@en-US ;
+    rdfs:label "Pseudonyme court ou alias"@fr ;
+    rdfs:label "Alias corto"@es ;
+    rdfs:label "כינוי קצר"@he ;
+    rdfs:label "简称或别名"@zh .
+paa:prof_avatar rdfs:label "Avatar URL (foaf:img)"@en-US ;
+    rdfs:label "URL de l'avatar (foaf:img)"@fr ;
+    rdfs:label "URL del avatar (foaf:img)"@es ;
+    rdfs:label "כתובת תמונה (foaf:img)"@he ;
+    rdfs:label "头像网址 (foaf:img)"@zh .
+paa:prof_email rdfs:label "Email (foaf:mbox)"@en-US ;
+    rdfs:label "E-mail (foaf:mbox)"@fr ;
+    rdfs:label "Correo electrónico (foaf:mbox)"@es ;
+    rdfs:label "דוא\"ל (foaf:mbox)"@he ;
+    rdfs:label "邮箱 (foaf:mbox)"@zh .
+paa:prof_homepage rdfs:label "Homepage (foaf:homepage)"@en-US ;
+    rdfs:label "Page d'accueil (foaf:homepage)"@fr ;
+    rdfs:label "Página personal (foaf:homepage)"@es ;
+    rdfs:label "דף בית (foaf:homepage)"@he ;
+    rdfs:label "主页 (foaf:homepage)"@zh .
+paa:prof_bio rdfs:label "Bio (vcard:note)"@en-US ;
+    rdfs:label "Biographie (vcard:note)"@fr ;
+    rdfs:label "Biografía (vcard:note)"@es ;
+    rdfs:label "אודות (vcard:note)"@he ;
+    rdfs:label "简介 (vcard:note)"@zh .
+paa:prof_bio_ph rdfs:label "A short bio about yourself"@en-US ;
+    rdfs:label "Une courte biographie"@fr ;
+    rdfs:label "Una breve biografía"@es ;
+    rdfs:label "ביוגרפיה קצרה"@he ;
+    rdfs:label "简短的自我介绍"@zh .
+paa:prof_role rdfs:label "Role (vcard:role)"@en-US ;
+    rdfs:label "Rôle (vcard:role)"@fr ;
+    rdfs:label "Rol (vcard:role)"@es ;
+    rdfs:label "תפקיד (vcard:role)"@he ;
+    rdfs:label "角色 (vcard:role)"@zh .
+paa:prof_description rdfs:label "Description (schema:description)"@en-US ;
+    rdfs:label "Description (schema:description)"@fr ;
+    rdfs:label "Descripción (schema:description)"@es ;
+    rdfs:label "תיאור (schema:description)"@he ;
+    rdfs:label "描述 (schema:description)"@zh .
+paa:prof_description_ph rdfs:label "A longer description"@en-US ;
+    rdfs:label "Une description plus longue"@fr ;
+    rdfs:label "Una descripción más larga"@es ;
+    rdfs:label "תיאור מפורט יותר"@he ;
+    rdfs:label "更详细的描述"@zh .
+paa:prof_custom_prefixes rdfs:label "Custom Prefixes"@en-US ;
+    rdfs:label "Préfixes personnalisés"@fr ;
+    rdfs:label "Prefijos personalizados"@es ;
+    rdfs:label "תחיליות מותאמות"@he ;
+    rdfs:label "自定义前缀"@zh .
+paa:prof_prefix_desc rdfs:label "Define namespace prefixes for custom triples. These are used for Turtle shorthand and template keys."@en-US ;
+    rdfs:label "Définissez des préfixes d'espace de noms pour les triplets personnalisés. Ils sont utilisés pour la notation abrégée Turtle et les clés de modèle."@fr ;
+    rdfs:label "Defina prefijos de espacio de nombres para tripletas personalizadas. Se usan para la notación abreviada Turtle y las claves de plantilla."@es ;
+    rdfs:label "הגדרת תחיליות מרחב שמות לשלשות מותאמות. אלה משמשים לקיצור Turtle ולמפתחות תבנית."@he ;
+    rdfs:label "定义命名空间前缀用于自定义三元组。这些用于 Turtle 简写和模板键。"@zh .
+paa:prof_find_ontologies rdfs:label "Find ontologies:"@en-US ;
+    rdfs:label "Rechercher des ontologies :"@fr ;
+    rdfs:label "Buscar ontologías:"@es ;
+    rdfs:label "חיפוש אונטולוגיות:"@he ;
+    rdfs:label "查找本体："@zh .
+paa:prof_prefix rdfs:label "Prefix"@en-US ;
+    rdfs:label "Préfixe"@fr ;
+    rdfs:label "Prefijo"@es ;
+    rdfs:label "תחילית"@he ;
+    rdfs:label "前缀"@zh .
+paa:prof_namespace rdfs:label "Namespace IRI"@en-US ;
+    rdfs:label "IRI de l'espace de noms"@fr ;
+    rdfs:label "IRI del espacio de nombres"@es ;
+    rdfs:label "IRI מרחב שמות"@he ;
+    rdfs:label "命名空间 IRI"@zh .
+paa:prof_add_prefix rdfs:label "Add Prefix"@en-US ;
+    rdfs:label "Ajouter un préfixe"@fr ;
+    rdfs:label "Agregar prefijo"@es ;
+    rdfs:label "הוספת תחילית"@he ;
+    rdfs:label "添加前缀"@zh .
+paa:prof_connections rdfs:label "Connections"@en-US ;
+    rdfs:label "Connexions"@fr ;
+    rdfs:label "Conexiones"@es ;
+    rdfs:label "קשרים"@he ;
+    rdfs:label "联系人"@zh .
+paa:prof_connections_desc rdfs:label "People you know (foaf:knows). Add WebIDs or profile URIs. ActivityPub followers and following are included automatically."@en-US ;
+    rdfs:label "Personnes que vous connaissez (foaf:knows). Ajoutez des WebID ou des URI de profil. Les abonnés et abonnements ActivityPub sont inclus automatiquement."@fr ;
+    rdfs:label "Personas que conoce (foaf:knows). Agregue WebIDs o URIs de perfil. Los seguidores y seguidos de ActivityPub se incluyen automáticamente."@es ;
+    rdfs:label "אנשים שאתם מכירים (foaf:knows). הוסיפו WebID או URI של פרופילים. עוקבים ונעקבים ב-ActivityPub נכללים אוטומטית."@he ;
+    rdfs:label "您认识的人 (foaf:knows)。添加 WebID 或个人资料 URI。ActivityPub 关注者和正在关注的人会自动包含。"@zh .
+paa:prof_add_connection rdfs:label "Add Connection"@en-US ;
+    rdfs:label "Ajouter une connexion"@fr ;
+    rdfs:label "Agregar conexión"@es ;
+    rdfs:label "הוספת קשר"@he ;
+    rdfs:label "添加联系人"@zh .
+paa:prof_custom_triples rdfs:label "Add/Edit Custom Triples"@en-US ;
+    rdfs:label "Ajouter/Modifier des triplets personnalisés"@fr ;
+    rdfs:label "Agregar/Editar tripletas personalizadas"@es ;
+    rdfs:label "הוספה/עריכה של שלשות מותאמות"@he ;
+    rdfs:label "添加/编辑自定义三元组"@zh .
+paa:prof_custom_triples_desc rdfs:label "Add custom predicate-object pairs for your WebID subject."@en-US ;
+    rdfs:label "Ajoutez des paires prédicat-objet personnalisées pour votre sujet WebID."@fr ;
+    rdfs:label "Agregue pares predicado-objeto personalizados para su sujeto WebID."@es ;
+    rdfs:label "הוסיפו זוגות פרדיקט-אובייקט מותאמים לנושא ה-WebID שלכם."@he ;
+    rdfs:label "为您的 WebID 主体添加自定义谓词-对象对。"@zh .
+paa:prof_predicate rdfs:label "Predicate IRI"@en-US ;
+    rdfs:label "IRI du prédicat"@fr ;
+    rdfs:label "IRI del predicado"@es ;
+    rdfs:label "IRI פרדיקט"@he ;
+    rdfs:label "谓词 IRI"@zh .
+paa:prof_object rdfs:label "Object value"@en-US ;
+    rdfs:label "Valeur de l'objet"@fr ;
+    rdfs:label "Valor del objeto"@es ;
+    rdfs:label "ערך אובייקט"@he ;
+    rdfs:label "对象值"@zh .
+paa:prof_template_key rdfs:label "Template key"@en-US ;
+    rdfs:label "Clé de modèle"@fr ;
+    rdfs:label "Clave de plantilla"@es ;
+    rdfs:label "מפתח תבנית"@he ;
+    rdfs:label "模板键"@zh .
+paa:prof_remove rdfs:label "Remove"@en-US ;
+    rdfs:label "Supprimer"@fr ;
+    rdfs:label "Eliminar"@es ;
+    rdfs:label "הסרה"@he ;
+    rdfs:label "移除"@zh .
+paa:prof_page_builder rdfs:label "Page Builder"@en-US ;
+    rdfs:label "Constructeur de page"@fr ;
+    rdfs:label "Constructor de página"@es ;
+    rdfs:label "בונה עמודים"@he ;
+    rdfs:label "页面构建器"@zh .
+paa:prof_page_builder_desc rdfs:label "Build your profile page layout. Elements render in order. Click to edit."@en-US ;
+    rdfs:label "Construisez la mise en page de votre profil. Les éléments sont rendus dans l'ordre. Cliquez pour modifier."@fr ;
+    rdfs:label "Construya el diseño de su página de perfil. Los elementos se muestran en orden. Haga clic para editar."@es ;
+    rdfs:label "בניית פריסת דף הפרופיל שלך. האלמנטים מוצגים לפי סדר. לחצו לעריכה."@he ;
+    rdfs:label "构建个人主页布局。元素按顺序渲染。点击编辑。"@zh .
+paa:prof_head rdfs:label "+ Head"@en-US ;
+    rdfs:label "+ Head"@fr ;
+    rdfs:label "+ Head"@es ;
+    rdfs:label "+ Head"@he ;
+    rdfs:label "+ Head"@zh .
+paa:prof_body rdfs:label "+ Body"@en-US ;
+    rdfs:label "+ Body"@fr ;
+    rdfs:label "+ Body"@es ;
+    rdfs:label "+ Body"@he ;
+    rdfs:label "+ Body"@zh .
+paa:prof_import_component rdfs:label "Import Component"@en-US ;
+    rdfs:label "Importer un composant"@fr ;
+    rdfs:label "Importar componente"@es ;
+    rdfs:label "ייבוא רכיב"@he ;
+    rdfs:label "导入组件"@zh .
+paa:prof_preview rdfs:label "Preview"@en-US ;
+    rdfs:label "Aperçu"@fr ;
+    rdfs:label "Vista previa"@es ;
+    rdfs:label "תצוגה מקדימה"@he ;
+    rdfs:label "预览"@zh .
+paa:prof_save rdfs:label "Save Profile"@en-US ;
+    rdfs:label "Enregistrer le profil"@fr ;
+    rdfs:label "Guardar perfil"@es ;
+    rdfs:label "שמירת פרופיל"@he ;
+    rdfs:label "保存资料"@zh .
+paa:prof_cancel rdfs:label "Cancel"@en-US ;
+    rdfs:label "Annuler"@fr ;
+    rdfs:label "Cancelar"@es ;
+    rdfs:label "ביטול"@he ;
+    rdfs:label "取消"@zh .
+paa:prof_system_triples rdfs:label "System Triples (read-only)"@en-US ;
+    rdfs:label "Triplets système (lecture seule)"@fr ;
+    rdfs:label "Tripletas del sistema (solo lectura)"@es ;
+    rdfs:label "שלשות מערכת (קריאה בלבד)"@he ;
+    rdfs:label "系统三元组（只读）"@zh .
+paa:prof_updated rdfs:label "Profile updated successfully."@en-US ;
+    rdfs:label "Profil mis à jour avec succès."@fr ;
+    rdfs:label "Perfil actualizado correctamente."@es ;
+    rdfs:label "הפרופיל עודכן בהצלחה."@he ;
+    rdfs:label "资料更新成功。"@zh .
+paa:prof_layout_reset rdfs:label "Profile page reset to default template."@en-US ;
+    rdfs:label "Page de profil réinitialisée au modèle par défaut."@fr ;
+    rdfs:label "Página de perfil restablecida a la plantilla predeterminada."@es ;
+    rdfs:label "דף הפרופיל אופס לתבנית ברירת מחדל."@he ;
+    rdfs:label "个人主页已重置为默认模板。"@zh .
+
+# ── Access policy editor ──────────────────────────────
+paa:acl_title rdfs:label "Access Policy"@en-US ;
+    rdfs:label "Politique d'accès"@fr ;
+    rdfs:label "Política de acceso"@es ;
+    rdfs:label "מדיניות גישה"@he ;
+    rdfs:label "访问策略"@zh .
+paa:acl_resource rdfs:label "Resource:"@en-US ;
+    rdfs:label "Ressource :"@fr ;
+    rdfs:label "Recurso:"@es ;
+    rdfs:label "משאב:"@he ;
+    rdfs:label "资源："@zh .
+paa:acl_container_desc rdfs:label "This policy applies to the container and its contents (unless overridden)."@en-US ;
+    rdfs:label "Cette politique s'applique au conteneur et à son contenu (sauf si remplacée)."@fr ;
+    rdfs:label "Esta política se aplica al contenedor y su contenido (a menos que se anule)."@es ;
+    rdfs:label "מדיניות זו חלה על המכולה ותוכנה (אלא אם דרסו אותה)."@he ;
+    rdfs:label "此策略适用于该容器及其内容（除非被覆盖）。"@zh .
+paa:acl_access_level rdfs:label "Access Level"@en-US ;
+    rdfs:label "Niveau d'accès"@fr ;
+    rdfs:label "Nivel de acceso"@es ;
+    rdfs:label "רמת גישה"@he ;
+    rdfs:label "访问级别"@zh .
+paa:acl_mode_inherit rdfs:label "Inherit from parent"@en-US ;
+    rdfs:label "Hériter du parent"@fr ;
+    rdfs:label "Heredar del padre"@es ;
+    rdfs:label "ירושה מהורה"@he ;
+    rdfs:label "从父级继承"@zh .
+paa:acl_mode_inherit_desc rdfs:label "Use the same access policy as the parent container."@en-US ;
+    rdfs:label "Utiliser la même politique d'accès que le conteneur parent."@fr ;
+    rdfs:label "Usar la misma política de acceso que el contenedor padre."@es ;
+    rdfs:label "שימוש באותה מדיניות גישה כמו המכולה ההורה."@he ;
+    rdfs:label "使用与父容器相同的访问策略。"@zh .
+paa:acl_mode_public rdfs:label "Public"@en-US ;
+    rdfs:label "Public"@fr ;
+    rdfs:label "Público"@es ;
+    rdfs:label "ציבורי"@he ;
+    rdfs:label "公开"@zh .
+paa:acl_mode_public_desc rdfs:label "Anyone can discover and read this resource."@en-US ;
+    rdfs:label "Tout le monde peut découvrir et lire cette ressource."@fr ;
+    rdfs:label "Cualquiera puede descubrir y leer este recurso."@es ;
+    rdfs:label "כל אחד יכול לגלות ולקרוא משאב זה."@he ;
+    rdfs:label "任何人都可以发现和阅读此资源。"@zh .
+paa:acl_mode_unlisted rdfs:label "Public (unlisted)"@en-US ;
+    rdfs:label "Public (non répertorié)"@fr ;
+    rdfs:label "Público (no listado)"@es ;
+    rdfs:label "ציבורי (לא ברשימה)"@he ;
+    rdfs:label "公开（不列出）"@zh .
+paa:acl_mode_unlisted_desc rdfs:label "Anyone with the direct link can read, but not listed in container indexes."@en-US ;
+    rdfs:label "Quiconque possède le lien direct peut lire, mais non répertorié dans les index."@fr ;
+    rdfs:label "Cualquiera con el enlace directo puede leer, pero no se lista en los índices."@es ;
+    rdfs:label "כל מי שיש לו את הקישור הישיר יכול לקרוא, אך לא מופיע באינדקסים."@he ;
+    rdfs:label "拥有直接链接的人可以阅读，但不在容器索引中列出。"@zh .
+paa:acl_mode_friends rdfs:label "Friends"@en-US ;
+    rdfs:label "Amis"@fr ;
+    rdfs:label "Amigos"@es ;
+    rdfs:label "חברים"@he ;
+    rdfs:label "好友"@zh .
+paa:acl_mode_friends_desc rdfs:label "Only people in your friends list can read."@en-US ;
+    rdfs:label "Seules les personnes de votre liste d'amis peuvent lire."@fr ;
+    rdfs:label "Solo las personas en su lista de amigos pueden leer."@es ;
+    rdfs:label "רק אנשים ברשימת החברים שלך יכולים לקרוא."@he ;
+    rdfs:label "仅好友列表中的人可以阅读。"@zh .
+paa:acl_mode_private rdfs:label "Private"@en-US ;
+    rdfs:label "Privé"@fr ;
+    rdfs:label "Privado"@es ;
+    rdfs:label "פרטי"@he ;
+    rdfs:label "私密"@zh .
+paa:acl_mode_private_desc rdfs:label "Only you can access this resource."@en-US ;
+    rdfs:label "Vous seul pouvez accéder à cette ressource."@fr ;
+    rdfs:label "Solo usted puede acceder a este recurso."@es ;
+    rdfs:label "רק אתם יכולים לגשת למשאב זה."@he ;
+    rdfs:label "只有您可以访问此资源。"@zh .
+paa:acl_mode_custom rdfs:label "Custom"@en-US ;
+    rdfs:label "Personnalisé"@fr ;
+    rdfs:label "Personalizado"@es ;
+    rdfs:label "מותאם"@he ;
+    rdfs:label "自定义"@zh .
+paa:acl_mode_custom_desc rdfs:label "Grant read access to specific WebIDs."@en-US ;
+    rdfs:label "Accorder l'accès en lecture à des WebID spécifiques."@fr ;
+    rdfs:label "Otorgar acceso de lectura a WebIDs específicos."@es ;
+    rdfs:label "מתן גישת קריאה ל-WebID ספציפיים."@he ;
+    rdfs:label "授予特定 WebID 的读取权限。"@zh .
+paa:acl_effective rdfs:label "Effective policy:"@en-US ;
+    rdfs:label "Politique effective :"@fr ;
+    rdfs:label "Política efectiva:"@es ;
+    rdfs:label "מדיניות בתוקף:"@he ;
+    rdfs:label "生效策略："@zh .
+paa:acl_inherited_from rdfs:label "inherited from"@en-US ;
+    rdfs:label "hérité de"@fr ;
+    rdfs:label "heredado de"@es ;
+    rdfs:label "נורש מ"@he ;
+    rdfs:label "继承自"@zh .
+paa:acl_allowed_webids rdfs:label "Allowed WebIDs (one per line)"@en-US ;
+    rdfs:label "WebID autorisés (un par ligne)"@fr ;
+    rdfs:label "WebIDs permitidos (uno por línea)"@es ;
+    rdfs:label "WebID מורשים (אחד בכל שורה)"@he ;
+    rdfs:label "允许的 WebID（每行一个）"@zh .
+paa:acl_inherit_children rdfs:label "Allow children to inherit this policy"@en-US ;
+    rdfs:label "Permettre aux enfants d'hériter de cette politique"@fr ;
+    rdfs:label "Permitir que los hijos hereden esta política"@es ;
+    rdfs:label "אפשרו לצאצאים לרשת מדיניות זו"@he ;
+    rdfs:label "允许子项继承此策略"@zh .
+paa:acl_inherit_desc rdfs:label "When unchecked, resources inside this container must set their own policy."@en-US ;
+    rdfs:label "Si décoché, les ressources dans ce conteneur doivent définir leur propre politique."@fr ;
+    rdfs:label "Si no está marcado, los recursos dentro de este contenedor deben definir su propia política."@es ;
+    rdfs:label "כאשר לא מסומן, משאבים בתוך מכולה זו חייבים להגדיר מדיניות משלהם."@he ;
+    rdfs:label "取消勾选时，此容器内的资源必须设置自己的策略。"@zh .
+paa:acl_save_policy rdfs:label "Save Policy"@en-US ;
+    rdfs:label "Enregistrer la politique"@fr ;
+    rdfs:label "Guardar política"@es ;
+    rdfs:label "שמירת מדיניות"@he ;
+    rdfs:label "保存策略"@zh .
+paa:acl_back rdfs:label "Back"@en-US ;
+    rdfs:label "Retour"@fr ;
+    rdfs:label "Volver"@es ;
+    rdfs:label "חזרה"@he ;
+    rdfs:label "返回"@zh .
+paa:acl_friends_list rdfs:label "Friends List"@en-US ;
+    rdfs:label "Liste d'amis"@fr ;
+    rdfs:label "Lista de amigos"@es ;
+    rdfs:label "רשימת חברים"@he ;
+    rdfs:label "好友列表"@zh .
+paa:acl_friends_desc rdfs:label "WebIDs listed here are granted read access when a resource is set to \"Friends\" mode."@en-US ;
+    rdfs:label "Les WebID listés ici ont accès en lecture lorsqu'une ressource est en mode \"Amis\"."@fr ;
+    rdfs:label "Los WebIDs listados aquí tienen acceso de lectura cuando un recurso está en modo \"Amigos\"."@es ;
+    rdfs:label "ל-WebID המפורטים כאן ניתנת גישת קריאה כאשר משאב מוגדר למצב \"חברים\"."@he ;
+    rdfs:label "当资源设置为\"好友\"模式时，此处列出的 WebID 将获得读取权限。"@zh .
+paa:acl_remove rdfs:label "remove"@en-US ;
+    rdfs:label "supprimer"@fr ;
+    rdfs:label "eliminar"@es ;
+    rdfs:label "הסרה"@he ;
+    rdfs:label "移除"@zh .
+paa:acl_no_friends rdfs:label "No friends added yet."@en-US ;
+    rdfs:label "Aucun ami ajouté pour le moment."@fr ;
+    rdfs:label "Aún no se han agregado amigos."@es ;
+    rdfs:label "עדיין לא נוספו חברים."@he ;
+    rdfs:label "尚未添加好友。"@zh .
+paa:acl_add_friend rdfs:label "Add Friend"@en-US ;
+    rdfs:label "Ajouter un ami"@fr ;
+    rdfs:label "Agregar amigo"@es ;
+    rdfs:label "הוספת חבר"@he ;
+    rdfs:label "添加好友"@zh .
+paa:acl_quota rdfs:label "Storage Quota"@en-US ;
+    rdfs:label "Quota de stockage"@fr ;
+    rdfs:label "Cuota de almacenamiento"@es ;
+    rdfs:label "מכסת אחסון"@he ;
+    rdfs:label "存储配额"@zh .
+paa:acl_quota_desc rdfs:label "Set a storage limit for this container and its contents."@en-US ;
+    rdfs:label "Définir une limite de stockage pour ce conteneur et son contenu."@fr ;
+    rdfs:label "Establecer un límite de almacenamiento para este contenedor y su contenido."@es ;
+    rdfs:label "הגדרת מגבלת אחסון למכולה זו ותוכנה."@he ;
+    rdfs:label "为此容器及其内容设置存储限制。"@zh .
+paa:acl_used rdfs:label "Used:"@en-US ;
+    rdfs:label "Utilisé :"@fr ;
+    rdfs:label "Usado:"@es ;
+    rdfs:label "בשימוש:"@he ;
+    rdfs:label "已使用："@zh .
+paa:acl_limit_label rdfs:label "Limit (e.g., 500MB, 1GB, or empty for no limit)"@en-US ;
+    rdfs:label "Limite (ex. 500 Mo, 1 Go, ou vide pour aucune limite)"@fr ;
+    rdfs:label "Límite (ej. 500MB, 1GB, o vacío sin límite)"@es ;
+    rdfs:label "מגבלה (למשל 500MB, 1GB, או ריק ללא מגבלה)"@he ;
+    rdfs:label "限制（例如 500MB、1GB，留空表示无限制）"@zh .
+paa:acl_no_limit rdfs:label "No limit"@en-US ;
+    rdfs:label "Aucune limite"@fr ;
+    rdfs:label "Sin límite"@es ;
+    rdfs:label "ללא מגבלה"@he ;
+    rdfs:label "无限制"@zh .
+paa:acl_save_quota rdfs:label "Save Quota"@en-US ;
+    rdfs:label "Enregistrer le quota"@fr ;
+    rdfs:label "Guardar cuota"@es ;
+    rdfs:label "שמירת מכסה"@he ;
+    rdfs:label "保存配额"@zh .
+paa:acl_details rdfs:label "ACP Details"@en-US ;
+    rdfs:label "Détails ACP"@fr ;
+    rdfs:label "Detalles ACP"@es ;
+    rdfs:label "פרטי ACP"@he ;
+    rdfs:label "ACP 详情"@zh .
+paa:acl_view_raw rdfs:label "View raw Access Control Policy (Turtle)"@en-US ;
+    rdfs:label "Voir la politique de contrôle d'accès brute (Turtle)"@fr ;
+    rdfs:label "Ver política de control de acceso sin procesar (Turtle)"@es ;
+    rdfs:label "צפייה במדיניות בקרת גישה גולמית (Turtle)"@he ;
+    rdfs:label "查看原始访问控制策略 (Turtle)"@zh .
+paa:acl_default_source rdfs:label "(default)"@en-US ;
+    rdfs:label "(par défaut)"@fr ;
+    rdfs:label "(predeterminado)"@es ;
+    rdfs:label "(ברירת מחדל)"@he ;
+    rdfs:label "（默认）"@zh .
+
+# ── Storage browser ───────────────────────────────────
+paa:stor_title rdfs:label "Storage"@en-US ;
+    rdfs:label "Stockage"@fr ;
+    rdfs:label "Almacenamiento"@es ;
+    rdfs:label "אחסון"@he ;
+    rdfs:label "存储"@zh .
+paa:stor_path rdfs:label "Path:"@en-US ;
+    rdfs:label "Chemin :"@fr ;
+    rdfs:label "Ruta:"@es ;
+    rdfs:label "נתיב:"@he ;
+    rdfs:label "路径："@zh .
+paa:stor_contents rdfs:label "Contents"@en-US ;
+    rdfs:label "Contenu"@fr ;
+    rdfs:label "Contenido"@es ;
+    rdfs:label "תוכן"@he ;
+    rdfs:label "内容"@zh .
+paa:stor_empty rdfs:label "Empty container."@en-US ;
+    rdfs:label "Conteneur vide."@fr ;
+    rdfs:label "Contenedor vacío."@es ;
+    rdfs:label "מכולה ריקה."@he ;
+    rdfs:label "空容器。"@zh .
+paa:stor_raw rdfs:label "raw"@en-US ;
+    rdfs:label "brut"@fr ;
+    rdfs:label "crudo"@es ;
+    rdfs:label "גולמי"@he ;
+    rdfs:label "原始"@zh .
+paa:stor_move_to rdfs:label "Move to:"@en-US ;
+    rdfs:label "Déplacer vers :"@fr ;
+    rdfs:label "Mover a:"@es ;
+    rdfs:label "העברה אל:"@he ;
+    rdfs:label "移动到："@zh .
+paa:stor_move rdfs:label "move"@en-US ;
+    rdfs:label "déplacer"@fr ;
+    rdfs:label "mover"@es ;
+    rdfs:label "העברה"@he ;
+    rdfs:label "移动"@zh .
+paa:stor_copy_to rdfs:label "Copy to:"@en-US ;
+    rdfs:label "Copier vers :"@fr ;
+    rdfs:label "Copiar a:"@es ;
+    rdfs:label "העתקה אל:"@he ;
+    rdfs:label "复制到："@zh .
+paa:stor_copy rdfs:label "copy"@en-US ;
+    rdfs:label "copier"@fr ;
+    rdfs:label "copiar"@es ;
+    rdfs:label "העתקה"@he ;
+    rdfs:label "复制"@zh .
+paa:stor_delete_confirm rdfs:label "Delete {{name}}?"@en-US ;
+    rdfs:label "Supprimer {{name}} ?"@fr ;
+    rdfs:label "¿Eliminar {{name}}?"@es ;
+    rdfs:label "למחוק את {{name}}?"@he ;
+    rdfs:label "删除 {{name}}？"@zh .
+paa:stor_delete rdfs:label "delete"@en-US ;
+    rdfs:label "supprimer"@fr ;
+    rdfs:label "eliminar"@es ;
+    rdfs:label "מחיקה"@he ;
+    rdfs:label "删除"@zh .
+paa:stor_access_policy rdfs:label "Access Policy"@en-US ;
+    rdfs:label "Politique d'accès"@fr ;
+    rdfs:label "Política de acceso"@es ;
+    rdfs:label "מדיניות גישה"@he ;
+    rdfs:label "访问策略"@zh .
+paa:stor_delete_container rdfs:label "Delete Container"@en-US ;
+    rdfs:label "Supprimer le conteneur"@fr ;
+    rdfs:label "Eliminar contenedor"@es ;
+    rdfs:label "מחיקת מכולה"@he ;
+    rdfs:label "删除容器"@zh .
+paa:stor_confirm_delete_container rdfs:label "Delete this container and all its contents?"@en-US ;
+    rdfs:label "Supprimer ce conteneur et tout son contenu ?"@fr ;
+    rdfs:label "¿Eliminar este contenedor y todo su contenido?"@es ;
+    rdfs:label "למחוק מכולה זו וכל תוכנה?"@he ;
+    rdfs:label "删除此容器及其所有内容？"@zh .
+paa:stor_create_container rdfs:label "Create Container"@en-US ;
+    rdfs:label "Créer un conteneur"@fr ;
+    rdfs:label "Crear contenedor"@es ;
+    rdfs:label "יצירת מכולה"@he ;
+    rdfs:label "创建容器"@zh .
+paa:stor_container_name rdfs:label "Container name"@en-US ;
+    rdfs:label "Nom du conteneur"@fr ;
+    rdfs:label "Nombre del contenedor"@es ;
+    rdfs:label "שם מכולה"@he ;
+    rdfs:label "容器名称"@zh .
+paa:stor_create rdfs:label "Create"@en-US ;
+    rdfs:label "Créer"@fr ;
+    rdfs:label "Crear"@es ;
+    rdfs:label "יצירה"@he ;
+    rdfs:label "创建"@zh .
+paa:stor_upload rdfs:label "Upload File"@en-US ;
+    rdfs:label "Envoyer un fichier"@fr ;
+    rdfs:label "Subir archivo"@es ;
+    rdfs:label "העלאת קובץ"@he ;
+    rdfs:label "上传文件"@zh .
+paa:stor_filename_optional rdfs:label "Filename (optional, uses original name if empty)"@en-US ;
+    rdfs:label "Nom de fichier (facultatif, utilise le nom original si vide)"@fr ;
+    rdfs:label "Nombre de archivo (opcional, usa el nombre original si está vacío)"@es ;
+    rdfs:label "שם קובץ (אופציונלי, משתמש בשם המקורי אם ריק)"@he ;
+    rdfs:label "文件名（可选，留空则使用原始名称）"@zh .
+paa:stor_upload_btn rdfs:label "Upload"@en-US ;
+    rdfs:label "Envoyer"@fr ;
+    rdfs:label "Subir"@es ;
+    rdfs:label "העלאה"@he ;
+    rdfs:label "上传"@zh .
+paa:stor_create_resource rdfs:label "Create Resource"@en-US ;
+    rdfs:label "Créer une ressource"@fr ;
+    rdfs:label "Crear recurso"@es ;
+    rdfs:label "יצירת משאב"@he ;
+    rdfs:label "创建资源"@zh .
+paa:stor_filename rdfs:label "Filename"@en-US ;
+    rdfs:label "Nom de fichier"@fr ;
+    rdfs:label "Nombre de archivo"@es ;
+    rdfs:label "שם קובץ"@he ;
+    rdfs:label "文件名"@zh .
+paa:stor_filename_ph rdfs:label "e.g. notes.txt, data.ttl, page.html"@en-US ;
+    rdfs:label "ex. notes.txt, data.ttl, page.html"@fr ;
+    rdfs:label "ej. notes.txt, data.ttl, page.html"@es ;
+    rdfs:label "למשל notes.txt, data.ttl, page.html"@he ;
+    rdfs:label "例如 notes.txt、data.ttl、page.html"@zh .
+paa:stor_content rdfs:label "Content"@en-US ;
+    rdfs:label "Contenu"@fr ;
+    rdfs:label "Contenido"@es ;
+    rdfs:label "תוכן"@he ;
+    rdfs:label "内容"@zh .
+paa:stor_enter_content rdfs:label "Enter content..."@en-US ;
+    rdfs:label "Saisissez le contenu..."@fr ;
+    rdfs:label "Ingrese el contenido..."@es ;
+    rdfs:label "הזינו תוכן..."@he ;
+    rdfs:label "输入内容…"@zh .
+paa:stor_resource rdfs:label "Resource"@en-US ;
+    rdfs:label "Ressource"@fr ;
+    rdfs:label "Recurso"@es ;
+    rdfs:label "משאב"@he ;
+    rdfs:label "资源"@zh .
+paa:stor_save rdfs:label "Save"@en-US ;
+    rdfs:label "Enregistrer"@fr ;
+    rdfs:label "Guardar"@es ;
+    rdfs:label "שמירה"@he ;
+    rdfs:label "保存"@zh .
+paa:stor_cancel rdfs:label "Cancel"@en-US ;
+    rdfs:label "Annuler"@fr ;
+    rdfs:label "Cancelar"@es ;
+    rdfs:label "ביטול"@he ;
+    rdfs:label "取消"@zh .
+paa:stor_download rdfs:label "Download File"@en-US ;
+    rdfs:label "Télécharger le fichier"@fr ;
+    rdfs:label "Descargar archivo"@es ;
+    rdfs:label "הורדת קובץ"@he ;
+    rdfs:label "下载文件"@zh .
+paa:stor_no_content rdfs:label "Resource exists but has no content."@en-US ;
+    rdfs:label "La ressource existe mais n'a aucun contenu."@fr ;
+    rdfs:label "El recurso existe pero no tiene contenido."@es ;
+    rdfs:label "המשאב קיים אך אין לו תוכן."@he ;
+    rdfs:label "资源存在但没有内容。"@zh .
+paa:stor_view_raw rdfs:label "View Raw"@en-US ;
+    rdfs:label "Voir le brut"@fr ;
+    rdfs:label "Ver crudo"@es ;
+    rdfs:label "תצוגה גולמית"@he ;
+    rdfs:label "查看原始内容"@zh .
+paa:stor_edit rdfs:label "Edit"@en-US ;
+    rdfs:label "Modifier"@fr ;
+    rdfs:label "Editar"@es ;
+    rdfs:label "עריכה"@he ;
+    rdfs:label "编辑"@zh .
+paa:stor_move_btn rdfs:label "Move"@en-US ;
+    rdfs:label "Déplacer"@fr ;
+    rdfs:label "Mover"@es ;
+    rdfs:label "העברה"@he ;
+    rdfs:label "移动"@zh .
+paa:stor_copy_btn rdfs:label "Copy"@en-US ;
+    rdfs:label "Copier"@fr ;
+    rdfs:label "Copiar"@es ;
+    rdfs:label "העתקה"@he ;
+    rdfs:label "复制"@zh .
+paa:stor_delete_resource rdfs:label "Delete this resource?"@en-US ;
+    rdfs:label "Supprimer cette ressource ?"@fr ;
+    rdfs:label "¿Eliminar este recurso?"@es ;
+    rdfs:label "למחוק משאב זה?"@he ;
+    rdfs:label "删除此资源？"@zh .
+paa:stor_metadata rdfs:label "Metadata"@en-US ;
+    rdfs:label "Métadonnées"@fr ;
+    rdfs:label "Metadatos"@es ;
+    rdfs:label "מטא-נתונים"@he ;
+    rdfs:label "元数据"@zh .
+paa:stor_save_metadata rdfs:label "Save Metadata"@en-US ;
+    rdfs:label "Enregistrer les métadonnées"@fr ;
+    rdfs:label "Guardar metadatos"@es ;
+    rdfs:label "שמירת מטא-נתונים"@he ;
+    rdfs:label "保存元数据"@zh .
+paa:stor_no_metadata rdfs:label "No metadata."@en-US ;
+    rdfs:label "Aucune métadonnée."@fr ;
+    rdfs:label "Sin metadatos."@es ;
+    rdfs:label "אין מטא-נתונים."@he ;
+    rdfs:label "无元数据。"@zh .
+paa:stor_edit_metadata rdfs:label "Edit Metadata"@en-US ;
+    rdfs:label "Modifier les métadonnées"@fr ;
+    rdfs:label "Editar metadatos"@es ;
+    rdfs:label "עריכת מטא-נתונים"@he ;
+    rdfs:label "编辑元数据"@zh .
+paa:stor_browse rdfs:label "Browse"@en-US ;
+    rdfs:label "Parcourir"@fr ;
+    rdfs:label "Explorar"@es ;
+    rdfs:label "עיון"@he ;
+    rdfs:label "浏览"@zh .
+
+# ── Admin dashboard ───────────────────────────────────
+paa:adm_dashboard rdfs:label "Admin Dashboard"@en-US ;
+    rdfs:label "Tableau de bord admin"@fr ;
+    rdfs:label "Panel de administración"@es ;
+    rdfs:label "לוח בקרה ניהולי"@he ;
+    rdfs:label "管理仪表板"@zh .
+paa:adm_user_info rdfs:label "User Information"@en-US ;
+    rdfs:label "Informations utilisateur"@fr ;
+    rdfs:label "Información de usuario"@es ;
+    rdfs:label "מידע משתמש"@he ;
+    rdfs:label "用户信息"@zh .
+paa:adm_total_users rdfs:label "Total Users"@en-US ;
+    rdfs:label "Utilisateurs total"@fr ;
+    rdfs:label "Total de usuarios"@es ;
+    rdfs:label "סה\"כ משתמשים"@he ;
+    rdfs:label "用户总数"@zh .
+paa:adm_total_storage rdfs:label "Total Storage"@en-US ;
+    rdfs:label "Stockage total"@fr ;
+    rdfs:label "Almacenamiento total"@es ;
+    rdfs:label "סה\"כ אחסון"@he ;
+    rdfs:label "总存储量"@zh .
+paa:adm_total_posts rdfs:label "Total Posts"@en-US ;
+    rdfs:label "Publications total"@fr ;
+    rdfs:label "Total de publicaciones"@es ;
+    rdfs:label "סה\"כ פרסומים"@he ;
+    rdfs:label "帖子总数"@zh .
+paa:adm_user_list rdfs:label "User List"@en-US ;
+    rdfs:label "Liste des utilisateurs"@fr ;
+    rdfs:label "Lista de usuarios"@es ;
+    rdfs:label "רשימת משתמשים"@he ;
+    rdfs:label "用户列表"@zh .
+paa:adm_username rdfs:label "Username"@en-US ;
+    rdfs:label "Nom d'utilisateur"@fr ;
+    rdfs:label "Nombre de usuario"@es ;
+    rdfs:label "שם משתמש"@he ;
+    rdfs:label "用户名"@zh .
+paa:adm_storage rdfs:label "Storage"@en-US ;
+    rdfs:label "Stockage"@fr ;
+    rdfs:label "Almacenamiento"@es ;
+    rdfs:label "אחסון"@he ;
+    rdfs:label "存储"@zh .
+paa:adm_followers rdfs:label "Followers"@en-US ;
+    rdfs:label "Abonnés"@fr ;
+    rdfs:label "Seguidores"@es ;
+    rdfs:label "עוקבים"@he ;
+    rdfs:label "关注者"@zh .
+paa:adm_posts rdfs:label "Posts"@en-US ;
+    rdfs:label "Publications"@fr ;
+    rdfs:label "Publicaciones"@es ;
+    rdfs:label "פרסומים"@he ;
+    rdfs:label "帖子"@zh .
+paa:adm_status rdfs:label "Status"@en-US ;
+    rdfs:label "Statut"@fr ;
+    rdfs:label "Estado"@es ;
+    rdfs:label "מצב"@he ;
+    rdfs:label "状态"@zh .
+paa:adm_created rdfs:label "Created"@en-US ;
+    rdfs:label "Créé"@fr ;
+    rdfs:label "Creado"@es ;
+    rdfs:label "נוצר"@he ;
+    rdfs:label "创建时间"@zh .
+paa:adm_admin rdfs:label "admin"@en-US ;
+    rdfs:label "admin"@fr ;
+    rdfs:label "admin"@es ;
+    rdfs:label "מנהל"@he ;
+    rdfs:label "管理员"@zh .
+paa:adm_disabled rdfs:label "Disabled"@en-US ;
+    rdfs:label "Désactivé"@fr ;
+    rdfs:label "Deshabilitado"@es ;
+    rdfs:label "מושבת"@he ;
+    rdfs:label "已禁用"@zh .
+paa:adm_active rdfs:label "Active"@en-US ;
+    rdfs:label "Actif"@fr ;
+    rdfs:label "Activo"@es ;
+    rdfs:label "פעיל"@he ;
+    rdfs:label "活跃"@zh .
+paa:adm_manage_users rdfs:label "Manage Users"@en-US ;
+    rdfs:label "Gérer les utilisateurs"@fr ;
+    rdfs:label "Gestionar usuarios"@es ;
+    rdfs:label "ניהול משתמשים"@he ;
+    rdfs:label "管理用户"@zh .
+paa:adm_fedcm_title rdfs:label "External FedCM Identity Providers"@en-US ;
+    rdfs:label "Fournisseurs d'identité FedCM externes"@fr ;
+    rdfs:label "Proveedores de identidad FedCM externos"@es ;
+    rdfs:label "ספקי זהות FedCM חיצוניים"@he ;
+    rdfs:label "外部 FedCM 身份提供商"@zh .
+paa:adm_id rdfs:label "ID"@en-US ;
+    rdfs:label "ID"@fr ;
+    rdfs:label "ID"@es ;
+    rdfs:label "ID"@he ;
+    rdfs:label "ID"@zh .
+paa:adm_name rdfs:label "Name"@en-US ;
+    rdfs:label "Nom"@fr ;
+    rdfs:label "Nombre"@es ;
+    rdfs:label "שם"@he ;
+    rdfs:label "名称"@zh .
+paa:adm_issuer rdfs:label "Issuer"@en-US ;
+    rdfs:label "Émetteur"@fr ;
+    rdfs:label "Emisor"@es ;
+    rdfs:label "מנפיק"@he ;
+    rdfs:label "签发者"@zh .
+paa:adm_no_idps rdfs:label "No external identity providers configured."@en-US ;
+    rdfs:label "Aucun fournisseur d'identité externe configuré."@fr ;
+    rdfs:label "No hay proveedores de identidad externos configurados."@es ;
+    rdfs:label "לא הוגדרו ספקי זהות חיצוניים."@he ;
+    rdfs:label "未配置外部身份提供商。"@zh .
+paa:adm_manage_fedcm rdfs:label "Manage FedCM IdPs"@en-US ;
+    rdfs:label "Gérer les IdP FedCM"@fr ;
+    rdfs:label "Gestionar IdPs FedCM"@es ;
+    rdfs:label "ניהול ספקי FedCM"@he ;
+    rdfs:label "管理 FedCM 身份提供商"@zh .
+
+# ── Admin users ───────────────────────────────────────
+paa:adm_user_mgmt rdfs:label "User Management"@en-US ;
+    rdfs:label "Gestion des utilisateurs"@fr ;
+    rdfs:label "Gestión de usuarios"@es ;
+    rdfs:label "ניהול משתמשים"@he ;
+    rdfs:label "用户管理"@zh .
+paa:adm_quota rdfs:label "Quota"@en-US ;
+    rdfs:label "Quota"@fr ;
+    rdfs:label "Cuota"@es ;
+    rdfs:label "מכסה"@he ;
+    rdfs:label "配额"@zh .
+paa:adm_actions rdfs:label "Actions"@en-US ;
+    rdfs:label "Actions"@fr ;
+    rdfs:label "Acciones"@es ;
+    rdfs:label "פעולות"@he ;
+    rdfs:label "操作"@zh .
+paa:adm_enable rdfs:label "Enable"@en-US ;
+    rdfs:label "Activer"@fr ;
+    rdfs:label "Habilitar"@es ;
+    rdfs:label "הפעלה"@he ;
+    rdfs:label "启用"@zh .
+paa:adm_disable rdfs:label "Disable"@en-US ;
+    rdfs:label "Désactiver"@fr ;
+    rdfs:label "Deshabilitar"@es ;
+    rdfs:label "השבתה"@he ;
+    rdfs:label "禁用"@zh .
+paa:adm_set rdfs:label "Set"@en-US ;
+    rdfs:label "Définir"@fr ;
+    rdfs:label "Establecer"@es ;
+    rdfs:label "הגדרה"@he ;
+    rdfs:label "设置"@zh .
+paa:adm_mb rdfs:label "MB"@en-US ;
+    rdfs:label "Mo"@fr ;
+    rdfs:label "MB"@es ;
+    rdfs:label "MB"@he ;
+    rdfs:label "MB"@zh .
+paa:adm_create_user rdfs:label "Create User"@en-US ;
+    rdfs:label "Créer un utilisateur"@fr ;
+    rdfs:label "Crear usuario"@es ;
+    rdfs:label "יצירת משתמש"@he ;
+    rdfs:label "创建用户"@zh .
+paa:adm_password rdfs:label "Password"@en-US ;
+    rdfs:label "Mot de passe"@fr ;
+    rdfs:label "Contraseña"@es ;
+    rdfs:label "סיסמה"@he ;
+    rdfs:label "密码"@zh .
+paa:adm_back_dashboard rdfs:label "Back to Admin Dashboard"@en-US ;
+    rdfs:label "Retour au tableau de bord admin"@fr ;
+    rdfs:label "Volver al panel de administración"@es ;
+    rdfs:label "חזרה ללוח בקרה ניהולי"@he ;
+    rdfs:label "返回管理仪表板"@zh .
+
+# ── Admin FedCM IdPs ──────────────────────────────────
+paa:adm_display_name rdfs:label "Display Name"@en-US ;
+    rdfs:label "Nom d'affichage"@fr ;
+    rdfs:label "Nombre para mostrar"@es ;
+    rdfs:label "שם תצוגה"@he ;
+    rdfs:label "显示名称"@zh .
+paa:adm_fedcm_config_url rdfs:label "FedCM Config URL"@en-US ;
+    rdfs:label "URL de configuration FedCM"@fr ;
+    rdfs:label "URL de configuración FedCM"@es ;
+    rdfs:label "כתובת הגדרות FedCM"@he ;
+    rdfs:label "FedCM 配置网址"@zh .
+paa:adm_client_id rdfs:label "Client ID"@en-US ;
+    rdfs:label "ID client"@fr ;
+    rdfs:label "ID de cliente"@es ;
+    rdfs:label "מזהה לקוח"@he ;
+    rdfs:label "客户端 ID"@zh .
+paa:adm_issuer_url rdfs:label "Issuer URL"@en-US ;
+    rdfs:label "URL de l'émetteur"@fr ;
+    rdfs:label "URL del emisor"@es ;
+    rdfs:label "כתובת מנפיק"@he ;
+    rdfs:label "签发者网址"@zh .
+paa:adm_save rdfs:label "Save"@en-US ;
+    rdfs:label "Enregistrer"@fr ;
+    rdfs:label "Guardar"@es ;
+    rdfs:label "שמירה"@he ;
+    rdfs:label "保存"@zh .
+paa:adm_delete rdfs:label "Delete"@en-US ;
+    rdfs:label "Supprimer"@fr ;
+    rdfs:label "Eliminar"@es ;
+    rdfs:label "מחיקה"@he ;
+    rdfs:label "删除"@zh .
+paa:adm_add_provider rdfs:label "Add Identity Provider"@en-US ;
+    rdfs:label "Ajouter un fournisseur d'identité"@fr ;
+    rdfs:label "Agregar proveedor de identidad"@es ;
+    rdfs:label "הוספת ספק זהות"@he ;
+    rdfs:label "添加身份提供商"@zh .
+paa:adm_id_slug rdfs:label "ID (slug)"@en-US ;
+    rdfs:label "ID (slug)"@fr ;
+    rdfs:label "ID (slug)"@es ;
+    rdfs:label "ID (slug)"@he ;
+    rdfs:label "ID（标识符）"@zh .
+paa:adm_id_pattern rdfs:label "Letters, numbers, hyphens, underscores"@en-US ;
+    rdfs:label "Lettres, chiffres, tirets, underscores"@fr ;
+    rdfs:label "Letras, números, guiones, guiones bajos"@es ;
+    rdfs:label "אותיות, מספרים, מקפים, קווים תחתונים"@he ;
+    rdfs:label "字母、数字、连字符、下划线"@zh .
+paa:adm_issuer_optional rdfs:label "Issuer URL (optional, derived from config URL origin if omitted)"@en-US ;
+    rdfs:label "URL de l'émetteur (facultatif, déduit de l'origine de l'URL de configuration)"@fr ;
+    rdfs:label "URL del emisor (opcional, se deriva del origen de la URL de configuración)"@es ;
+    rdfs:label "כתובת מנפיק (אופציונלי, נגזר ממקור כתובת ההגדרות)"@he ;
+    rdfs:label "签发者网址（可选，省略时从配置网址来源推导）"@zh .
+paa:adm_add_btn rdfs:label "Add Provider"@en-US ;
+    rdfs:label "Ajouter le fournisseur"@fr ;
+    rdfs:label "Agregar proveedor"@es ;
+    rdfs:label "הוספת ספק"@he ;
+    rdfs:label "添加提供商"@zh .
+
+# ── OIDC Authorize ────────────────────────────────────
+paa:auth_title rdfs:label "Authorize"@en-US ;
+    rdfs:label "Autoriser"@fr ;
+    rdfs:label "Autorizar"@es ;
+    rdfs:label "אישור"@he ;
+    rdfs:label "授权"@zh .
+paa:auth_registered_dynamic rdfs:label "Registered via dynamic registration"@en-US ;
+    rdfs:label "Enregistré via l'enregistrement dynamique"@fr ;
+    rdfs:label "Registrado vía registro dinámico"@es ;
+    rdfs:label "נרשם דרך רישום דינמי"@he ;
+    rdfs:label "通过动态注册登记"@zh .
+paa:auth_wants_access rdfs:label "This application wants to access your Solid pod."@en-US ;
+    rdfs:label "Cette application souhaite accéder à votre pod Solid."@fr ;
+    rdfs:label "Esta aplicación quiere acceder a su pod Solid."@es ;
+    rdfs:label "אפליקציה זו מבקשת גישה ל-pod ה-Solid שלך."@he ;
+    rdfs:label "此应用想要访问您的 Solid pod。"@zh .
+paa:auth_allow_write rdfs:label "Allow write access to:"@en-US ;
+    rdfs:label "Autoriser l'accès en écriture à :"@fr ;
+    rdfs:label "Permitir acceso de escritura a:"@es ;
+    rdfs:label "אפשרו גישת כתיבה ל:"@he ;
+    rdfs:label "允许写入权限："@zh .
+paa:auth_or_enter_path rdfs:label "Or enter a container path:"@en-US ;
+    rdfs:label "Ou saisissez un chemin de conteneur :"@fr ;
+    rdfs:label "O ingrese una ruta de contenedor:"@es ;
+    rdfs:label "או הזינו נתיב מכולה:"@he ;
+    rdfs:label "或输入容器路径："@zh .
+paa:auth_grant_write rdfs:label "Grant write access to a specific path, even if it doesn't exist yet"@en-US ;
+    rdfs:label "Accorder l'accès en écriture à un chemin spécifique, même s'il n'existe pas encore"@fr ;
+    rdfs:label "Otorgar acceso de escritura a una ruta específica, incluso si aún no existe"@es ;
+    rdfs:label "מתן גישת כתיבה לנתיב ספציפי, גם אם הוא עדיין לא קיים"@he ;
+    rdfs:label "授予特定路径的写入权限，即使该路径尚不存在"@zh .
+paa:auth_remember rdfs:label "Remember this app (skip consent next time)"@en-US ;
+    rdfs:label "Mémoriser cette application (ignorer le consentement la prochaine fois)"@fr ;
+    rdfs:label "Recordar esta aplicación (omitir consentimiento la próxima vez)"@es ;
+    rdfs:label "זכירת אפליקציה זו (דלגו על הסכמה בפעם הבאה)"@he ;
+    rdfs:label "记住此应用（下次跳过授权确认）"@zh .
+paa:auth_approve rdfs:label "Approve"@en-US ;
+    rdfs:label "Approuver"@fr ;
+    rdfs:label "Aprobar"@es ;
+    rdfs:label "אישור"@he ;
+    rdfs:label "批准"@zh .
+paa:auth_deny rdfs:label "Deny"@en-US ;
+    rdfs:label "Refuser"@fr ;
+    rdfs:label "Denegar"@es ;
+    rdfs:label "דחייה"@he ;
+    rdfs:label "拒绝"@zh .
+paa:auth_invalid_credentials rdfs:label "Invalid credentials"@en-US ;
+    rdfs:label "Identifiants invalides"@fr ;
+    rdfs:label "Credenciales inválidas"@es ;
+    rdfs:label "פרטי התחברות שגויים"@he ;
+    rdfs:label "凭据无效"@zh .
+paa:auth_account_disabled rdfs:label "Account disabled"@en-US ;
+    rdfs:label "Compte désactivé"@fr ;
+    rdfs:label "Cuenta deshabilitada"@es ;
+    rdfs:label "חשבון מושבת"@he ;
+    rdfs:label "账户已禁用"@zh .
+paa:auth_try_again rdfs:label "Try Again"@en-US ;
+    rdfs:label "Réessayer"@fr ;
+    rdfs:label "Intentar de nuevo"@es ;
+    rdfs:label "נסו שוב"@he ;
+    rdfs:label "重试"@zh .
+
+# ── Shared labels ─────────────────────────────────────
+paa:lbl_username rdfs:label "Username"@en-US ;
+    rdfs:label "Nom d'utilisateur"@fr ;
+    rdfs:label "Nombre de usuario"@es ;
+    rdfs:label "שם משתמש"@he ;
+    rdfs:label "用户名"@zh .
+paa:lbl_password rdfs:label "Password"@en-US ;
+    rdfs:label "Mot de passe"@fr ;
+    rdfs:label "Contraseña"@es ;
+    rdfs:label "סיסמה"@he ;
+    rdfs:label "密码"@zh .
+
+# ── Error messages ────────────────────────────────────
+paa:err_username_invalid rdfs:label "Username must contain only letters, numbers, hyphens, and underscores."@en-US ;
+    rdfs:label "Le nom d'utilisateur ne doit contenir que des lettres, chiffres, tirets et underscores."@fr ;
+    rdfs:label "El nombre de usuario solo debe contener letras, números, guiones y guiones bajos."@es ;
+    rdfs:label "שם המשתמש חייב להכיל רק אותיות, מספרים, מקפים וקווים תחתונים."@he ;
+    rdfs:label "用户名只能包含字母、数字、连字符和下划线。"@zh .
+paa:err_username_reserved rdfs:label "That username is reserved. Please choose another."@en-US ;
+    rdfs:label "Ce nom d'utilisateur est réservé. Veuillez en choisir un autre."@fr ;
+    rdfs:label "Ese nombre de usuario está reservado. Elija otro."@es ;
+    rdfs:label "שם משתמש זה שמור. אנא בחרו אחר."@he ;
+    rdfs:label "该用户名已被保留，请选择其他用户名。"@zh .
+paa:err_username_taken rdfs:label "That username is already taken."@en-US ;
+    rdfs:label "Ce nom d'utilisateur est déjà pris."@fr ;
+    rdfs:label "Ese nombre de usuario ya está en uso."@es ;
+    rdfs:label "שם משתמש זה כבר תפוס."@he ;
+    rdfs:label "该用户名已被使用。"@zh .
+paa:err_password_short rdfs:label "Password must be at least 8 characters."@en-US ;
+    rdfs:label "Le mot de passe doit comporter au moins 8 caractères."@fr ;
+    rdfs:label "La contraseña debe tener al menos 8 caracteres."@es ;
+    rdfs:label "הסיסמה חייבת להכיל לפחות 8 תווים."@he ;
+    rdfs:label "密码至少需要 8 个字符。"@zh .
+paa:err_password_mismatch rdfs:label "Passwords do not match."@en-US ;
+    rdfs:label "Les mots de passe ne correspondent pas."@fr ;
+    rdfs:label "Las contraseñas no coinciden."@es ;
+    rdfs:label "הסיסמאות אינן תואמות."@he ;
+    rdfs:label "密码不匹配。"@zh .
+paa:err_registration_closed rdfs:label "Registration is closed"@en-US ;
+    rdfs:label "Les inscriptions sont fermées"@fr ;
+    rdfs:label "El registro está cerrado"@es ;
+    rdfs:label "ההרשמה סגורה"@he ;
+    rdfs:label "注册已关闭"@zh .
+paa:err_missing_token rdfs:label "Missing registration token"@en-US ;
+    rdfs:label "Jeton d'inscription manquant"@fr ;
+    rdfs:label "Falta el token de registro"@es ;
+    rdfs:label "חסר אסימון הרשמה"@he ;
+    rdfs:label "缺少注册令牌"@zh .
+paa:err_token_expired rdfs:label "Registration token expired or invalid"@en-US ;
+    rdfs:label "Jeton d'inscription expiré ou invalide"@fr ;
+    rdfs:label "Token de registro expirado o inválido"@es ;
+    rdfs:label "אסימון הרשמה פג תוקף או לא חוקי"@he ;
+    rdfs:label "注册令牌已过期或无效"@zh .
+paa:err_cannot_disable_admin rdfs:label "Cannot disable admin"@en-US ;
+    rdfs:label "Impossible de désactiver l'administrateur"@fr ;
+    rdfs:label "No se puede deshabilitar al administrador"@es ;
+    rdfs:label "לא ניתן להשבית מנהל"@he ;
+    rdfs:label "无法禁用管理员"@zh .
+paa:err_invalid_username rdfs:label "Invalid username"@en-US ;
+    rdfs:label "Nom d'utilisateur invalide"@fr ;
+    rdfs:label "Nombre de usuario inválido"@es ;
+    rdfs:label "שם משתמש לא חוקי"@he ;
+    rdfs:label "无效的用户名"@zh .
+paa:err_reserved_username rdfs:label "Username is reserved"@en-US ;
+    rdfs:label "Nom d'utilisateur réservé"@fr ;
+    rdfs:label "Nombre de usuario reservado"@es ;
+    rdfs:label "שם משתמש שמור"@he ;
+    rdfs:label "用户名已被保留"@zh .
+paa:err_already_taken rdfs:label "Username already taken"@en-US ;
+    rdfs:label "Nom d'utilisateur déjà pris"@fr ;
+    rdfs:label "Nombre de usuario ya en uso"@es ;
+    rdfs:label "שם משתמש כבר תפוס"@he ;
+    rdfs:label "用户名已被使用"@zh .
+
+# ── Admin messages ────────────────────────────────────
+paa:msg_user_disabled rdfs:label "User {{username}} disabled"@en-US ;
+    rdfs:label "Utilisateur {{username}} désactivé"@fr ;
+    rdfs:label "Usuario {{username}} deshabilitado"@es ;
+    rdfs:label "המשתמש {{username}} הושבת"@he ;
+    rdfs:label "用户 {{username}} 已禁用"@zh .
+paa:msg_user_enabled rdfs:label "User {{username}} enabled"@en-US ;
+    rdfs:label "Utilisateur {{username}} activé"@fr ;
+    rdfs:label "Usuario {{username}} habilitado"@es ;
+    rdfs:label "המשתמש {{username}} הופעל"@he ;
+    rdfs:label "用户 {{username}} 已启用"@zh .
+paa:msg_quota_set rdfs:label "Quota set for {{username}}"@en-US ;
+    rdfs:label "Quota défini pour {{username}}"@fr ;
+    rdfs:label "Cuota establecida para {{username}}"@es ;
+    rdfs:label "מכסה הוגדרה עבור {{username}}"@he ;
+    rdfs:label "已为 {{username}} 设置配额"@zh .
+paa:msg_user_created rdfs:label "User {{username}} created"@en-US ;
+    rdfs:label "Utilisateur {{username}} créé"@fr ;
+    rdfs:label "Usuario {{username}} creado"@es ;
+    rdfs:label "המשתמש {{username}} נוצר"@he ;
+    rdfs:label "用户 {{username}} 已创建"@zh .
+
+# ── Settings page ─────────────────────────────────────
+paa:settings_title rdfs:label "Settings"@en-US ;
+    rdfs:label "Paramètres"@fr ;
+    rdfs:label "Configuración"@es ;
+    rdfs:label "הגדרות"@he ;
+    rdfs:label "设置"@zh .
+paa:settings_language rdfs:label "Language & Locale"@en-US ;
+    rdfs:label "Langue et paramètres régionaux"@fr ;
+    rdfs:label "Idioma y configuración regional"@es ;
+    rdfs:label "שפה ואזור"@he ;
+    rdfs:label "语言与区域"@zh .
+paa:settings_select_language rdfs:label "Language"@en-US ;
+    rdfs:label "Langue"@fr ;
+    rdfs:label "Idioma"@es ;
+    rdfs:label "שפה"@he ;
+    rdfs:label "语言"@zh .
+paa:settings_date_format rdfs:label "Date format"@en-US ;
+    rdfs:label "Format de date"@fr ;
+    rdfs:label "Formato de fecha"@es ;
+    rdfs:label "תבנית תאריך"@he ;
+    rdfs:label "日期格式"@zh .
+paa:settings_date_short rdfs:label "Short"@en-US ;
+    rdfs:label "Court"@fr ;
+    rdfs:label "Corto"@es ;
+    rdfs:label "קצר"@he ;
+    rdfs:label "简短"@zh .
+paa:settings_date_medium rdfs:label "Medium"@en-US ;
+    rdfs:label "Moyen"@fr ;
+    rdfs:label "Medio"@es ;
+    rdfs:label "בינוני"@he ;
+    rdfs:label "中等"@zh .
+paa:settings_date_long rdfs:label "Long"@en-US ;
+    rdfs:label "Long"@fr ;
+    rdfs:label "Largo"@es ;
+    rdfs:label "ארוך"@he ;
+    rdfs:label "详细"@zh .
+paa:settings_timezone rdfs:label "Timezone"@en-US ;
+    rdfs:label "Fuseau horaire"@fr ;
+    rdfs:label "Zona horaria"@es ;
+    rdfs:label "אזור זמן"@he ;
+    rdfs:label "时区"@zh .
+paa:settings_appearance rdfs:label "Appearance"@en-US ;
+    rdfs:label "Apparence"@fr ;
+    rdfs:label "Apariencia"@es ;
+    rdfs:label "מראה"@he ;
+    rdfs:label "外观"@zh .
+paa:settings_theme_path rdfs:label "Custom theme CSS path"@en-US ;
+    rdfs:label "Chemin CSS du thème personnalisé"@fr ;
+    rdfs:label "Ruta CSS del tema personalizado"@es ;
+    rdfs:label "נתיב CSS של ערכת נושא מותאמת"@he ;
+    rdfs:label "自定义主题 CSS 路径"@zh .
+paa:settings_notifications rdfs:label "Notifications"@en-US ;
+    rdfs:label "Notifications"@fr ;
+    rdfs:label "Notificaciones"@es ;
+    rdfs:label "התראות"@he ;
+    rdfs:label "通知"@zh .
+paa:settings_show_follows rdfs:label "Show follow activities"@en-US ;
+    rdfs:label "Afficher les activités de suivi"@fr ;
+    rdfs:label "Mostrar actividades de seguimiento"@es ;
+    rdfs:label "הצגת פעילויות מעקב"@he ;
+    rdfs:label "显示关注活动"@zh .
+paa:settings_show_mentions rdfs:label "Show mentions"@en-US ;
+    rdfs:label "Afficher les mentions"@fr ;
+    rdfs:label "Mostrar menciones"@es ;
+    rdfs:label "הצגת אזכורים"@he ;
+    rdfs:label "显示提及"@zh .
+paa:settings_app_mgmt rdfs:label "App Management"@en-US ;
+    rdfs:label "Gestion des applications"@fr ;
+    rdfs:label "Gestión de aplicaciones"@es ;
+    rdfs:label "ניהול אפליקציות"@he ;
+    rdfs:label "应用管理"@zh .
+paa:settings_save rdfs:label "Save Settings"@en-US ;
+    rdfs:label "Enregistrer les paramètres"@fr ;
+    rdfs:label "Guardar configuración"@es ;
+    rdfs:label "שמירת הגדרות"@he ;
+    rdfs:label "保存设置"@zh .
+paa:settings_saved rdfs:label "Settings saved."@en-US ;
+    rdfs:label "Paramètres enregistrés."@fr ;
+    rdfs:label "Configuración guardada."@es ;
+    rdfs:label "ההגדרות נשמרו."@he ;
+    rdfs:label "设置已保存。"@zh .

@@ -53,6 +53,27 @@ All these routes require an active session (redirect to `/login` if not authenti
 | POST | `/storage/**` | `handleStorageAction` | Upload, create, edit, delete resources |
 | GET | `/acp/**` | `renderAclEditor` | Access policy editor |
 | POST | `/acp/**` | `handleAclUpdate` | Save access policy |
+| GET | `/settings` | `renderSettings` | User preferences and app management |
+| POST | `/settings` | `handleSettingsUpdate` | Save language, locale, appearance, notification preferences |
+| GET | `/app-permissions` | *(redirect)* | Redirects to `/settings` |
+| POST | `/app-permissions` | `handleAppPermissionsUpdate` | Update or revoke app container access |
+| POST | `/follow-requests/accept` | `handleAcceptFollowRequest` | Accept a pending follow request |
+| POST | `/follow-requests/reject` | `handleRejectFollowRequest` | Reject a pending follow request |
+| POST | `/activity/mark-read` | `handleMarkRead` | Mark an activity as read |
+| POST | `/activity/mark-all-read` | `handleMarkAllRead` | Mark all activities as read |
+| GET | `/activity/remote` | `renderRemoteFeed` | View a remote actor's public feed |
+
+## Admin panel
+
+Available to the admin user only. Redirects to `/login` for non-admin users.
+
+| Method | Path | Handler | Description |
+|---|---|---|---|
+| GET | `/admin` | `renderAdminDashboard` | Aggregate stats and per-user overview |
+| GET | `/admin/users` | `renderAdminUsers` | User management table |
+| POST | `/admin/users` | `handleAdminUserAction` | Enable/disable users, set quotas, create accounts |
+| GET | `/admin/fedcm-idps` | `renderAdminFedCMIdps` | External FedCM IdP management |
+| POST | `/admin/fedcm-idps` | `handleAdminFedCMIdpAction` | Add, edit, or remove external IdPs |
 
 ## ActivityPub routes
 

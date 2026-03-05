@@ -35,7 +35,9 @@ import { verifyPassword } from './auth/password.js';
 import { importPrivateKey, rsaSign } from './crypto/rsa.js';
 import { sha256 } from './crypto/digest.js';
 import { createSession } from './auth/session.js';
-import { htmlPage, htmlResponse, escapeHtml } from './ui/shell.js';
+import { renderPage, htmlPage, htmlResponse, escapeHtml } from './ui/shell.js';
+import { getTranslations } from './i18n/index.js';
+import authorizeTemplate from './ui/templates/authorize.html';
 import { bufferToBase64url } from './utils.js';
 import { grantAppPermission, hasAppPermissions } from './solid/app-permissions.js';
 import { parseNTriples, unwrapIri } from './rdf/ntriples.js';
@@ -151,65 +153,24 @@ export async function handleAuthorize(reqCtx) {
       </label>`
     ).join('\n');
 
-    const body = `
-      <div class="card login-card-wide">
-        <h1>Authorize</h1>
-        <p class="client-name">${escapeHtml(meta.displayName)}</p>
-        ${meta.clientUri ? `<p class="mb-025"><a href="${escapeHtml(meta.clientUri)}" target="_blank" rel="noopener" class="text-sm">${escapeHtml(meta.displayOrigin || meta.clientUri)}</a></p>` : ''}
-        ${isInternalClient ? `<p class="text-muted text-sm mb-025">Registered via dynamic registration</p>` : ''}
-        <p class="mono text-muted mb-1 text-sm break-all">${escapeHtml(clientId)}</p>
-        <p class="text-muted mb-1">
-          This application wants to access your Solid pod.
-        </p>
-        <form method="POST" action="/authorize">
-          <input type="hidden" name="client_id" value="${escapeHtml(clientId)}">
-          <input type="hidden" name="redirect_uri" value="${escapeHtml(redirectUri)}">
-          <input type="hidden" name="scope" value="${escapeHtml(scope)}">
-          <input type="hidden" name="state" value="${escapeHtml(state)}">
-          <input type="hidden" name="code_challenge" value="${escapeHtml(codeChallenge)}">
-          <input type="hidden" name="code_challenge_method" value="${escapeHtml(codeChallengeMethod)}">
-          <input type="hidden" name="response_type" value="${escapeHtml(responseType)}">
-          <input type="hidden" name="nonce" value="${escapeHtml(nonce)}">
-          ${!user ? `
-            <div class="form-group">
-              <label for="username">Username</label>
-              <input type="text" id="username" name="username" required autofocus>
-            </div>
-            <div class="form-group">
-              <label for="password">Password</label>
-              <input type="password" id="password" name="password" required>
-            </div>
-          ` : ''}
-          ${containers.length > 0 ? `
-            <div class="form-group mt-075">
-              <label class="font-medium text-md mb-05">Allow write access to:</label>
-              <div class="checkbox-panel">
-                ${containerCheckboxes}
-              </div>
-            </div>
-          ` : ''}
-          <div class="form-group mt-05">
-            <label for="custom_container">Or enter a container path:</label>
-            <input type="text" name="custom_container" placeholder="/${escapeHtml(user || 'username')}/path/"
-                   class="mono" id="custom_container">
-            <p class="text-muted text-sm mt-025">
-              Grant write access to a specific path, even if it doesn't exist yet
-            </p>
-          </div>
-          <div class="form-group mt-075">
-            <label class="container-label">
-              <input type="checkbox" name="remember" value="1">
-              Remember this app (skip consent next time)
-            </label>
-          </div>
-          <div class="flex gap-05">
-            <button type="submit" name="approve" value="yes" class="btn">Approve</button>
-            <button type="submit" name="approve" value="no" class="btn btn-secondary">Deny</button>
-          </div>
-        </form>
-      </div>`;
-
-    return htmlResponse(await htmlPage('Authorize', body));
+    return renderPage('Authorize', authorizeTemplate, {
+      displayName: meta.displayName,
+      clientUri: meta.clientUri,
+      displayOrigin: meta.displayOrigin || meta.clientUri,
+      isInternalClient,
+      clientId,
+      redirectUri,
+      scope,
+      state,
+      codeChallenge,
+      codeChallengeMethod,
+      responseType,
+      nonce,
+      isLoggedIn: !!user,
+      hasContainers: containers.length > 0,
+      containerCheckboxes,
+      userPlaceholder: user || 'username',
+    }, { lang: reqCtx.lang });
   }
 
   // POST — process login + approval
@@ -236,18 +197,20 @@ export async function handleAuthorize(reqCtx) {
     const password = form.get('password') || '';
     const userRecord = await reqCtx.env.APPDATA.get(`user:${submittedUsername}`);
     if (!userRecord || !await verifyPassword(password, userRecord)) {
-      return htmlResponse(await htmlPage('Authorize', `
-        <div class="card login-card-wide">
-          <div class="error">Invalid credentials</div>
-          <a href="${escapeHtml(reqCtx.url.href)}" class="btn">Try Again</a>
-        </div>`));
+      const t = getTranslations(reqCtx.lang);
+      const body = `<div class="card login-card-wide">
+          <div class="error">${escapeHtml(t.auth_invalid_credentials)}</div>
+          <a href="${escapeHtml(reqCtx.url.href)}" class="btn">${escapeHtml(t.auth_try_again)}</a>
+        </div>`;
+      return htmlResponse(await htmlPage('Authorize', body, { lang: reqCtx.lang }));
     }
     const userMeta = await getUser(reqCtx.env.APPDATA, submittedUsername);
     if (userMeta?.disabled) {
-      return htmlResponse(await htmlPage('Authorize', `
-        <div class="card login-card-wide">
-          <div class="error">Account disabled</div>
-        </div>`));
+      const t = getTranslations(reqCtx.lang);
+      const body = `<div class="card login-card-wide">
+          <div class="error">${escapeHtml(t.auth_account_disabled)}</div>
+        </div>`;
+      return htmlResponse(await htmlPage('Authorize', body, { lang: reqCtx.lang }));
     }
     authUser = submittedUsername;
     sessionToken = await createSession(reqCtx.env.APPDATA, submittedUsername);

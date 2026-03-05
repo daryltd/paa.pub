@@ -1,12 +1,12 @@
-<h1>Storage</h1>
+<h1>{{t.stor_title}}</h1>
 <div class="card">
-  <div class="text-muted mb-05">Path: <span class="mono">{{displayPath}}</span></div>
+  <div class="text-muted mb-05">{{t.stor_path}} <span class="mono">{{displayPath}}</span></div>
   {{{breadcrumbs}}}
 </div>
 <div class="card">
-  <h2>Contents</h2>
+  <h2>{{t.stor_contents}}</h2>
   {{^hasItems}}
-  <div class="text-muted">Empty container.</div>
+  <div class="text-muted">{{t.stor_empty}}</div>
   {{/hasItems}}
   {{#hasItems}}
   <table>
@@ -15,25 +15,25 @@
       <td class="col-icon">{{{icon}}}</td>
       <td><a href="/storage/{{storagePath}}" class="mono">{{name}}</a></td>
       <td class="col-action">
-        <a href="/{{rawPath}}" class="text-muted text-sm" target="_blank">raw</a>
+        <a href="/{{rawPath}}" class="text-muted text-sm" target="_blank">{{t.stor_raw}}</a>
         <form method="POST" action="/storage/{{storagePath}}" class="inline-form ml-05">
           <input type="hidden" name="action" value="move">
           <input type="hidden" name="destination" value="">
           <button type="submit" class="link-btn-neutral"
-            data-prompt="Move to:"
-            data-prompt-default="{{storagePath}}">move</button>
+            data-prompt="{{t.stor_move_to}}"
+            data-prompt-default="{{storagePath}}">{{t.stor_move}}</button>
         </form>
         <form method="POST" action="/storage/{{storagePath}}" class="inline-form ml-05">
           <input type="hidden" name="action" value="copy">
           <input type="hidden" name="destination" value="">
           <button type="submit" class="link-btn-neutral"
-            data-prompt="Copy to:"
-            data-prompt-default="{{copyDefault}}">copy</button>
+            data-prompt="{{t.stor_copy_to}}"
+            data-prompt-default="{{copyDefault}}">{{t.stor_copy}}</button>
         </form>
         <form method="POST" action="/storage/{{storagePath}}" class="inline-form ml-05">
           <input type="hidden" name="action" value="delete">
           <button type="submit" class="link-btn"
-            data-confirm="Delete {{name}}?">delete</button>
+            data-confirm="{{deleteConfirm}}">{{t.stor_delete}}</button>
         </form>
       </td>
     </tr>
@@ -41,48 +41,47 @@
   </table>
   {{/hasItems}}
   <div class="mt-075 flex gap-05">
-    <a href="/acp/{{{path}}}" class="btn btn-secondary btn-small-text">Access Policy</a>
+    <a href="/acp/{{{path}}}" class="btn btn-secondary btn-small-text">{{t.stor_access_policy}}</a>
     {{^isRoot}}
     <form method="POST" action="/storage/{{{path}}}" class="inline-form">
       <input type="hidden" name="action" value="delete">
       <button type="submit" class="btn btn-danger btn-small-text"
-        data-confirm="Delete this container and all its contents?">Delete Container</button>
+        data-confirm="{{t.stor_confirm_delete_container}}">{{t.stor_delete_container}}</button>
     </form>
     {{/isRoot}}
   </div>
 </div>
 <details class="card">
-  <summary>Create Container</summary>
+  <summary>{{t.stor_create_container}}</summary>
   <form method="POST" action="/storage/{{{path}}}">
     <input type="hidden" name="action" value="mkdir">
     <div class="flex gap-05">
-      <input type="text" name="name" placeholder="Container name" required class="flex-1">
-      <button type="submit" class="btn">Create</button>
+      <input type="text" name="name" placeholder="{{t.stor_container_name}}" required class="flex-1">
+      <button type="submit" class="btn">{{t.stor_create}}</button>
     </div>
   </form>
 </details>
 <details class="card">
-  <summary>Upload File</summary>
+  <summary>{{t.stor_upload}}</summary>
   <form method="POST" action="/storage/{{{path}}}" enctype="multipart/form-data">
     <input type="hidden" name="action" value="upload">
     <div class="form-group"><input type="file" name="file" required></div>
-    <div class="form-group"><input type="text" name="slug" placeholder="Filename (optional, uses original name if empty)"></div>
-    <button type="submit" class="btn">Upload</button>
+    <div class="form-group"><input type="text" name="slug" placeholder="{{t.stor_filename_optional}}"></div>
+    <button type="submit" class="btn">{{t.stor_upload_btn}}</button>
   </form>
 </details>
 <details class="card">
-  <summary>Create Resource</summary>
+  <summary>{{t.stor_create_resource}}</summary>
   <form method="POST" action="/storage/{{{path}}}">
     <input type="hidden" name="action" value="create">
     <div class="form-group">
-      <label for="create-name">Filename</label>
-      <input type="text" id="create-name" name="name" placeholder="e.g. notes.txt, data.ttl, page.html" required>
+      <label for="create-name">{{t.stor_filename}}</label>
+      <input type="text" id="create-name" name="name" placeholder="{{t.stor_filename_ph}}" required>
     </div>
     <div class="form-group">
-      <label for="create-content">Content</label>
-      <textarea id="create-content" name="content" rows="8" class="mono editor-textarea" placeholder="Enter content..."></textarea>
+      <label for="create-content">{{t.stor_content}}</label>
+      <textarea id="create-content" name="content" rows="8" class="mono editor-textarea" placeholder="{{t.stor_enter_content}}"></textarea>
     </div>
-    <button type="submit" class="btn">Create</button>
+    <button type="submit" class="btn">{{t.stor_create}}</button>
   </form>
 </details>
-

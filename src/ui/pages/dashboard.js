@@ -7,14 +7,17 @@ import { requireAuth } from '../../auth/middleware.js';
 import { parseNTriples, unwrapIri, unwrapLiteral } from '../../rdf/ntriples.js';
 import { PREFIXES } from '../../rdf/prefixes.js';
 import { getUserConfig } from '../../config.js';
+import { formatBytes } from '../../i18n/format.js';
+import { getTranslations } from '../../i18n/index.js';
 
 export async function renderDashboard(reqCtx) {
   const authCheck = requireAuth(reqCtx);
   if (authCheck) return authCheck;
 
-  const { config, env } = reqCtx;
+  const { config, env, lang } = reqCtx;
   const username = reqCtx.user;
   const uc = getUserConfig(config, username);
+  const t = getTranslations(lang);
 
   // Load stats
   const [followersData, followingData, outboxData, quotaData, pendingData] = await Promise.all([
@@ -39,7 +42,11 @@ export async function renderDashboard(reqCtx) {
   const passkeys = credResults.filter(Boolean).map(c => ({ id: c.id, name: c.name, createdAt: c.createdAt }));
 
   // Compute storage breakdown by resource type
-  const breakdown = await computeStorageBreakdown(reqCtx.storage, config, username, quota.usedBytes);
+  const breakdown = await computeStorageBreakdown(reqCtx.storage, config, username, quota.usedBytes, t);
+
+  // Plural labels
+  const pendingFollowLabel = (pendingFollows.length === 1 ? t.dash_pending_follow_one : t.dash_pending_follow_other).replace('{{count}}', pendingFollows.length);
+  const totalResourcesLabel = (breakdown.totalCount === 1 ? t.dash_resources_one : t.dash_resources_other).replace('{{count}}', breakdown.totalCount);
 
   return renderPage('Dashboard', template, {
     username,
@@ -51,25 +58,18 @@ export async function renderDashboard(reqCtx) {
     followingCount: following.length,
     postCount: outbox.length,
     pendingFollowCount: pendingFollows.length,
+    pendingFollowLabel,
     hasPendingFollows: pendingFollows.length > 0,
-    storageUsed: formatBytes(quota.usedBytes),
+    storageUsed: formatBytes(quota.usedBytes, lang),
+    totalResourcesLabel,
     webfingerParam: encodeURIComponent(username) + '@' + encodeURIComponent(config.domain),
     passkeys,
     hasPasskeys: passkeys.length > 0,
     storageBreakdown: breakdown.categories,
     hasBreakdown: breakdown.categories.length > 0,
     totalResources: breakdown.totalCount,
-    totalResourcesPlural: breakdown.totalCount !== 1,
     fedcmConfigURL: config.baseUrl + '/fedcm/config.json',
-  }, { user: username, config, nav: 'dashboard', storage: reqCtx.storage, baseUrl: config.baseUrl });
-}
-
-function formatBytes(bytes) {
-  if (bytes === 0) return '0 B';
-  const k = 1024;
-  const sizes = ['B', 'KB', 'MB', 'GB'];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return `${(bytes / Math.pow(k, i)).toFixed(1)} ${sizes[i]}`;
+  }, { user: username, config, nav: 'dashboard', storage: reqCtx.storage, baseUrl: config.baseUrl, lang });
 }
 
 /**
@@ -141,7 +141,7 @@ async function collectResources(storage, containerIri, results) {
 /**
  * Compute storage breakdown grouped by resource category.
  */
-async function computeStorageBreakdown(storage, config, username, totalUsedBytes) {
+async function computeStorageBreakdown(storage, config, username, totalUsedBytes, t) {
   const rootIri = `${config.baseUrl}/${username}/`;
   const resources = [];
 
@@ -169,7 +169,7 @@ async function computeStorageBreakdown(storage, config, username, totalUsedBytes
       name: c.name,
       size: formatBytes(c.bytes),
       count: c.count,
-      label: `${c.count} file${c.count !== 1 ? 's' : ''}`,
+      label: (c.count === 1 ? t.dash_n_files_one : t.dash_n_files_other).replace('{{count}}', c.count),
     }));
 
   // Add "Everything Else" for unaccounted bytes (metadata, indexes, etc.)
@@ -177,10 +177,10 @@ async function computeStorageBreakdown(storage, config, username, totalUsedBytes
   const remainder = (totalUsedBytes || 0) - categorizedBytes;
   if (remainder > 0) {
     categories.push({
-      name: 'Everything Else',
+      name: t.dash_everything_else || 'Everything Else',
       size: formatBytes(remainder),
       count: 0,
-      label: 'system data',
+      label: t.dash_system_data || 'system data',
     });
   }
 

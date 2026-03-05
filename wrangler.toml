@@ -27,5 +27,5 @@ bucket_name = "paa-pub-blobs"
 
 [[rules]]
 type = "Text"
-globs = ["**/*.html"]
+globs = ["**/*.html", "**/*.ttl"]
 fallthrough = true

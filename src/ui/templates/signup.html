@@ -1,22 +1,22 @@
 <div class="card login-card">
-  <h1>Sign Up</h1>
+  <h1>{{t.signup_title}}</h1>
   {{#error}}
   <div class="error">{{error}}</div>
   {{/error}}
   <form method="POST" action="/signup">
     <div class="form-group">
-      <label for="username">Username</label>
-      <input type="text" id="username" name="username" pattern="[a-zA-Z0-9_\-]+" title="Letters, numbers, hyphens, and underscores only" autocomplete="username" required autofocus value="{{username}}">
+      <label for="username">{{t.land_username}}</label>
+      <input type="text" id="username" name="username" pattern="[a-zA-Z0-9_\-]+" title="{{t.land_username_pattern}}" autocomplete="username" required autofocus value="{{username}}">
     </div>
     <div class="form-group">
-      <label for="password">Password</label>
+      <label for="password">{{t.land_password}}</label>
       <input type="password" id="password" name="password" minlength="8" autocomplete="new-password" required>
     </div>
     <div class="form-group">
-      <label for="confirm_password">Confirm Password</label>
+      <label for="confirm_password">{{t.land_confirm_password}}</label>
       <input type="password" id="confirm_password" name="confirm_password" minlength="8" autocomplete="new-password" required>
     </div>
-    <button type="submit" class="btn">Create Account</button>
+    <button type="submit" class="btn">{{t.land_create_account}}</button>
   </form>
-  <p class="text-muted mt-1">Already have an account? <a href="/login">Sign in</a></p>
+  <p class="text-muted mt-1">{{t.signup_already_have}} <a href="/login">{{t.signup_sign_in}}</a></p>
 </div>

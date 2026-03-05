@@ -391,15 +391,6 @@ const EXT_MAP = {
 };
 
 /**
- * Generic content types that indicate the client didn't know the real type.
- * When we see one of these we try to infer from the file extension instead.
- */
-const GENERIC_TYPES = new Set([
-  'application/octet-stream',
-  'application/x-www-form-urlencoded',  // sometimes sent erroneously
-]);
-
-/**
  * Extract the file extension from a resource IRI.
  * Returns lowercase extension without dot, or null.
  */
@@ -421,8 +412,8 @@ function extractExtension(resourceIri) {
  * Resolve the content type for a resource.
  *
  * Fallback hierarchy:
- * 1. Trust specific client Content-Type (non-generic)
- * 2. Infer from file extension if client sent generic type or none
+ * 1. Trust any client-provided Content-Type header as-is
+ * 2. Infer from file extension only when no Content-Type was sent
  * 3. Fall back to application/octet-stream
  *
  * @param {string|null} headerCT - Content-Type from the request header
@@ -433,26 +424,18 @@ export function resolveContentType(headerCT, resourceIri) {
   // Normalize: strip parameters (charset, boundary, etc.)
   const baseCT = headerCT ? headerCT.split(';')[0].trim().toLowerCase() : null;
 
-  // If client sent a specific (non-generic) type, trust it
-  if (baseCT && !GENERIC_TYPES.has(baseCT)) {
+  // If client sent any Content-Type, trust it
+  if (baseCT) {
     return baseCT;
   }
 
-  // Try to infer from extension
+  // No Content-Type sent — try to infer from extension
   const ext = extractExtension(resourceIri);
   if (ext && EXT_MAP[ext]) {
     return EXT_MAP[ext];
   }
 
   // Fall back
-  return baseCT || 'application/octet-stream';
+  return 'application/octet-stream';
 }
 
-/**
- * Look up a media type by extension.
- * @param {string} ext - File extension without dot (lowercase)
- * @returns {string|null} Media type or null
- */
-export function mediaTypeFromExtension(ext) {
-  return EXT_MAP[ext?.toLowerCase()] || null;
-}

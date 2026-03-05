@@ -164,6 +164,35 @@ Index entries are arrays of `{ id, published }` objects sorted newest-first, cap
 |---|---|---|
 | `quota:{username}` | `{"usedBytes": 145832}` | permanent |
 
+### User preferences
+
+| Key | Value | TTL |
+|---|---|---|
+| `user_prefs:{username}` | User preferences JSON (see below) | permanent |
+
+```json
+{
+  "language": "en-US",
+  "dateFormat": "medium",
+  "timezone": "UTC",
+  "theme": "",
+  "notifications": {
+    "showFollows": true,
+    "showMentions": true
+  }
+}
+```
+
+Supported languages: `en-US`, `fr`, `es`, `he`, `zh`. The language setting determines which translations are used for the web UI and which locale is used for date/number formatting.
+
+### FedCM configuration
+
+| Key | Value | TTL |
+|---|---|---|
+| `fedcm_external_idps` | JSON array of external IdP configs | permanent |
+
+Each entry: `{ id, name, configURL, clientId, issuer }`. Managed by the admin at `/admin/fedcm-idps`.
+
 ### System flags
 
 | Key | Value | TTL |

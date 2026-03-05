@@ -59,15 +59,6 @@ export async function loadMergedPrefixes(kv, username) {
   return { ...PREFIXES, ...customMap };
 }
 
-/** Build a prefix header for Turtle serialization. */
-export function turtlePrefixes(prefixNames, prefixMap) {
-  const map = prefixMap || PREFIXES;
-  return prefixNames
-    .filter(name => map[name])
-    .map(name => `@prefix ${name}: <${map[name]}> .`)
-    .join('\n');
-}
-
 // --- Namespace predicate catalog ---
 
 /** Helper to build predicate entries from a namespace + local names. */
@@ -147,7 +138,7 @@ export const BUILTIN_NS_PREDICATES = {
  * Load stored predicates for a namespace from KV.
  * Falls back to BUILTIN_NS_PREDICATES if no custom data is stored.
  */
-export async function loadNsPredicates(kv, nsIri) {
+async function loadNsPredicates(kv, nsIri) {
   try {
     const raw = await kv.get(`ns_predicates:${nsIri}`);
     if (raw) return JSON.parse(raw);

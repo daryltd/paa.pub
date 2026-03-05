@@ -7,38 +7,7 @@ import { parseTurtle } from '../rdf/turtle-parser.js';
 import { serializeTurtle } from '../rdf/turtle-serializer.js';
 import { parseNTriples, serializeNTriples } from '../rdf/ntriples.js';
 import { solidHeaders } from './headers.js';
-import { negotiateType, serializeRdf } from './conneg.js';
 import { parseSparqlUpdate } from './ldp.js';
-
-/**
- * Handle GET for .acl resources.
- * @param {object} reqCtx
- * @param {string} resourceIri - IRI of the resource (without .acl)
- * @returns {Promise<Response>}
- */
-export async function handleAclGet(reqCtx, resourceIri) {
-  const { storage, request, config } = reqCtx;
-  const aclIri = resourceIri + '.acl';
-
-  // Check access — only owner can read ACLs
-  if (reqCtx.user !== config.username) {
-    return new Response('Forbidden', { status: 403 });
-  }
-
-  const aclData = await storage.get(`acl:${resourceIri}`);
-  if (!aclData) {
-    return new Response('Not Found', { status: 404 });
-  }
-
-  const triples = parseNTriples(aclData);
-  const accept = request.headers.get('Accept') || 'text/turtle';
-  const contentType = negotiateType(accept);
-  const body = serializeRdf(triples, contentType, ['acl', 'foaf']);
-
-  const headers = solidHeaders(aclIri, false);
-  headers.set('Content-Type', contentType);
-  return new Response(body, { status: 200, headers });
-}
 
 /**
  * Handle PUT for .acl resources.

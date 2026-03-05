@@ -49,14 +49,17 @@ import { renderActivityPage, renderRemoteFeed, handleMarkRead, handleMarkAllRead
 import { renderStoragePage, handleStorageAction } from './ui/pages/storage.js';
 import { renderAclEditor, handleAclUpdate } from './ui/pages/acl-editor.js';  // ACP editor (file retains old name for git history)
 import { renderProfileEditor, handleProfileUpdate, handleProfileIndexReset, handleDiscoverNs, handlePreviewLayout, handleListComponents, handleSaveComponent, handleImportComponent } from './ui/pages/profile-editor.js';
-import { renderAppPermissions, handleAppPermissionsUpdate } from './ui/pages/app-permissions.js';
+import { handleAppPermissionsUpdate } from './ui/pages/app-permissions.js';
+import { renderSettings, handleSettingsUpdate } from './ui/pages/settings.js';
 import { handleDiscovery, handleJwks, handleRegister, handleAuthorize, handleToken, handleUserInfo, verifyAccessToken } from './oidc.js';
-import { renderSignupPage, handleSignup } from './auth/registration.js';
-import { handleWebIdentity, handleFedCMConfig, handleFedCMAccounts, handleFedCMAssertion, handleFedCMClientMetadata, handleFedCMDisconnect, handleFedCMVerify } from './fedcm.js';
+import { renderSignupPage, handleSignup, renderFedCMSignupPage, handleFedCMSignup } from './auth/registration.js';
+import { handleWebIdentity, handleFedCMConfig, handleFedCMAccounts, handleFedCMAssertion, handleFedCMClientMetadata, handleFedCMDisconnect, handleFedCMVerify, handleFedCMExternalVerify } from './fedcm.js';
 import { renderPage } from './ui/shell.js';
+import { resolveLanguage } from './i18n/index.js';
 import landingTemplate from './ui/templates/landing.html';
 import { renderAdminDashboard } from './admin/dashboard.js';
 import { renderAdminUsers, handleAdminUserAction } from './admin/users.js';
+import { renderAdminFedCMIdps, handleAdminFedCMIdpAction } from './admin/fedcm-idps.js';
 import { checkRateLimit, rateLimitResponse } from './security/rate-limit.js';
 import { checkContentLength, getSizeLimit } from './security/size-limit.js';
 
@@ -90,6 +93,7 @@ function buildRouter() {
   router.get('/fedcm/client-metadata', handleFedCMClientMetadata);
   router.post('/fedcm/disconnect', handleFedCMDisconnect);
   router.post('/fedcm/verify', handleFedCMVerify);
+  router.post('/fedcm/external-verify', handleFedCMExternalVerify);
 
   // Public routes
   router.get('/.well-known/webfinger', handleWebFinger);
@@ -100,6 +104,8 @@ function buildRouter() {
   // Registration
   router.get('/signup', renderSignupPage);
   router.post('/signup', handleSignup);
+  router.get('/signup/fedcm', renderFedCMSignupPage);
+  router.post('/signup/fedcm', handleFedCMSignup);
 
   // WebAuthn
   router.post('/webauthn/register/begin', handleWebAuthnRegisterBegin);
@@ -113,6 +119,8 @@ function buildRouter() {
   router.get('/admin', renderAdminDashboard);
   router.get('/admin/users', renderAdminUsers);
   router.post('/admin/users', handleAdminUserAction);
+  router.get('/admin/fedcm-idps', renderAdminFedCMIdps);
+  router.post('/admin/fedcm-idps', handleAdminFedCMIdpAction);
 
   // Authenticated UI routes
   router.get('/dashboard', renderDashboard);
@@ -139,8 +147,12 @@ function buildRouter() {
   router.post('/profile/components', handleSaveComponent);
   router.post('/profile/import-component', handleImportComponent);
 
-  // App permissions management
-  router.get('/app-permissions', renderAppPermissions);
+  // Settings page
+  router.get('/settings', renderSettings);
+  router.post('/settings', handleSettingsUpdate);
+
+  // App permissions management (POST still handled here, GET redirects to /settings)
+  router.get('/app-permissions', () => new Response(null, { status: 302, headers: { 'Location': '/settings' } }));
   router.post('/app-permissions', handleAppPermissionsUpdate);
 
   // Legacy /acl/ redirect
@@ -179,8 +191,10 @@ function getRateLimitCategory(method, pathname, handler) {
   if (method === 'POST' && pathname === '/token') return 'token';
   if (method === 'POST' && pathname === '/fedcm/assertion') return 'token';
   if (method === 'POST' && pathname === '/fedcm/verify') return 'login';
+  if (method === 'POST' && pathname === '/fedcm/external-verify') return 'login';
   if (method === 'POST' && pathname === '/register') return 'register';
   if (method === 'POST' && pathname === '/signup') return 'register';
+  if (method === 'POST' && pathname === '/signup/fedcm') return 'register';
   if (method === 'POST' && (pathname === '/inbox' || pathname.match(/^\/[^/]+\/inbox$/))) return 'inbox';
   // LDP write operations
   if (handler === handleLDP && ['PUT', 'POST', 'PATCH', 'DELETE'].includes(method)) return 'write';
@@ -237,6 +251,14 @@ export default {
     // Build user-specific config if authenticated
     const userConfig = user ? getUserConfig(config, user) : null;
 
+    // Load user preferences and resolve language
+    let userPrefs = null;
+    if (user) {
+      const prefsRaw = await env.APPDATA.get(`user_prefs:${user}`);
+      userPrefs = prefsRaw ? JSON.parse(prefsRaw) : null;
+    }
+    const lang = resolveLanguage(request, userPrefs);
+
     // Handle CORS preflight
     if (request.method === 'OPTIONS') {
       return applyCors(new Response(null, { status: 204 }), request);
@@ -247,10 +269,21 @@ export default {
       if (user) {
         return applyCors(new Response(null, { status: 302, headers: { 'Location': '/dashboard' } }), request);
       }
+      const externalIdps = JSON.parse(await env.APPDATA.get('fedcm_external_idps') || '[]');
       const landing = await renderPage('Welcome', landingTemplate, {
         siteName: config.domain,
         registrationOpen: config.registrationMode !== 'closed',
-      });
+        externalIdps,
+        hasExternalIdps: externalIdps.length > 0,
+      }, { lang });
+      if (externalIdps.length > 0) {
+        const origins = [...new Set(externalIdps.map(p => new URL(p.configURL).origin))];
+        const csp = landing.headers.get('Content-Security-Policy');
+        landing.headers.set('Content-Security-Policy', csp.replace(
+          /connect-src\s+'self'([^;]*)/,
+          `connect-src 'self'$1 ${origins.join(' ')}`,
+        ));
+      }
       return applyCors(landing, request);
     }
 
@@ -297,6 +330,8 @@ export default {
       params: match.params,
       orchestrator,
       storage,
+      lang,
+      userPrefs,
     };
 
     try {

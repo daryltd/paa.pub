@@ -1,31 +1,31 @@
+<h1>{{t.adm_dashboard}}</h1>
 <div class="card">
-  <h1>Admin Dashboard</h1>
-
+  <h2>{{t.adm_user_info}}</h2>
   <div class="stats-grid">
     <div class="stat-card">
       <div class="stat-value">{{totalUsers}}</div>
-      <div class="stat-label">Total Users</div>
+      <div class="stat-label">{{t.adm_total_users}}</div>
     </div>
     <div class="stat-card">
       <div class="stat-value">{{totalStorage}}</div>
-      <div class="stat-label">Total Storage</div>
+      <div class="stat-label">{{t.adm_total_storage}}</div>
     </div>
     <div class="stat-card">
       <div class="stat-value">{{totalPosts}}</div>
-      <div class="stat-label">Total Posts</div>
+      <div class="stat-label">{{t.adm_total_posts}}</div>
     </div>
   </div>
 
-  <h2>Users</h2>
+  <h3>{{t.adm_user_list}}</h3>
   <table class="data-table">
     <thead>
       <tr>
-        <th>Username</th>
-        <th>Storage</th>
-        <th>Followers</th>
-        <th>Posts</th>
-        <th>Status</th>
-        <th>Created</th>
+        <th>{{t.adm_username}}</th>
+        <th>{{t.adm_storage}}</th>
+        <th>{{t.adm_followers}}</th>
+        <th>{{t.adm_posts}}</th>
+        <th>{{t.adm_status}}</th>
+        <th>{{t.adm_created}}</th>
       </tr>
     </thead>
     <tbody>
@@ -33,17 +33,45 @@
       <tr>
         <td>
           <a href="/{{username}}/">{{username}}</a>
-          {{#isAdmin}}<span class="badge">admin</span>{{/isAdmin}}
+          {{#isAdmin}}<span class="badge">{{t.adm_admin}}</span>{{/isAdmin}}
         </td>
         <td>{{storageDisplay}}</td>
         <td>{{followersCount}}</td>
         <td>{{postsCount}}</td>
-        <td>{{#disabled}}<span class="text-danger">Disabled</span>{{/disabled}}{{^disabled}}<span class="text-success">Active</span>{{/disabled}}</td>
+        <td>{{#disabled}}<span class="text-danger">{{t.adm_disabled}}</span>{{/disabled}}{{^disabled}}<span class="text-success">{{t.adm_active}}</span>{{/disabled}}</td>
         <td>{{createdShort}}</td>
       </tr>
       {{/users}}
     </tbody>
   </table>
 
-  <p class="mt-1"><a href="/admin/users" class="btn btn-secondary">Manage Users</a></p>
+  <p class="mt-1"><a href="/admin/users" class="btn btn-secondary">{{t.adm_manage_users}}</a></p>
+</div>
+<div class="card">
+  <h2>{{t.adm_fedcm_title}}</h2>
+  {{#hasIdps}}
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th>{{t.adm_id}}</th>
+        <th>{{t.adm_name}}</th>
+        <th>{{t.adm_issuer}}</th>
+      </tr>
+    </thead>
+    <tbody>
+      {{#idps}}
+      <tr>
+        <td>{{id}}</td>
+        <td>{{name}}</td>
+        <td class="text-sm">{{issuer}}</td>
+      </tr>
+      {{/idps}}
+    </tbody>
+  </table>
+  {{/hasIdps}}
+  {{^hasIdps}}
+  <p class="text-muted">{{t.adm_no_idps}}</p>
+  {{/hasIdps}}
+
+  <p class="mt-1"><a href="/admin/fedcm-idps" class="btn btn-secondary">{{t.adm_manage_fedcm}}</a></p>
 </div>

@@ -10,15 +10,18 @@ import template from '../templates/activity.html';
 import { requireAuth } from '../../auth/middleware.js';
 import { simpleHash } from '../../utils.js';
 import { fetchRemoteActor } from '../../activitypub/remote.js';
+import { getTranslations } from '../../i18n/index.js';
+import { formatDateTime } from '../../i18n/format.js';
 
 export async function renderActivityPage(reqCtx) {
   const authCheck = requireAuth(reqCtx);
   if (authCheck) return authCheck;
 
-  const { config, env, url } = reqCtx;
+  const { config, env, url, lang } = reqCtx;
   const username = reqCtx.user;
   const error = url.searchParams.get('error');
   const feedLimit = config.feedLimit;
+  const t = getTranslations(lang);
 
   // Load inbox, outbox, following, and pending follow requests
   const [inboxData, outboxData, followingData, pendingData, followersData, watermark, readItemsData] = await Promise.all([
@@ -62,26 +65,26 @@ export async function renderActivityPage(reqCtx) {
 
   // Pre-process activities with boolean flags for Mustache
   const activities = allItems.map(a => {
-    const source = a._source === 'inbox' ? 'Received' : 'Sent';
-    const type = a.type || 'Unknown';
+    const source = a._source === 'inbox' ? t.act_source_received : t.act_source_sent;
+    const type = a.type || t.act_type_unknown;
     const actor = typeof a.actor === 'string' ? a.actor : a.actor?.id || '';
-    const published = a.published ? new Date(a.published).toLocaleString() : '';
-    const isReceived = source === 'Received';
+    const published = a.published ? formatDateTime(a.published, lang) : '';
+    const isReceived = a._source === 'inbox';
 
     let isCreate = false, isFollow = false, isAccept = false, isUndo = false, isOther = false;
     let content = '', summary = '', hasSummary = false, target = '';
 
-    if (type === 'Create' && a.object && typeof a.object !== 'string') {
+    if (a.type === 'Create' && a.object && typeof a.object !== 'string') {
       isCreate = true;
       content = a.object.content || '';
       summary = a.object.summary || '';
       hasSummary = !!summary;
-    } else if (type === 'Follow') {
+    } else if (a.type === 'Follow') {
       isFollow = true;
       target = typeof a.object === 'string' ? a.object : a.object?.id || '';
-    } else if (type === 'Accept') {
+    } else if (a.type === 'Accept') {
       isAccept = true;
-    } else if (type === 'Undo') {
+    } else if (a.type === 'Undo') {
       isUndo = true;
     } else {
       isOther = true;
@@ -93,7 +96,7 @@ export async function renderActivityPage(reqCtx) {
   // Format pending follow requests for template
   const pendingRequests = pendingFollows.map(p => ({
     actor: p.actor,
-    receivedAt: p.receivedAt ? new Date(p.receivedAt).toLocaleString() : '',
+    receivedAt: p.receivedAt ? formatDateTime(p.receivedAt, lang) : '',
   }));
 
   // Format followers and following with profile feed links
@@ -121,7 +124,7 @@ export async function renderActivityPage(reqCtx) {
     hasActivities: activities.length > 0,
     feedLimit,
     showAll,
-  }, { user: username, config, nav: 'activity', storage: reqCtx.storage, baseUrl: config.baseUrl });
+  }, { user: username, config, nav: 'activity', storage: reqCtx.storage, baseUrl: config.baseUrl, lang });
 }
 
 /**
@@ -132,9 +135,10 @@ export async function renderRemoteFeed(reqCtx) {
   const authCheck = requireAuth(reqCtx);
   if (authCheck) return authCheck;
 
-  const { config, env, url } = reqCtx;
+  const { config, env, url, lang } = reqCtx;
   const username = reqCtx.user;
   const actorUri = url.searchParams.get('actor');
+  const t = getTranslations(lang);
   if (!actorUri) {
     return new Response(null, { status: 302, headers: { 'Location': '/activity' } });
   }
@@ -144,7 +148,7 @@ export async function renderRemoteFeed(reqCtx) {
   // Fetch the remote actor to get their outbox URL
   const actor = await fetchRemoteActor(actorUri, env.APPDATA);
   if (!actor || !actor.outbox) {
-    return renderPage('Remote Feed', '<h1>Remote Feed</h1><div class="card"><div class="text-muted">Could not load actor or outbox.</div><a href="/activity" class="btn mt-05">Back</a></div>', {}, { user: username, config, nav: 'activity', storage: reqCtx.storage, baseUrl: config.baseUrl });
+    return renderPage(t.act_remote_feed, `<h1>${escapeHtml(t.act_remote_feed)}</h1><div class="card"><div class="text-muted">${escapeHtml(t.act_could_not_load)}</div><a href="/activity" class="btn mt-05">${escapeHtml(t.act_back)}</a></div>`, {}, { user: username, config, nav: 'activity', storage: reqCtx.storage, baseUrl: config.baseUrl, lang });
   }
 
   // Fetch the outbox collection
@@ -178,10 +182,10 @@ export async function renderRemoteFeed(reqCtx) {
 
   // Process items for display
   const activities = items.map(a => {
-    const type = a.type || 'Unknown';
-    const published = a.published ? new Date(a.published).toLocaleString() : '';
+    const type = a.type || t.act_type_unknown;
+    const published = a.published ? formatDateTime(a.published, lang) : '';
     let content = '', summary = '', hasSummary = false;
-    const isCreate = type === 'Create' && a.object && typeof a.object !== 'string';
+    const isCreate = a.type === 'Create' && a.object && typeof a.object !== 'string';
 
     if (isCreate) {
       content = a.object.content || '';
@@ -194,22 +198,22 @@ export async function renderRemoteFeed(reqCtx) {
 
   const actorName = actor.preferredUsername || actor.name || actorUri;
 
-  const body = `<h1>Feed: ${escapeHtml(actorName)}</h1>
+  const body = `<h1>${escapeHtml(t.act_feed_prefix)} ${escapeHtml(actorName)}</h1>
 <div class="card">
   <div class="mono text-muted text-sm break-all mb-05">${escapeHtml(actorUri)}</div>
-  <a href="/activity" class="btn btn-secondary">Back to Activity</a>
+  <a href="/activity" class="btn btn-secondary">${escapeHtml(t.act_back_to_activity)}</a>
 </div>
-${activities.length === 0 ? '<div class="card text-muted">No public activities found.</div>' : ''}
+${activities.length === 0 ? `<div class="card text-muted">${escapeHtml(t.act_no_public)}</div>` : ''}
 ${activities.map(a => `<div class="card">
   <div class="flex justify-between mb-05">
     <span class="badge badge-type">${escapeHtml(a.type)}</span>
     <span class="text-muted">${escapeHtml(a.published)}</span>
   </div>
-  ${a.isCreate ? `${a.hasSummary ? `<div class="text-muted"><em>CW: ${escapeHtml(a.summary)}</em></div>` : ''}
-  <div>${a.content}</div>` : `<div class="text-muted">${escapeHtml(a.type)} activity</div>`}
+  ${a.isCreate ? `${a.hasSummary ? `<div class="text-muted"><em>${escapeHtml(t.act_cw_prefix)} ${escapeHtml(a.summary)}</em></div>` : ''}
+  <div>${a.content}</div>` : `<div class="text-muted">${escapeHtml(a.type)} ${escapeHtml(t.act_type_activity)}</div>`}
 </div>`).join('\n')}`;
 
-  return renderPage('Remote Feed', body, {}, { user: username, config, nav: 'activity', storage: reqCtx.storage, baseUrl: config.baseUrl });
+  return renderPage(t.act_remote_feed, body, {}, { user: username, config, nav: 'activity', storage: reqCtx.storage, baseUrl: config.baseUrl, lang });
 }
 
 function escapeHtml(str) {

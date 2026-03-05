@@ -5,7 +5,7 @@ const RESERVED_NAMES = new Set([
   'authorize', 'token', 'register', 'userinfo', 'jwks',
   'webauthn', 'app-permissions', 'follow-requests',
   '.well-known',
-  'signup', 'admin', 'fedcm',
+  'signup', 'admin', 'fedcm', 'settings',
 ]);
 
 export { RESERVED_NAMES };

@@ -1,26 +1,38 @@
 <div class="card login-card">
-  <h1>Login</h1>
+  <h1>{{t.login_title}}</h1>
   {{#error}}
   <div class="error">{{error}}</div>
   {{/error}}
   <form method="POST" action="/login">
     {{#returnTo}}<input type="hidden" name="return_to" value="{{returnTo}}">{{/returnTo}}
+    {{#fedcm}}<input type="hidden" name="fedcm" value="1">{{/fedcm}}
     <div class="form-group">
-      <label for="username">Username</label>
+      <label for="username">{{t.land_username}}</label>
       <input type="text" id="username" name="username" autocomplete="username" required autofocus>
     </div>
     <div class="form-group">
-      <label for="password">Password</label>
+      <label for="password">{{t.land_password}}</label>
       <input type="password" id="password" name="password" autocomplete="current-password" required>
     </div>
-    <button type="submit" class="btn">Sign In</button>
+    <button type="submit" class="btn">{{t.land_sign_in}}</button>
   </form>
   <div id="passkey-login" class="mt-1">
-    <button type="button" class="btn btn-secondary hidden" onclick="passkeyLogin()" id="passkey-btn">Sign in with Passkey</button>
+    <button type="button" class="btn btn-secondary hidden" onclick="passkeyLogin()" id="passkey-btn">{{t.land_passkey}}</button>
   </div>
   <div id="fedcm-login" class="mt-1">
-    <button type="button" class="btn btn-secondary hidden" onclick="fedcmLogin()" id="fedcm-btn">Sign in with FedCM</button>
+    <button type="button" class="btn btn-secondary hidden" onclick="fedcmLogin()" id="fedcm-btn">{{t.land_fedcm}}</button>
   </div>
+  {{#hasExternalIdps}}
+  <div class="mt-1">
+    <p class="text-muted text-sm">{{t.land_or_sign_in_with}}</p>
+    {{#externalIdps}}
+    <button type="button" class="btn btn-secondary mt-025"
+      onclick="fedcmExternalLogin('{{configURL}}', '{{clientId}}', '{{id}}')">
+      {{name}}
+    </button>
+    {{/externalIdps}}
+  </div>
+  {{/hasExternalIdps}}
   <script src="/scripts/webauthn-utils.js"></script>
   <script src="/scripts/passkey-login.js"></script>
   <script src="/scripts/fedcm-login.js"></script>
