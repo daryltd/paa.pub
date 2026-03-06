@@ -52,6 +52,7 @@ import { renderAclEditor, handleAclUpdate } from './ui/pages/acl-editor.js';  //
 import { renderProfileEditor, handleProfileUpdate, handleProfileIndexReset, handleDiscoverNs, handlePreviewLayout, handleListComponents, handleSaveComponent, handleImportComponent } from './ui/pages/profile-editor.js';
 import { handleAppPermissionsUpdate } from './ui/pages/app-permissions.js';
 import { renderSettings, handleSettingsUpdate } from './ui/pages/settings.js';
+import { handleExport, handleCleanup } from './ui/pages/export.js';
 import { handleDiscovery, handleJwks, handleRegister, handleAuthorize, handleToken, handleUserInfo, verifyAccessToken } from './oidc.js';
 import { renderSignupPage, handleSignup, renderFedCMSignupPage, handleFedCMSignup } from './auth/registration.js';
 import { handleWebIdentity, handleFedCMConfig, handleFedCMAccounts, handleFedCMAssertion, handleFedCMClientMetadata, handleFedCMDisconnect, handleFedCMVerify, handleFedCMExternalVerify } from './fedcm.js';
@@ -152,6 +153,8 @@ function buildRouter() {
   // Settings page
   router.get('/settings', renderSettings);
   router.post('/settings', handleSettingsUpdate);
+  router.get('/settings/export', handleExport);
+  router.post('/settings/cleanup', handleCleanup);
 
   // App permissions management (POST still handled here, GET redirects to /settings)
   router.get('/app-permissions', () => new Response(null, { status: 302, headers: { 'Location': '/settings' } }));

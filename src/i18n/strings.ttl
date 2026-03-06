@@ -1663,3 +1663,99 @@ paa:settings_saved rdfs:label "Settings saved."@en-US ;
     rdfs:label "Configuración guardada."@es ;
     rdfs:label "ההגדרות נשמרו."@he ;
     rdfs:label "设置已保存。"@zh .
+
+paa:export_title rdfs:label "Data Export"@en-US ;
+    rdfs:label "Export des données"@fr ;
+    rdfs:label "Exportación de datos"@es ;
+    rdfs:label "ייצוא נתונים"@he ;
+    rdfs:label "数据导出"@zh .
+
+paa:export_description rdfs:label "Download a copy of your data as a compressed archive."@en-US ;
+    rdfs:label "Téléchargez une copie de vos données sous forme d'archive compressée."@fr ;
+    rdfs:label "Descarga una copia de tus datos como archivo comprimido."@es ;
+    rdfs:label "הורד עותק של הנתונים שלך כארכיון דחוס."@he ;
+    rdfs:label "下载数据的压缩存档副本。"@zh .
+
+paa:export_categories rdfs:label "Select data to include"@en-US ;
+    rdfs:label "Sélectionner les données à inclure"@fr ;
+    rdfs:label "Seleccionar datos a incluir"@es ;
+    rdfs:label "בחר נתונים לכלול"@he ;
+    rdfs:label "选择要包含的数据"@zh .
+
+paa:export_cat_pod_and_files rdfs:label "Pod resources and files (documents, containers, uploads, access policies)"@en-US ;
+    rdfs:label "Ressources et fichiers du pod (documents, conteneurs, téléchargements, politiques d'accès)"@fr ;
+    rdfs:label "Recursos y archivos del pod (documentos, contenedores, cargas, políticas de acceso)"@es ;
+    rdfs:label "משאבי Pod וקבצים (מסמכים, מכולות, העלאות, מדיניות גישה)"@he ;
+    rdfs:label "Pod 资源和文件（文档、容器、上传内容、访问策略）"@zh .
+
+paa:export_cat_activitypub rdfs:label "ActivityPub data (followers, following, inbox, outbox)"@en-US ;
+    rdfs:label "Données ActivityPub (abonnés, abonnements, boîte de réception, boîte d'envoi)"@fr ;
+    rdfs:label "Datos de ActivityPub (seguidores, siguiendo, bandeja de entrada, bandeja de salida)"@es ;
+    rdfs:label "נתוני ActivityPub (עוקבים, נעקבים, דואר נכנס, דואר יוצא)"@he ;
+    rdfs:label "ActivityPub 数据（关注者、正在关注、收件箱、发件箱）"@zh .
+
+paa:export_cat_profile rdfs:label "Profile & settings (layout, preferences, prefixes, friends)"@en-US ;
+    rdfs:label "Profil et paramètres (mise en page, préférences, préfixes, amis)"@fr ;
+    rdfs:label "Perfil y configuración (diseño, preferencias, prefijos, amigos)"@es ;
+    rdfs:label "פרופיל והגדרות (פריסה, העדפות, קידומות, חברים)"@he ;
+    rdfs:label "个人资料与设置（布局、偏好、前缀、好友）"@zh .
+
+paa:export_cat_keys rdfs:label "Cryptographic keys (ActivityPub signing keypair)"@en-US ;
+    rdfs:label "Clés cryptographiques (paire de clés de signature ActivityPub)"@fr ;
+    rdfs:label "Claves criptográficas (par de claves de firma ActivityPub)"@es ;
+    rdfs:label "מפתחות קריפטוגרפיים (זוג מפתחות חתימה של ActivityPub)"@he ;
+    rdfs:label "加密密钥（ActivityPub 签名密钥对）"@zh .
+
+paa:export_max_file_size rdfs:label "Maximum individual file size"@en-US ;
+    rdfs:label "Taille maximale par fichier"@fr ;
+    rdfs:label "Tamaño máximo por archivo"@es ;
+    rdfs:label "גודל קובץ מרבי"@he ;
+    rdfs:label "单个文件最大大小"@zh .
+
+paa:export_max_file_size_hint rdfs:label "Binary files larger than this will be skipped."@en-US ;
+    rdfs:label "Les fichiers binaires plus grands seront ignorés."@fr ;
+    rdfs:label "Los archivos binarios más grandes se omitirán."@es ;
+    rdfs:label "קבצים בינאריים גדולים מזה ידולגו."@he ;
+    rdfs:label "大于此大小的二进制文件将被跳过。"@zh .
+
+paa:export_no_limit rdfs:label "No limit"@en-US ;
+    rdfs:label "Sans limite"@fr ;
+    rdfs:label "Sin límite"@es ;
+    rdfs:label "ללא הגבלה"@he ;
+    rdfs:label "无限制"@zh .
+
+paa:export_download rdfs:label "Download Archive"@en-US ;
+    rdfs:label "Télécharger l'archive"@fr ;
+    rdfs:label "Descargar archivo"@es ;
+    rdfs:label "הורד ארכיון"@he ;
+    rdfs:label "下载存档"@zh .
+
+paa:cleanup_title rdfs:label "Storage Cleanup"@en-US ;
+    rdfs:label "Nettoyage du stockage"@fr ;
+    rdfs:label "Limpieza de almacenamiento"@es ;
+    rdfs:label "ניקוי אחסון"@he ;
+    rdfs:label "存储清理"@zh .
+
+paa:cleanup_description rdfs:label "Remove orphaned data left behind by deleted resources. This frees storage space occupied by files and metadata that are no longer referenced in your pod."@en-US ;
+    rdfs:label "Supprimer les données orphelines laissées par les ressources supprimées. Cela libère l'espace de stockage occupé par des fichiers et métadonnées qui ne sont plus référencés dans votre pod."@fr ;
+    rdfs:label "Eliminar datos huérfanos dejados por recursos eliminados. Esto libera espacio de almacenamiento ocupado por archivos y metadatos que ya no están referenciados en tu pod."@es ;
+    rdfs:label "הסר נתונים יתומים שנותרו ממשאבים שנמחקו. פעולה זו משחררת שטח אחסון שתפוס על ידי קבצים ומטא-נתונים שכבר לא מקושרים ב-Pod שלך."@he ;
+    rdfs:label "清除已删除资源留下的孤立数据。这将释放 Pod 中不再引用的文件和元数据所占用的存储空间。"@zh .
+
+paa:cleanup_confirm rdfs:label "This will permanently delete orphaned data. Continue?"@en-US ;
+    rdfs:label "Cela supprimera définitivement les données orphelines. Continuer ?"@fr ;
+    rdfs:label "Esto eliminará permanentemente los datos huérfanos. ¿Continuar?"@es ;
+    rdfs:label "פעולה זו תמחק לצמיתות נתונים יתומים. להמשיך?"@he ;
+    rdfs:label "这将永久删除孤立数据。是否继续？"@zh .
+
+paa:cleanup_run rdfs:label "Clean Up Orphaned Data"@en-US ;
+    rdfs:label "Nettoyer les données orphelines"@fr ;
+    rdfs:label "Limpiar datos huérfanos"@es ;
+    rdfs:label "נקה נתונים יתומים"@he ;
+    rdfs:label "清理孤立数据"@zh .
+
+paa:cleanup_done rdfs:label "Cleaned up {count} orphaned entries."@en-US ;
+    rdfs:label "{count} entrées orphelines nettoyées."@fr ;
+    rdfs:label "Se limpiaron {count} entradas huérfanas."@es ;
+    rdfs:label "נוקו {count} רשומות יתומות."@he ;
+    rdfs:label "已清理 {count} 条孤立条目。"@zh .
