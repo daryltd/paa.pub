@@ -1,16 +1,16 @@
-<h1>Access Policy</h1>
+<h1>{{t.acl_title}}</h1>
 
 <div class="card">
   <div class="text-muted mb-025">
-    Resource: <span class="mono">{{resourceIri}}</span>
+    {{t.acl_resource}} <span class="mono">{{resourceIri}}</span>
   </div>
   {{#isDir}}
-  <div class="text-muted text-sm">This policy applies to the container and its contents (unless overridden).</div>
+  <div class="text-muted text-sm">{{t.acl_container_applies}}</div>
   {{/isDir}}
 </div>
 
 <div class="card">
-  <h2>Access Level</h2>
+  <h2>{{t.acl_access_level}}</h2>
   <form method="POST" action="/acp/{{{path}}}">
     <input type="hidden" name="action" value="save_policy">
 
@@ -28,16 +28,16 @@
 
     {{#isInheritMode}}
     <div class="info-box">
-      Effective policy: <strong>{{effectiveLabel}}</strong>
+      {{t.acl_effective}} <strong>{{effectiveLabel}}</strong>
       {{#effectiveSource}}
-      <span class="text-muted"> — inherited from <span class="mono">{{effectiveSource}}</span></span>
+      <span class="text-muted"> — {{t.acl_inherited_from}} <span class="mono">{{effectiveSource}}</span></span>
       {{/effectiveSource}}
     </div>
     {{/isInheritMode}}
 
     <div id="custom-agents" class="mb-1{{#customHidden}} hidden{{/customHidden}}">
       <div class="form-group">
-        <label for="agents">Allowed WebIDs (one per line)</label>
+        <label for="agents">{{t.acl_allowed_webids}}</label>
         <textarea id="agents" name="agents" rows="4" class="mono editor-textarea" placeholder="https://alice.example/profile/card#me">{{agentsText}}</textarea>
       </div>
     </div>
@@ -45,14 +45,14 @@
     <div id="inherit-option" class="form-group{{^showInheritCheckbox}} hidden{{/showInheritCheckbox}}">
       <label>
         <input type="checkbox" name="inherit" value="1" {{{inheritChecked}}}>
-        Allow children to inherit this policy
+        {{t.acl_allow_inherit}}
       </label>
-      <div class="text-muted text-sm mt-025">When unchecked, resources inside this container must set their own policy.</div>
+      <div class="text-muted text-sm mt-025">{{t.acl_inherit_note}}</div>
     </div>
 
     <div class="flex gap-05">
-      <button type="submit" class="btn">Save Policy</button>
-      <a href="/storage/{{{path}}}" class="btn btn-secondary">Back</a>
+      <button type="submit" class="btn">{{t.acl_save_policy}}</button>
+      <a href="/storage/{{{path}}}" class="btn btn-secondary">{{t.acl_back}}</a>
     </div>
   </form>
 
@@ -60,9 +60,9 @@
 </div>
 
 <div class="card">
-  <h2>Friends List</h2>
+  <h2>{{t.acl_friends_list}}</h2>
   <p class="text-muted mb-075">
-    WebIDs listed here are granted read access when a resource is set to "Friends" mode.
+    {{t.acl_friends_desc}}
   </p>
   {{#hasFriends}}
   <table class="mb-075">
@@ -73,7 +73,7 @@
         <form method="POST" action="/acp/{{{path}}}" class="inline-form">
           <input type="hidden" name="action" value="remove_friend">
           <input type="hidden" name="webid" value="{{.}}">
-          <button type="submit" class="link-btn">remove</button>
+          <button type="submit" class="link-btn">{{t.acl_remove}}</button>
         </form>
       </td>
     </tr>
@@ -81,28 +81,28 @@
   </table>
   {{/hasFriends}}
   {{^hasFriends}}
-  <div class="text-muted mb-075">No friends added yet.</div>
+  <div class="text-muted mb-075">{{t.acl_no_friends}}</div>
   {{/hasFriends}}
 
   <form method="POST" action="/acp/{{{path}}}">
     <input type="hidden" name="action" value="add_friend">
     <div class="flex gap-05">
       <input type="url" name="webid" placeholder="https://alice.example/profile/card#me" required class="flex-1">
-      <button type="submit" class="btn">Add Friend</button>
+      <button type="submit" class="btn">{{t.acl_add_friend}}</button>
     </div>
   </form>
 </div>
 
 {{#isDir}}
 <div class="card">
-  <h2>Storage Quota</h2>
+  <h2>{{t.acl_quota}}</h2>
   <p class="text-muted mb-075 text-sm">
-    Set a storage limit for this container and its contents.
+    {{t.acl_quota_desc}}
   </p>
   {{#quotaData}}
   <div class="mb-075">
     <div class="text-md mb-025">
-      Used: <strong>{{usedFormatted}}</strong>{{#hasLimit}} / {{limitFormatted}}{{/hasLimit}}
+      {{t.acl_used}} <strong>{{usedFormatted}}</strong>{{#hasLimit}} / {{limitFormatted}}{{/hasLimit}}
     </div>
     {{#hasLimit}}
     <div class="progress-track">
@@ -115,18 +115,18 @@
   <form method="POST" action="/acp/{{{path}}}">
     <input type="hidden" name="action" value="save_quota">
     <div class="form-group mb-05">
-      <label for="quota_limit">Limit (e.g., 500MB, 1GB, or empty for no limit)</label>
+      <label for="quota_limit">{{t.acl_limit_label}}</label>
       <input type="text" id="quota_limit" name="quota_limit" value="{{quotaLimitValue}}" placeholder="No limit" class="input-short">
     </div>
-    <button type="submit" class="btn">Save Quota</button>
+    <button type="submit" class="btn">{{t.acl_save_quota}}</button>
   </form>
 </div>
 {{/isDir}}
 
 <div class="card">
-  <h2>ACP Details</h2>
+  <h2>{{t.acl_acp_details}}</h2>
   <details>
-    <summary class="text-muted cursor-pointer text-sm">View raw Access Control Policy (Turtle)</summary>
+    <summary class="text-muted cursor-pointer text-sm">{{t.acl_view_raw}}</summary>
     <pre class="mono code-block mt-05">{{turtlePolicy}}</pre>
   </details>
 </div>

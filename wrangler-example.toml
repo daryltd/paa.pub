@@ -9,6 +9,7 @@ PAA_USERNAME = "admin"
 # PAA_DOMAIN set via `wrangler secret put PAA_DOMAIN` or vars
 # PAA_STORAGE_LIMIT set here or via secret (default 1GB)
 # PAA_FEED_LIMIT set here or via secret (default 50)
+# PAA_LANGUAGE set here or via secret (default en-US). Options: en-US, fr, es, he, zh
 
 [assets]
 directory = "./public"
@@ -27,5 +28,5 @@ bucket_name = "paa-pub-blobs"
 
 [[rules]]
 type = "Text"
-globs = ["**/*.html"]
+globs = ["**/*.html", "**/*.ttl"]
 fallthrough = true

@@ -90,13 +90,14 @@ export async function renderProfileEditor(reqCtx) {
   const data = await buildEditorData(storage, config, env);
 
   // Pass through flash messages from redirect
+  const t = reqCtx.t || {};
   if (url.searchParams.has('saved')) {
-    data.success = 'Profile updated successfully.';
+    data.success = t.prof_saved || 'Profile updated successfully.';
   } else if (url.searchParams.has('reset')) {
-    data.success = 'Profile page reset to default template.';
+    data.success = t.prof_reset_success || 'Profile page reset to default template.';
   }
 
-  return renderPage('Edit Profile', template, data, { user: config.username, nav: 'profile', storage, baseUrl: config.baseUrl });
+  return renderPage('Edit Profile', template, data, { user: config.username, nav: 'profile', lang: reqCtx.lang, dir: reqCtx.dir, t, storage, baseUrl: config.baseUrl });
 }
 
 /**

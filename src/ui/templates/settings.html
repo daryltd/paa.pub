@@ -1,0 +1,92 @@
+<h1>{{t.set_title}}</h1>
+
+{{#success}}<div class="success">{{success}}</div>{{/success}}
+{{#error}}<div class="error">{{error}}</div>{{/error}}
+
+<details class="card" open>
+  <summary><h2>{{t.set_language_locale}}</h2></summary>
+  <form method="POST" action="/settings">
+    <input type="hidden" name="action" value="save_prefs">
+
+    <div class="form-group">
+      <label for="language">{{t.set_language}}</label>
+      <select id="language" name="language">
+        {{#languages}}
+        <option value="{{code}}" {{#selected}}selected{{/selected}}>{{nativeName}} ({{name}})</option>
+        {{/languages}}
+      </select>
+    </div>
+
+    <div class="form-group">
+      <label for="dateFormat">{{t.set_date_format}}</label>
+      <select id="dateFormat" name="dateFormat">
+        {{#dateFormats}}
+        <option value="{{value}}" {{#selected}}selected{{/selected}}>{{label}}</option>
+        {{/dateFormats}}
+      </select>
+    </div>
+
+    <button type="submit" class="btn">{{t.set_save_prefs}}</button>
+  </form>
+</details>
+
+<details class="card">
+  <summary><h2>{{t.set_app_management}}</h2></summary>
+
+  <p class="text-muted mb-1">
+    {{t.apps_desc}}
+  </p>
+
+  {{#hasApps}}
+  {{#apps}}
+  <div class="card">
+    <h3 class="mb-025">{{clientName}}</h3>
+    <div class="mono text-muted text-sm break-all mb-05">{{clientId}}</div>
+    <div class="text-muted text-sm mb-075">{{t.apps_authorized}} {{grantedAt}}</div>
+
+    {{#hasContainers}}
+    <div class="mb-075">
+      <strong class="text-md">{{t.apps_allowed_containers}}</strong>
+      <ul class="list-indented">
+        {{#containers}}
+        <li class="mono text-sm">{{path}}</li>
+        {{/containers}}
+      </ul>
+    </div>
+    {{/hasContainers}}
+    {{^hasContainers}}
+    <div class="text-muted mb-075 text-md">{{t.apps_no_write}}</div>
+    {{/hasContainers}}
+
+    <details class="mb-075">
+      <summary class="cursor-pointer text-sm">{{t.apps_update_access}}</summary>
+      <form method="POST" action="/settings" class="mt-05">
+        <input type="hidden" name="action" value="update">
+        <input type="hidden" name="client_id" value="{{clientId}}">
+        <div class="checkbox-panel mb-05">
+          {{#allContainers}}
+          <label class="container-label">
+            <input type="checkbox" name="containers" value="{{iri}}">
+            <span class="mono">{{path}}</span>
+          </label>
+          {{/allContainers}}
+        </div>
+        <button type="submit" class="btn">{{t.apps_update}}</button>
+      </form>
+    </details>
+
+    <form method="POST" action="/settings" class="inline-form">
+      <input type="hidden" name="action" value="revoke">
+      <input type="hidden" name="client_id" value="{{clientId}}">
+      <button type="submit" class="btn btn-secondary text-danger">{{t.apps_revoke}}</button>
+    </form>
+  </div>
+  {{/apps}}
+  {{/hasApps}}
+
+  {{^hasApps}}
+  <div class="card">
+    <div class="text-muted">{{t.apps_none}}</div>
+  </div>
+  {{/hasApps}}
+</details>

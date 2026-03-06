@@ -1,19 +1,19 @@
-<h1>Storage</h1>
+<h1>{{t.stor_title}}</h1>
 <div class="card">
-  <div class="text-muted mb-05">Path: <span class="mono">{{displayPath}}</span></div>
+  <div class="text-muted mb-05">{{t.stor_path}} <span class="mono">{{displayPath}}</span></div>
   {{{breadcrumbs}}}
 </div>
 <div class="card">
-  <h2>Resource</h2>
+  <h2>{{t.stor_resource}}</h2>
   {{#showEditor}}
   <form method="POST" action="/storage/{{{path}}}">
     <input type="hidden" name="action" value="save">
-    <div class="form-group"><label for="content">Content</label>
+    <div class="form-group"><label for="content">{{t.stor_content}}</label>
       <textarea id="content" name="content" rows="20" class="mono editor-textarea">{{content}}</textarea>
     </div>
     <div class="flex gap-05">
-      <button type="submit" class="btn">Save</button>
-      <a href="/storage/{{{path}}}" class="btn btn-secondary">Cancel</a>
+      <button type="submit" class="btn">{{t.stor_save}}</button>
+      <a href="/storage/{{{path}}}" class="btn btn-secondary">{{t.stor_cancel}}</a>
     </div>
   </form>
   {{/showEditor}}
@@ -26,44 +26,44 @@
   {{/showImage}}
   {{#showBinaryDownload}}
   <div class="text-muted">{{contentType}} &middot; {{{sizeFormatted}}}</div>
-  <div class="mt-05"><a href="{{resourceUrl}}" class="btn btn-secondary" target="_blank">Download File</a></div>
+  <div class="mt-05"><a href="{{resourceUrl}}" class="btn btn-secondary" target="_blank">{{t.stor_download}}</a></div>
   <div class="mt-05"><a href="{{resourceUrl}}" class="mono text-muted" target="_blank">{{fullResourceUrl}}</a></div>
   {{/showBinaryDownload}}
   {{#showContent}}
   <pre class="mono code-block-lg">{{content}}</pre>
   {{/showContent}}
   {{#showEmpty}}
-  <div class="text-muted">Resource exists but has no content.</div>
+  <div class="text-muted">{{t.stor_no_content}}</div>
   {{/showEmpty}}
   <div class="mt-075 flex gap-05 flex-wrap">
-    <a href="{{resourceUrl}}" class="btn btn-secondary btn-small-text" target="_blank">View Raw</a>
+    <a href="{{resourceUrl}}" class="btn btn-secondary btn-small-text" target="_blank">{{t.stor_view_raw}}</a>
     {{#showEditButton}}
-    <a href="/storage/{{{path}}}?edit=1" class="btn btn-small-text">Edit</a>
+    <a href="/storage/{{{path}}}?edit=1" class="btn btn-small-text">{{t.stor_edit}}</a>
     {{/showEditButton}}
     <form method="POST" action="/storage/{{{path}}}" class="inline-form">
       <input type="hidden" name="action" value="move">
       <input type="hidden" name="destination" value="">
       <button type="submit" class="btn btn-secondary btn-small-text"
-        data-prompt="Move to:"
-        data-prompt-default="{{{path}}}">Move</button>
+        data-prompt="{{t.stor_move_to}}"
+        data-prompt-default="{{{path}}}">{{t.stor_move_btn}}</button>
     </form>
     <form method="POST" action="/storage/{{{path}}}" class="inline-form">
       <input type="hidden" name="action" value="copy">
       <input type="hidden" name="destination" value="">
       <button type="submit" class="btn btn-secondary btn-small-text"
-        data-prompt="Copy to:"
-        data-prompt-default="{{{copyDefault}}}">Copy</button>
+        data-prompt="{{t.stor_copy_to}}"
+        data-prompt-default="{{{copyDefault}}}">{{t.stor_copy_btn}}</button>
     </form>
-    <a href="/acp/{{{path}}}" class="btn btn-secondary btn-small-text">Access Policy</a>
+    <a href="/acp/{{{path}}}" class="btn btn-secondary btn-small-text">{{t.stor_access_policy}}</a>
     <form method="POST" action="/storage/{{{path}}}" class="inline-form">
       <input type="hidden" name="action" value="delete">
       <button type="submit" class="btn btn-danger btn-small-text"
-        data-confirm="Delete this resource?">Delete</button>
+        data-confirm="{{t.stor_confirm_delete_resource}}">{{t.btn_delete}}</button>
     </form>
   </div>
 </div>
 <div class="card">
-  <h2>Metadata</h2>
+  <h2>{{t.stor_metadata}}</h2>
   {{#showMetaEditor}}
   <form method="POST" action="/storage/{{{path}}}">
     <input type="hidden" name="action" value="save_meta">
@@ -84,14 +84,14 @@
         <div class="te-obj-cell">
           <input type="text" class="te-obj-input" value="{{object}}" placeholder="Object value">
         </div>
-        <button type="button" class="btn btn-secondary btn-compact te-remove">Remove</button>
+        <button type="button" class="btn btn-secondary btn-compact te-remove">{{t.stor_remove}}</button>
       </div>
       {{/metaTriplesEditable}}
       <div class="te-add-area"></div>
     </div>
     <div class="flex gap-05 mt-075">
-      <button type="submit" class="btn">Save Metadata</button>
-      <a href="/storage/{{{path}}}" class="btn btn-secondary">Cancel</a>
+      <button type="submit" class="btn">{{t.stor_save_metadata}}</button>
+      <a href="/storage/{{{path}}}" class="btn btn-secondary">{{t.stor_cancel}}</a>
     </div>
   </form>
   {{/showMetaEditor}}
@@ -102,13 +102,13 @@
     {{/metaTriples}}
   </table>
   <div class="mt-05">
-    <a href="/storage/{{{path}}}?meta=1" class="btn btn-secondary btn-small-text">Edit Metadata</a>
+    <a href="/storage/{{{path}}}?meta=1" class="btn btn-secondary btn-small-text">{{t.stor_edit_metadata}}</a>
   </div>
   {{/hasMetaTriples}}
   {{#showNoMeta}}
-  <div class="text-muted">No metadata.</div>
+  <div class="text-muted">{{t.stor_no_metadata}}</div>
   <div class="mt-05">
-    <a href="/storage/{{{path}}}?meta=1" class="btn btn-secondary btn-small-text">Edit Metadata</a>
+    <a href="/storage/{{{path}}}?meta=1" class="btn btn-secondary btn-small-text">{{t.stor_edit_metadata}}</a>
   </div>
   {{/showNoMeta}}
 </div>

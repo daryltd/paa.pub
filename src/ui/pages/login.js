@@ -7,5 +7,5 @@ import template from '../templates/login.html';
 export function renderLoginPage(reqCtx) {
   const error = reqCtx.error || '';
   const returnTo = reqCtx.returnTo || (reqCtx.url && reqCtx.url.searchParams.get('return_to')) || '';
-  return renderPage('Login', template, { error, returnTo });
+  return renderPage('Login', template, { error, returnTo }, { lang: reqCtx.lang, dir: reqCtx.dir, t: reqCtx.t });
 }

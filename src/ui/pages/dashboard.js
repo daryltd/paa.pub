@@ -6,12 +6,13 @@ import template from '../templates/dashboard.html';
 import { requireAuth } from '../../auth/middleware.js';
 import { parseNTriples, unwrapIri, unwrapLiteral } from '../../rdf/ntriples.js';
 import { PREFIXES } from '../../rdf/prefixes.js';
+import { formatBytes } from '../../i18n/format.js';
 
 export async function renderDashboard(reqCtx) {
   const authCheck = requireAuth(reqCtx);
   if (authCheck) return authCheck;
 
-  const { config, env } = reqCtx;
+  const { config, env, lang, dir, t } = reqCtx;
   const username = config.username;
 
   // Load stats
@@ -37,7 +38,17 @@ export async function renderDashboard(reqCtx) {
   const passkeys = credResults.filter(Boolean).map(c => ({ id: c.id, name: c.name, createdAt: c.createdAt }));
 
   // Compute storage breakdown by resource type
-  const breakdown = await computeStorageBreakdown(reqCtx.storage, config, quota.usedBytes);
+  const breakdown = await computeStorageBreakdown(reqCtx.storage, config, quota.usedBytes, lang, t);
+
+  // Build translated labels with interpolation
+  const pendingCount = pendingFollows.length;
+  const pendingFollowLabel = (pendingCount === 1 ? t.dash_pending_follow_one : t.dash_pending_follow_other || '')
+    .replace('{{count}}', pendingCount);
+  const storageLabel = (t.dash_storage_used || 'Storage - {{used}} used')
+    .replace('{{used}}', formatBytes(quota.usedBytes, lang));
+  const totalCount = breakdown.totalCount;
+  const resourcesLabel = (totalCount === 1 ? t.dash_resources_one : t.dash_resources_other || '')
+    .replace('{{count}}', totalCount);
 
   return renderPage('Dashboard', template, {
     username,
@@ -48,25 +59,18 @@ export async function renderDashboard(reqCtx) {
     followerCount: followers.length,
     followingCount: following.length,
     postCount: outbox.length,
-    pendingFollowCount: pendingFollows.length,
-    hasPendingFollows: pendingFollows.length > 0,
-    storageUsed: formatBytes(quota.usedBytes),
+    pendingFollowCount: pendingCount,
+    hasPendingFollows: pendingCount > 0,
+    pendingFollowLabel,
+    storageLabel,
+    resourcesLabel,
     webfingerParam: encodeURIComponent(username) + '@' + encodeURIComponent(config.domain),
     passkeys,
     hasPasskeys: passkeys.length > 0,
     storageBreakdown: breakdown.categories,
     hasBreakdown: breakdown.categories.length > 0,
-    totalResources: breakdown.totalCount,
-    totalResourcesPlural: breakdown.totalCount !== 1,
-  }, { user: username, nav: 'dashboard', storage: reqCtx.storage, baseUrl: config.baseUrl });
-}
-
-function formatBytes(bytes) {
-  if (bytes === 0) return '0 B';
-  const k = 1024;
-  const sizes = ['B', 'KB', 'MB', 'GB'];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return `${(bytes / Math.pow(k, i)).toFixed(1)} ${sizes[i]}`;
+    totalResources: totalCount,
+  }, { user: username, nav: 'dashboard', lang, dir, t, storage: reqCtx.storage, baseUrl: config.baseUrl });
 }
 
 /**
@@ -138,7 +142,7 @@ async function collectResources(storage, containerIri, results) {
 /**
  * Compute storage breakdown grouped by resource category.
  */
-async function computeStorageBreakdown(storage, config, totalUsedBytes) {
+async function computeStorageBreakdown(storage, config, totalUsedBytes, lang = 'en-US', t = {}) {
   const rootIri = `${config.baseUrl}/${config.username}/`;
   const resources = [];
 
@@ -164,9 +168,10 @@ async function computeStorageBreakdown(storage, config, totalUsedBytes) {
     .sort((a, b) => b.bytes - a.bytes)
     .map(c => ({
       name: c.name,
-      size: formatBytes(c.bytes),
+      size: formatBytes(c.bytes, lang),
       count: c.count,
-      label: `${c.count} file${c.count !== 1 ? 's' : ''}`,
+      label: (c.count === 1 ? t.dash_n_files_one : t.dash_n_files_other || `${c.count} files`)
+        .replace('{{count}}', c.count),
     }));
 
   // Add "Everything Else" for unaccounted bytes (metadata, indexes, etc.)
@@ -174,10 +179,10 @@ async function computeStorageBreakdown(storage, config, totalUsedBytes) {
   const remainder = (totalUsedBytes || 0) - categorizedBytes;
   if (remainder > 0) {
     categories.push({
-      name: 'Everything Else',
-      size: formatBytes(remainder),
+      name: t.dash_everything_else || 'Everything Else',
+      size: formatBytes(remainder, lang),
       count: 0,
-      label: 'system data',
+      label: t.dash_system_data || 'system data',
     });
   }
 

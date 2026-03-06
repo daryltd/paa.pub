@@ -1,57 +1,82 @@
 /**
- * App permissions management page.
+ * Settings page — language/locale preferences and app management.
  *
  * Routes:
- *   GET  /app-permissions — list authorized apps with their granted containers
- *   POST /app-permissions — update container access or revoke apps
+ *   GET  /settings — render settings page with language selector and app management
+ *   POST /settings — handle preference saves, app permission updates/revokes
+ *
+ * User preferences are stored in APPDATA KV at key `user_prefs:{username}`.
+ * App management functionality is migrated from the standalone app-permissions page.
  */
 import { renderPage } from '../shell.js';
-import template from '../templates/app-permissions.html';
+import template from '../templates/settings.html';
 import { requireAuth } from '../../auth/middleware.js';
+import { SUPPORTED_LANGUAGES } from '../../i18n/index.js';
+import { formatDate } from '../../i18n/format.js';
 import { listAppPermissions, revokeAppPermission, grantAppPermission, getAppPermission } from '../../solid/app-permissions.js';
 import { parseNTriples, unwrapIri } from '../../rdf/ntriples.js';
 import { PREFIXES } from '../../rdf/prefixes.js';
-import { formatDate } from '../../i18n/format.js';
 
 /**
- * GET /app-permissions — render the management page.
+ * GET /settings — render the settings page.
  */
-export async function renderAppPermissions(reqCtx) {
+export async function renderSettings(reqCtx) {
   const authCheck = requireAuth(reqCtx);
   if (authCheck) return authCheck;
 
-  const { config, env, storage } = reqCtx;
+  const { config, env, storage, url, lang, dir, t, userPrefs } = reqCtx;
   const username = config.username;
 
+  // Flash messages from redirect
+  const saved = url.searchParams.get('saved');
+  const success = saved === '1' ? (t.set_prefs_saved || 'Preferences saved.') : '';
+
+  // Language selector data
+  const currentLang = userPrefs?.language || lang;
+  const languages = SUPPORTED_LANGUAGES.map(l => ({
+    ...l,
+    selected: l.code === currentLang,
+  }));
+
+  // Date format selector
+  const currentDateFormat = userPrefs?.dateFormat || 'medium';
+  const dateFormats = [
+    { value: 'short', label: t.set_date_short || 'Short', selected: currentDateFormat === 'short' },
+    { value: 'medium', label: t.set_date_medium || 'Medium', selected: currentDateFormat === 'medium' },
+    { value: 'long', label: t.set_date_long || 'Long', selected: currentDateFormat === 'long' },
+  ];
+
+  // Load app permissions (migrated from app-permissions.js)
   const apps = await listAppPermissions(env.APPDATA, username);
-
-  // Load available containers for the update form
   const containers = await loadTopLevelContainers(storage, config);
-
   const allContainers = containers.map(c => ({ iri: c.iri, path: c.path }));
 
   const appsData = apps.map(app => ({
     clientId: app.clientId,
     clientName: app.clientName || app.clientId,
-    grantedAt: app.grantedAt ? formatDate(app.grantedAt, reqCtx.lang || 'en-US') : 'Unknown',
+    grantedAt: app.grantedAt ? formatDate(app.grantedAt, lang) : 'Unknown',
     containers: (app.allowedContainers || []).map(c => {
       const path = c.replace(config.baseUrl, '');
       return { iri: c, path };
     }),
     hasContainers: (app.allowedContainers || []).length > 0,
     allContainers,
+    t,
   }));
 
-  return renderPage('App Permissions', template, {
+  return renderPage('Settings', template, {
     apps: appsData,
     hasApps: appsData.length > 0,
-  }, { user: username, nav: 'storage', lang: reqCtx.lang, dir: reqCtx.dir, t: reqCtx.t, storage, baseUrl: config.baseUrl });
+    languages,
+    dateFormats,
+    success,
+  }, { user: username, nav: 'settings', lang, dir, t, storage, baseUrl: config.baseUrl });
 }
 
 /**
- * POST /app-permissions — handle update/revoke actions.
+ * POST /settings — handle preference saves and app permission updates.
  */
-export async function handleAppPermissionsUpdate(reqCtx) {
+export async function handleSettingsUpdate(reqCtx) {
   const authCheck = requireAuth(reqCtx);
   if (authCheck) return authCheck;
 
@@ -59,6 +84,21 @@ export async function handleAppPermissionsUpdate(reqCtx) {
   const username = config.username;
   const form = await request.formData();
   const action = form.get('action');
+
+  if (action === 'save_prefs') {
+    const language = form.get('language') || 'en-US';
+    const dateFormat = form.get('dateFormat') || 'medium';
+
+    // Load existing prefs and merge
+    const prefsRaw = await env.APPDATA.get(`user_prefs:${username}`);
+    const prefs = prefsRaw ? JSON.parse(prefsRaw) : {};
+    prefs.language = language;
+    prefs.dateFormat = dateFormat;
+
+    await env.APPDATA.put(`user_prefs:${username}`, JSON.stringify(prefs));
+
+    return new Response(null, { status: 302, headers: { 'Location': '/settings?saved=1' } });
+  }
 
   if (action === 'revoke') {
     const clientId = form.get('client_id');
@@ -72,7 +112,6 @@ export async function handleAppPermissionsUpdate(reqCtx) {
     if (clientId) {
       const existing = await getAppPermission(env.APPDATA, username, clientId);
       const clientName = existing?.clientName || '';
-      // Collect selected containers
       const containers = form.getAll('containers');
       await grantAppPermission(env.APPDATA, username, clientId, clientName, containers);
     }

@@ -36,6 +36,7 @@ import { importPrivateKey, rsaSign } from './crypto/rsa.js';
 import { sha256 } from './crypto/digest.js';
 import { createSession } from './auth/session.js';
 import { htmlPage, htmlResponse, escapeHtml } from './ui/shell.js';
+import { getTranslations, resolveLanguage, RTL_LANGUAGES } from './i18n/index.js';
 import { bufferToBase64url } from './utils.js';
 import { grantAppPermission, hasAppPermissions } from './solid/app-permissions.js';
 import { parseNTriples, unwrapIri } from './rdf/ntriples.js';
@@ -111,6 +112,9 @@ export async function handleRegister(reqCtx) {
 
 export async function handleAuthorize(reqCtx) {
   const { request, url, config, user } = reqCtx;
+  const t = reqCtx.t || {};
+  const lang = reqCtx.lang || 'en-US';
+  const dir = reqCtx.dir || 'ltr';
 
   if (request.method === 'GET') {
     // Show consent page
@@ -150,11 +154,11 @@ export async function handleAuthorize(reqCtx) {
 
     const body = `
       <div class="card login-card-wide">
-        <h1>Authorize</h1>
+        <h1>${escapeHtml(t.auth_title || 'Authorize')}</h1>
         ${clientName ? `<p class="client-name">${escapeHtml(clientName)}</p>` : ''}
         <p class="mono text-muted mb-1 text-sm break-all">${escapeHtml(clientId)}</p>
         <p class="text-muted mb-1">
-          This application wants to access your Solid pod.
+          ${escapeHtml(t.auth_app_wants_access || 'This application wants to access your Solid pod.')}
         </p>
         <form method="POST" action="/authorize">
           <input type="hidden" name="client_id" value="${escapeHtml(clientId)}">
@@ -167,13 +171,13 @@ export async function handleAuthorize(reqCtx) {
           <input type="hidden" name="nonce" value="${escapeHtml(nonce)}">
           ${!user ? `
             <div class="form-group">
-              <label for="password">Password</label>
+              <label for="password">${escapeHtml(t.auth_password || 'Password')}</label>
               <input type="password" id="password" name="password" required autofocus>
             </div>
           ` : ''}
           ${containers.length > 0 ? `
             <div class="form-group mt-075">
-              <label class="font-medium text-md mb-05">Allow write access to:</label>
+              <label class="font-medium text-md mb-05">${escapeHtml(t.auth_write_access || 'Allow write access to:')}</label>
               <div class="checkbox-panel">
                 ${containerCheckboxes}
               </div>
@@ -182,17 +186,17 @@ export async function handleAuthorize(reqCtx) {
           <div class="form-group mt-075">
             <label class="container-label">
               <input type="checkbox" name="remember" value="1">
-              Remember this app (skip consent next time)
+              ${escapeHtml(t.auth_remember || 'Remember this app (skip consent next time)')}
             </label>
           </div>
           <div class="flex gap-05">
-            <button type="submit" name="approve" value="yes" class="btn">Approve</button>
-            <button type="submit" name="approve" value="no" class="btn btn-secondary">Deny</button>
+            <button type="submit" name="approve" value="yes" class="btn">${escapeHtml(t.auth_approve || 'Approve')}</button>
+            <button type="submit" name="approve" value="no" class="btn btn-secondary">${escapeHtml(t.auth_deny || 'Deny')}</button>
           </div>
         </form>
       </div>`;
 
-    return htmlResponse(await htmlPage('Authorize', body));
+    return htmlResponse(await htmlPage('Authorize', body, { lang, dir }));
   }
 
   // POST — process login + approval
@@ -241,9 +245,9 @@ export async function handleAuthorize(reqCtx) {
     if (!userRecord || !await verifyPassword(password, userRecord)) {
       return htmlResponse(await htmlPage('Authorize', `
         <div class="card login-card-wide">
-          <div class="error">Invalid password</div>
-          <a href="${escapeHtml(reqCtx.url.href)}" class="btn">Try Again</a>
-        </div>`));
+          <div class="error">${escapeHtml(t.auth_invalid_password || 'Invalid password')}</div>
+          <a href="${escapeHtml(reqCtx.url.href)}" class="btn">${escapeHtml(t.auth_try_again || 'Try Again')}</a>
+        </div>`, { lang, dir }));
     }
     // Set session cookie so future authorizations auto-approve
     const token = await createSession(reqCtx.env.APPDATA, config.username);

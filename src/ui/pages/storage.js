@@ -30,6 +30,7 @@ import { parseNTriples, unwrapIri, serializeNTriples, iri, literal, typedLiteral
 import { PREFIXES, shortenPredicate, loadMergedPrefixes, loadPredicateCatalog } from '../../rdf/prefixes.js';
 import { checkQuota, quotaExceededResponse, addQuota } from '../../storage/quota.js';
 import { checkContainerQuota, containerQuotaExceededResponse, addContainerBytes, subtractContainerBytes } from '../../storage/container-quota.js';
+import { formatBytes } from '../../i18n/format.js';
 
 const TEXT_EXTS = new Set([
   'ttl', 'txt', 'html', 'css', 'csv', 'xml', 'md', 'n3',
@@ -90,7 +91,7 @@ async function renderContainerPage(reqCtx, path, resourceIri, username) {
     items,
     hasItems: items.length > 0,
     isRoot,
-  }, { user: username, nav: 'storage', storage, baseUrl: config.baseUrl });
+  }, { user: username, nav: 'storage', lang: reqCtx.lang, dir: reqCtx.dir, t: reqCtx.t, storage, baseUrl: config.baseUrl });
 }
 
 // ── Resource page ────────────────────────────────────
@@ -152,7 +153,7 @@ async function renderResourcePage(reqCtx, path, resourceIri, username, editMode,
     copyDefault,
     content,
     contentType,
-    sizeFormatted: formatBytes(size),
+    sizeFormatted: formatBytes(size, reqCtx.lang),
     showEditor,
     showImage,
     showBinaryDownload,
@@ -168,7 +169,7 @@ async function renderResourcePage(reqCtx, path, resourceIri, username, editMode,
     metaTurtle,
     prefixesJson: JSON.stringify(mergedPrefixes),
     namespaceCatalogJson: JSON.stringify(await loadPredicateCatalog(reqCtx.env.APPDATA, mergedPrefixes)),
-  }, { user: username, nav: 'storage', storage, baseUrl: config.baseUrl });
+  }, { user: username, nav: 'storage', lang: reqCtx.lang, dir: reqCtx.dir, t: reqCtx.t, storage, baseUrl: config.baseUrl });
 }
 
 // ── POST /storage/** ─────────────────────────────────
@@ -514,14 +515,6 @@ function buildBreadcrumbs(path) {
     if (i === parts.length - 1 && !path.endsWith('/')) current = current.slice(0, -1);
     return { href: current, label: part, notFirst: i > 0 };
   });
-}
-
-function formatBytes(bytes) {
-  if (!bytes || bytes === 0) return '0 B';
-  const k = 1024;
-  const sizes = ['B', 'KB', 'MB', 'GB'];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return `${(bytes / Math.pow(k, i)).toFixed(1)} ${sizes[i]}`;
 }
 
 // ── Move & Copy helpers ──────────────────────────────

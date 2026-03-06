@@ -48,9 +48,11 @@ import { renderStoragePage, handleStorageAction } from './ui/pages/storage.js';
 import { renderAclEditor, handleAclUpdate } from './ui/pages/acl-editor.js';  // ACP editor (file retains old name for git history)
 import { renderProfileEditor, handleProfileUpdate, handleProfileIndexReset, handleDiscoverNs, handlePreviewLayout, handleListComponents, handleSaveComponent, handleImportComponent } from './ui/pages/profile-editor.js';
 import { renderAppPermissions, handleAppPermissionsUpdate } from './ui/pages/app-permissions.js';
+import { renderSettings, handleSettingsUpdate } from './ui/pages/settings.js';
 import { handleDiscovery, handleJwks, handleRegister, handleAuthorize, handleToken, handleUserInfo, verifyAccessToken } from './oidc.js';
 import { checkRateLimit, rateLimitResponse } from './security/rate-limit.js';
 import { checkContentLength, getSizeLimit } from './security/size-limit.js';
+import { resolveLanguage, getTranslations, RTL_LANGUAGES } from './i18n/index.js';
 
 /** Singleton WASM kernel instance — initialized on first request. */
 let kernel = null;
@@ -113,8 +115,14 @@ function buildRouter() {
   router.post('/profile/components', handleSaveComponent);
   router.post('/profile/import-component', handleImportComponent);
 
-  // App permissions management
-  router.get('/app-permissions', renderAppPermissions);
+  // Settings (absorbs app permissions)
+  router.get('/settings', renderSettings);
+  router.post('/settings', handleSettingsUpdate);
+
+  // App permissions — redirect GET to /settings, keep POST for existing forms
+  router.get('/app-permissions', (ctx) => {
+    return new Response(null, { status: 302, headers: { 'Location': '/settings' } });
+  });
   router.post('/app-permissions', handleAppPermissionsUpdate);
 
   // Legacy /acl/ redirect
@@ -227,6 +235,16 @@ export default {
 
     console.log(`[route] ${request.method} ${url.pathname} → handler=${match.handler?.name || 'unknown'} params=${JSON.stringify(match.params)} user=${user || 'anon'} auth=${authMethod || 'none'}`);
 
+    // Load user preferences for i18n (language, date format, etc.)
+    let userPrefs = null;
+    if (user) {
+      const prefsRaw = await env.APPDATA.get(`user_prefs:${user}`);
+      userPrefs = prefsRaw ? JSON.parse(prefsRaw) : {};
+    }
+    const lang = resolveLanguage(request, config.language, userPrefs);
+    const dir = RTL_LANGUAGES.has(lang) ? 'rtl' : 'ltr';
+    const t = getTranslations(lang);
+
     // Build the request context object passed to all route handlers.
     // This is the single "dependency injection" point — handlers never
     // access globals, they receive everything they need through reqCtx.
@@ -242,6 +260,10 @@ export default {
       params: match.params,
       orchestrator,
       storage,
+      lang,
+      dir,
+      t,
+      userPrefs,
     };
 
     try {

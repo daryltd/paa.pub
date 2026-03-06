@@ -4,6 +4,7 @@ const RESERVED_NAMES = new Set([
   'profile', 'compose', 'follow', 'unfollow',
   'authorize', 'token', 'register', 'userinfo', 'jwks',
   'webauthn', 'app-permissions', 'follow-requests',
+  'settings',
   '.well-known',
 ]);
 
@@ -39,6 +40,9 @@ export function getConfig(env, request) {
   // Feed limit: max activities shown in the feed (default 50)
   const feedLimit = parseInt(env.PAA_FEED_LIMIT, 10) || 50;
 
+  // Language: default UI language (overridable per-user via preferences)
+  const language = env.PAA_LANGUAGE || 'en-US';
+
   return {
     username,
     password,
@@ -47,6 +51,7 @@ export function getConfig(env, request) {
     protocol,
     storageLimit,
     feedLimit,
+    language,
     actorId: `${baseUrl}/${username}/profile/card#me`,
     keyId: `${baseUrl}/${username}/profile/card#main-key`,
     webId: `${baseUrl}/${username}/profile/card#me`,
