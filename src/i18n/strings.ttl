@@ -1440,21 +1440,71 @@ paa:auth_wants_access rdfs:label "This application wants to access your Solid po
     rdfs:label "Esta aplicación quiere acceder a su pod Solid."@es ;
     rdfs:label "אפליקציה זו מבקשת גישה ל-pod ה-Solid שלך."@he ;
     rdfs:label "此应用想要访问您的 Solid pod。"@zh .
-paa:auth_allow_write rdfs:label "Allow write access to:"@en-US ;
-    rdfs:label "Autoriser l'accès en écriture à :"@fr ;
-    rdfs:label "Permitir acceso de escritura a:"@es ;
-    rdfs:label "אפשרו גישת כתיבה ל:"@he ;
-    rdfs:label "允许写入权限："@zh .
+paa:auth_access_label rdfs:label "Container access:"@en-US ;
+    rdfs:label "Accès aux conteneurs :"@fr ;
+    rdfs:label "Acceso a contenedores:"@es ;
+    rdfs:label "גישה למכולות:"@he ;
+    rdfs:label "容器访问："@zh .
+paa:auth_radio_allow rdfs:label "Allow"@en-US ;
+    rdfs:label "Autoriser"@fr ;
+    rdfs:label "Permitir"@es ;
+    rdfs:label "אפשר"@he ;
+    rdfs:label "允许"@zh .
+paa:auth_radio_deny rdfs:label "Deny"@en-US ;
+    rdfs:label "Refuser"@fr ;
+    rdfs:label "Denegar"@es ;
+    rdfs:label "דחה"@he ;
+    rdfs:label "拒绝"@zh .
+paa:auth_show_advanced rdfs:label "Advanced"@en-US ;
+    rdfs:label "Avancé"@fr ;
+    rdfs:label "Avanzado"@es ;
+    rdfs:label "מתקדם"@he ;
+    rdfs:label "高级"@zh .
+paa:auth_show_simple rdfs:label "Simple"@en-US ;
+    rdfs:label "Simple"@fr ;
+    rdfs:label "Simple"@es ;
+    rdfs:label "פשוט"@he ;
+    rdfs:label "简单"@zh .
+paa:auth_mode_read rdfs:label "Read"@en-US ;
+    rdfs:label "Lecture"@fr ;
+    rdfs:label "Lectura"@es ;
+    rdfs:label "קריאה"@he ;
+    rdfs:label "读取"@zh .
+paa:auth_mode_write rdfs:label "Write"@en-US ;
+    rdfs:label "Écriture"@fr ;
+    rdfs:label "Escritura"@es ;
+    rdfs:label "כתיבה"@he ;
+    rdfs:label "写入"@zh .
+paa:auth_mode_append rdfs:label "Append"@en-US ;
+    rdfs:label "Ajout"@fr ;
+    rdfs:label "Agregar"@es ;
+    rdfs:label "הוספה"@he ;
+    rdfs:label "追加"@zh .
+paa:auth_mode_create rdfs:label "Create"@en-US ;
+    rdfs:label "Création"@fr ;
+    rdfs:label "Crear"@es ;
+    rdfs:label "יצירה"@he ;
+    rdfs:label "创建"@zh .
+paa:auth_mode_update rdfs:label "Update"@en-US ;
+    rdfs:label "Mise à jour"@fr ;
+    rdfs:label "Actualizar"@es ;
+    rdfs:label "עדכון"@he ;
+    rdfs:label "更新"@zh .
+paa:auth_mode_delete rdfs:label "Delete"@en-US ;
+    rdfs:label "Suppression"@fr ;
+    rdfs:label "Eliminar"@es ;
+    rdfs:label "מחיקה"@he ;
+    rdfs:label "删除"@zh .
 paa:auth_or_enter_path rdfs:label "Or enter a container path:"@en-US ;
     rdfs:label "Ou saisissez un chemin de conteneur :"@fr ;
     rdfs:label "O ingrese una ruta de contenedor:"@es ;
     rdfs:label "או הזינו נתיב מכולה:"@he ;
     rdfs:label "或输入容器路径："@zh .
-paa:auth_grant_write rdfs:label "Grant write access to a specific path, even if it doesn't exist yet"@en-US ;
-    rdfs:label "Accorder l'accès en écriture à un chemin spécifique, même s'il n'existe pas encore"@fr ;
-    rdfs:label "Otorgar acceso de escritura a una ruta específica, incluso si aún no existe"@es ;
-    rdfs:label "מתן גישת כתיבה לנתיב ספציפי, גם אם הוא עדיין לא קיים"@he ;
-    rdfs:label "授予特定路径的写入权限，即使该路径尚不存在"@zh .
+paa:auth_grant_access rdfs:label "Grant access to a specific path, even if it doesn't exist yet"@en-US ;
+    rdfs:label "Accorder l'accès à un chemin spécifique, même s'il n'existe pas encore"@fr ;
+    rdfs:label "Otorgar acceso a una ruta específica, incluso si aún no existe"@es ;
+    rdfs:label "מתן גישה לנתיב ספציפי, גם אם הוא עדיין לא קיים"@he ;
+    rdfs:label "授予特定路径的访问权限，即使该路径尚不存在"@zh .
 paa:auth_remember rdfs:label "Remember this app (skip consent next time)"@en-US ;
     rdfs:label "Mémoriser cette application (ignorer le consentement la prochaine fois)"@fr ;
     rdfs:label "Recordar esta aplicación (omitir consentimiento la próxima vez)"@es ;

@@ -5,7 +5,7 @@
  * POST /app-permissions for update/revoke form submissions.
  */
 import { requireAuth } from '../../auth/middleware.js';
-import { revokeAppPermission, grantAppPermission, getAppPermission } from '../../solid/app-permissions.js';
+import { revokeAppPermission, grantAppPermission, getAppPermission, ACCESS_MODES } from '../../solid/app-permissions.js';
 
 /**
  * POST /app-permissions — handle update/revoke actions.
@@ -32,8 +32,15 @@ export async function handleAppPermissionsUpdate(reqCtx) {
       const existing = await getAppPermission(env.APPDATA, username, clientId);
       const clientName = existing?.clientName || '';
       const clientUri = existing?.clientUri || '';
-      // Collect selected containers
-      const containers = form.getAll('containers');
+
+      // Build a map of existing container modes for preservation
+      const existingModes = new Map();
+      for (const entry of (existing?.allowedContainers || [])) {
+        existingModes.set(entry.iri, entry.modes || [...ACCESS_MODES]);
+      }
+
+      // Collect selected containers (settings page uses simple IRI checkboxes)
+      const containerIris = form.getAll('containers');
 
       // Process manual container path
       const customContainer = (form.get('custom_container') || '').trim();
@@ -43,13 +50,19 @@ export async function handleAppPermissionsUpdate(reqCtx) {
         if (!path.endsWith('/')) path += '/';
         if (path.startsWith(`/${username}/`)) {
           const fullIri = config.baseUrl + path;
-          if (!containers.includes(fullIri)) {
-            containers.push(fullIri);
+          if (!containerIris.includes(fullIri)) {
+            containerIris.push(fullIri);
           }
         }
       }
 
-      await grantAppPermission(env.APPDATA, username, clientId, clientName, clientUri, containers);
+      // Preserve existing modes for kept containers, grant all modes for new ones
+      const allowedContainers = containerIris.map(iri => ({
+        iri,
+        modes: existingModes.get(iri) || [...ACCESS_MODES],
+      }));
+
+      await grantAppPermission(env.APPDATA, username, clientId, clientName, clientUri, allowedContainers);
     }
   }
 

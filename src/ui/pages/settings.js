@@ -68,11 +68,13 @@ export async function renderSettings(reqCtx) {
   const containers = await loadTopLevelContainers(storage, config, username);
 
   const appsData = apps.map(app => {
-    const allowedSet = new Set(app.allowedContainers || []);
+    // allowedContainers is now [{iri, modes}] (normalized by getAppPermission)
+    const allowed = app.allowedContainers || [];
+    const allowedIriSet = new Set(allowed.map(e => e.iri));
     const allContainers = containers.map(c => ({
       iri: c.iri,
       path: c.path,
-      checked: allowedSet.has(c.iri),
+      checked: allowedIriSet.has(c.iri),
     }));
 
     let displayName = app.clientName || null;
@@ -103,11 +105,12 @@ export async function renderSettings(reqCtx) {
       displayOrigin,
       isInternalClient,
       grantedAt: app.grantedAt ? formatDate(app.grantedAt, lang) : '',
-      containers: (app.allowedContainers || []).map(c => ({
-        iri: c,
-        path: c.replace(config.baseUrl, ''),
+      containers: allowed.map(entry => ({
+        iri: entry.iri,
+        path: entry.iri.replace(config.baseUrl, ''),
+        modesDisplay: (entry.modes || []).join(', '),
       })),
-      hasContainers: (app.allowedContainers || []).length > 0,
+      hasContainers: allowed.length > 0,
       allContainers,
       username,
     };

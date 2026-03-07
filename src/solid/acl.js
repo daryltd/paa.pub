@@ -1,5 +1,5 @@
 /**
- * ACL resource management for Solid WAC.
+ * ACL/ACR resource management for Solid WAC and ACP.
  */
 import { PREFIXES } from '../rdf/prefixes.js';
 import { iri } from '../rdf/ntriples.js';
@@ -8,6 +8,43 @@ import { serializeTurtle } from '../rdf/turtle-serializer.js';
 import { parseNTriples, serializeNTriples } from '../rdf/ntriples.js';
 import { solidHeaders } from './headers.js';
 import { parseSparqlUpdate } from './ldp.js';
+import { loadPolicy, loadFriends, policyToTurtle } from '../ui/pages/acl-editor.js';
+import { getUserConfig } from '../config.js';
+
+/**
+ * Handle GET/HEAD for .acl resources.
+ * WAC spec: Servers MUST accept GET and HEAD targeting an ACL resource
+ * when Accept requests text/turtle. Return 404 only when no ACL exists.
+ * @param {object} reqCtx
+ * @param {string} resourceIri - the subject resource IRI (without .acl)
+ * @returns {Promise<Response>}
+ */
+export async function handleAclGet(reqCtx, resourceIri) {
+  const { request, storage, config } = reqCtx;
+
+  // ACL access requires acl:Control — for now, only the resource owner
+  if (reqCtx.user !== config.username) {
+    return new Response('Forbidden', { status: 403 });
+  }
+
+  const aclData = await storage.get(`acl:${resourceIri}`);
+  if (!aclData) {
+    return new Response('Not Found', { status: 404 });
+  }
+
+  // Parse stored N-Triples and serialize as Turtle for the response
+  const triples = parseNTriples(aclData);
+  const aclIri = resourceIri + '.acl';
+  const turtle = serializeTurtle(triples, aclIri);
+
+  const headers = solidHeaders(resourceIri, false);
+  headers.set('Content-Type', 'text/turtle');
+
+  if (request.method === 'HEAD') {
+    return new Response(null, { status: 200, headers });
+  }
+  return new Response(turtle, { status: 200, headers });
+}
 
 /**
  * Handle PUT for .acl resources.
@@ -32,10 +69,11 @@ export async function handleAclPut(reqCtx, resourceIri) {
     triples = parseNTriples(body);
   }
 
+  const existing = await storage.get(`acl:${resourceIri}`);
   const ntriples = serializeNTriples(triples);
   await storage.put(`acl:${resourceIri}`, ntriples);
 
-  return new Response(null, { status: 205 });
+  return new Response(null, { status: existing ? 204 : 201 });
 }
 
 /**
@@ -93,6 +131,44 @@ export async function handleAclDelete(reqCtx, resourceIri) {
   }
   await reqCtx.storage.delete(`acl:${resourceIri}`);
   return new Response(null, { status: 204 });
+}
+
+/**
+ * Handle GET/HEAD for .acr resources (ACP Access Control Resources).
+ * Generates Turtle from the stored ACP policy JSON.
+ * @param {object} reqCtx
+ * @param {string} resourceIri - the subject resource IRI (without .acr)
+ * @returns {Promise<Response>}
+ */
+export async function handleAcrGet(reqCtx, resourceIri) {
+  const { request, config, env } = reqCtx;
+
+  if (reqCtx.user !== config.username) {
+    return new Response('Forbidden', { status: 403 });
+  }
+
+  const owner = extractOwnerFromIri(resourceIri, config.baseUrl);
+  const ownerUc = getUserConfig(config, owner);
+  const policy = await loadPolicy(env.APPDATA, resourceIri);
+  const friends = await loadFriends(env.APPDATA, owner);
+  const turtle = policyToTurtle(policy, resourceIri, ownerUc.webId, friends);
+
+  const headers = solidHeaders(resourceIri, false);
+  headers.set('Content-Type', 'text/turtle');
+
+  if (request.method === 'HEAD') {
+    return new Response(null, { status: 200, headers });
+  }
+  return new Response(turtle, { status: 200, headers });
+}
+
+/**
+ * Extract owner username from a resource IRI.
+ */
+function extractOwnerFromIri(resourceIri, baseUrl) {
+  const path = resourceIri.slice(baseUrl.length + 1);
+  const slash = path.indexOf('/');
+  return slash > 0 ? path.slice(0, slash) : path;
 }
 
 /**

@@ -78,7 +78,7 @@
       {{#hasContainers}}
       <p class="text-sm font-medium mt-05">{{t.apps_allowed_containers}}</p>
       <ul class="text-sm mono">
-        {{#containers}}<li>{{path}}</li>{{/containers}}
+        {{#containers}}<li>{{path}} <span class="text-muted">({{modesDisplay}})</span></li>{{/containers}}
       </ul>
       {{/hasContainers}}
       {{^hasContainers}}

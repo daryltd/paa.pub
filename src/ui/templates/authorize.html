@@ -16,6 +16,7 @@
     <input type="hidden" name="code_challenge_method" value="{{codeChallengeMethod}}">
     <input type="hidden" name="response_type" value="{{responseType}}">
     <input type="hidden" name="nonce" value="{{nonce}}">
+    <input type="hidden" name="perm_mode" id="perm_mode" value="simple">
     {{^isLoggedIn}}
       <div class="form-group">
         <label for="username">{{t.lbl_username}}</label>
@@ -28,9 +29,32 @@
     {{/isLoggedIn}}
     {{#hasContainers}}
       <div class="form-group mt-075">
-        <label class="font-medium text-md mb-05">{{t.auth_allow_write}}</label>
+        <div class="flex justify-between align-center mb-05">
+          <label class="font-medium text-md mb-0">{{t.auth_access_label}}</label>
+          <button type="button" class="btn-link text-sm" id="btnAdvanced" onclick="toggleAdvanced()">{{t.auth_show_advanced}}</button>
+        </div>
         <div class="checkbox-panel">
-          {{{containerCheckboxes}}}
+          {{#containers}}
+          <div class="perm-row">
+            <div class="perm-header">
+              <span class="mono text-sm">{{path}}</span>
+              <span class="perm-radios">
+                <label class="container-label"><input type="radio" name="perm_{{idx}}" value="allow" onchange="toggleAllow(this)"> {{t.auth_radio_allow}}</label>
+                <label class="container-label"><input type="radio" name="perm_{{idx}}" value="deny" checked onchange="toggleAllow(this)"> {{t.auth_radio_deny}}</label>
+              </span>
+            </div>
+            <div class="perm-options" style="display:none">
+              <label class="container-label"><input type="checkbox" name="allowed_access" value="{{iri}}|Read" disabled> {{t.auth_mode_read}}</label>
+              <label class="container-label"><input type="checkbox" name="allowed_access" value="{{iri}}|Write" disabled> {{t.auth_mode_write}}</label>
+              <div class="perm-advanced" style="display:none">
+                <label class="container-label"><input type="checkbox" name="allowed_access" value="{{iri}}|Append" disabled> {{t.auth_mode_append}}</label>
+                <label class="container-label"><input type="checkbox" name="allowed_access" value="{{iri}}|Create" disabled> {{t.auth_mode_create}}</label>
+                <label class="container-label"><input type="checkbox" name="allowed_access" value="{{iri}}|Update" disabled> {{t.auth_mode_update}}</label>
+                <label class="container-label"><input type="checkbox" name="allowed_access" value="{{iri}}|Delete" disabled> {{t.auth_mode_delete}}</label>
+              </div>
+            </div>
+          </div>
+          {{/containers}}
         </div>
       </div>
     {{/hasContainers}}
@@ -39,7 +63,7 @@
       <input type="text" name="custom_container" placeholder="/{{userPlaceholder}}/path/"
              class="mono" id="custom_container">
       <p class="text-muted text-sm mt-025">
-        {{t.auth_grant_write}}
+        {{t.auth_grant_access}}
       </p>
     </div>
     <div class="form-group mt-075">
@@ -54,3 +78,44 @@
     </div>
   </form>
 </div>
+<script>
+function toggleAllow(radio) {
+  var row = radio.closest('.perm-row');
+  var opts = row.querySelector('.perm-options');
+  var inputs = opts.querySelectorAll('input[type="checkbox"]');
+  if (radio.value === 'allow') {
+    opts.style.display = '';
+    // Enable only visible checkboxes
+    var isAdv = document.getElementById('perm_mode').value === 'advanced';
+    for (var i = 0; i < inputs.length; i++) {
+      var inAdvBlock = inputs[i].closest('.perm-advanced');
+      inputs[i].disabled = inAdvBlock && !isAdv;
+    }
+  } else {
+    opts.style.display = 'none';
+    for (var i = 0; i < inputs.length; i++) {
+      inputs[i].disabled = true;
+      inputs[i].checked = false;
+    }
+  }
+}
+function toggleAdvanced() {
+  var mode = document.getElementById('perm_mode');
+  var btn = document.getElementById('btnAdvanced');
+  var advBlocks = document.querySelectorAll('.perm-advanced');
+  var isAdvanced = mode.value === 'simple';
+  mode.value = isAdvanced ? 'advanced' : 'simple';
+  btn.textContent = isAdvanced ? '{{t.auth_show_simple}}' : '{{t.auth_show_advanced}}';
+  for (var i = 0; i < advBlocks.length; i++) {
+    advBlocks[i].style.display = isAdvanced ? '' : 'none';
+    var row = advBlocks[i].closest('.perm-row');
+    var allowRadio = row.querySelector('input[type="radio"][value="allow"]');
+    var isAllowed = allowRadio && allowRadio.checked;
+    var inputs = advBlocks[i].querySelectorAll('input[type="checkbox"]');
+    for (var j = 0; j < inputs.length; j++) {
+      inputs[j].disabled = !isAdvanced || !isAllowed;
+      if (!isAdvanced) inputs[j].checked = false;
+    }
+  }
+}
+</script>

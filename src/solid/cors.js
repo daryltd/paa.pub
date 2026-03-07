@@ -13,7 +13,8 @@ const EXPOSED_HEADERS = 'Accept-Patch, Accept-Post, Accept-Put, Allow, Content-R
  * @returns {Response}
  */
 export function applyCors(response, request) {
-  const origin = request.headers.get('Origin') || '*';
+  const origin = request.headers.get('Origin');
+  if (!origin) return response;
   const headers = new Headers(response.headers);
   headers.set('Access-Control-Allow-Origin', origin);
   headers.set('Access-Control-Allow-Methods', ALLOWED_METHODS);

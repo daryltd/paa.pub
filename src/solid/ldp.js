@@ -31,7 +31,7 @@ import { solidHeaders, buildWacAllow } from './headers.js';
 import { parseTurtle } from '../rdf/turtle-parser.js';
 import { parseNTriples, serializeNQuads, iri, unwrapIri, unwrapLiteral } from '../rdf/ntriples.js';
 import { isContainer, slugToName, addContainment, containerTypeQuads, parentContainer } from './containers.js';
-import { handleAclPut, handleAclPatch, handleAclDelete, defaultAclNTriples } from './acl.js';
+import { handleAclGet, handleAclPut, handleAclPatch, handleAclDelete, handleAcrGet, defaultAclNTriples } from './acl.js';
 import { checkAcpAccess } from '../ui/pages/acl-editor.js';
 import { PREFIXES, loadMergedPrefixes } from '../rdf/prefixes.js';
 import { checkQuota, quotaExceededResponse, addQuota } from '../storage/quota.js';
@@ -49,6 +49,20 @@ function extractOwner(resourceIri, baseUrl) {
   const path = resourceIri.slice(baseUrl.length + 1); // strip "https://domain.com/"
   const slash = path.indexOf('/');
   return slash > 0 ? path.slice(0, slash) : path;
+}
+
+/** Check if a resource IRI is a user's storage root container. */
+function isStorageRoot(resourceIri, baseUrl) {
+  const owner = extractOwner(resourceIri, baseUrl);
+  return resourceIri === `${baseUrl}/${owner}/`;
+}
+
+/** Build a 401 response with WWW-Authenticate header. */
+function unauthorizedResponse(baseUrl) {
+  return new Response('Unauthorized', {
+    status: 401,
+    headers: { 'WWW-Authenticate': `Bearer realm="${baseUrl}", scope="openid webid"` },
+  });
 }
 
 /**
@@ -96,11 +110,15 @@ export async function handleLDP(reqCtx) {
     return new Response('Not Found', { status: 404 });
   }
 
-  // Handle .acl resources (WAC compatibility) — no direct GET, keep write methods
+  // Handle .acl resources (WAC auxiliary resources)
   if (url.pathname.endsWith('.acl')) {
     const baseIri = resourceIri.slice(0, -4);
+    // Spec: DELETE on storage root ACL MUST return 405
+    if (request.method === 'DELETE' && isStorageRoot(baseIri, config.baseUrl)) {
+      return new Response('Method Not Allowed — cannot delete storage root ACL', { status: 405 });
+    }
     switch (request.method) {
-      case 'GET': case 'HEAD': return new Response('Not Found', { status: 404 });
+      case 'GET': case 'HEAD': return handleAclGet(reqCtx, baseIri);
       case 'PUT': return handleAclPut(reqCtx, baseIri);
       case 'PATCH': return handleAclPatch(reqCtx, baseIri);
       case 'DELETE': return handleAclDelete(reqCtx, baseIri);
@@ -108,9 +126,13 @@ export async function handleLDP(reqCtx) {
     }
   }
 
-  // Handle .acr resources — auxiliary ACP metadata, not directly browseable
+  // Handle .acr resources (ACP auxiliary resources)
   if (url.pathname.endsWith('.acr')) {
-    return new Response('Not Found', { status: 404 });
+    const baseIri = resourceIri.slice(0, -4);
+    switch (request.method) {
+      case 'GET': case 'HEAD': return handleAcrGet(reqCtx, baseIri);
+      default: return new Response('Method Not Allowed', { status: 405 });
+    }
   }
 
   // OIDC apps can read any resource the authenticated owner can read.
@@ -202,7 +224,8 @@ async function handleGet(reqCtx, resourceIri) {
     const blob = await storage.getBlob(`blob:${resourceIri}`);
     if (!blob) {
       // Return 404 with Solid headers so clients know PUT is available
-      const notFoundHeaders = solidHeaders(resourceIri, isContainer(resourceIri));
+      const isSR = isStorageRoot(resourceIri, config.baseUrl);
+      const notFoundHeaders = solidHeaders(resourceIri, isContainer(resourceIri), { isStorageRoot: isSR });
       notFoundHeaders.set('Content-Type', 'text/plain; charset=utf-8');
       return new Response('Not Found', { status: 404, headers: notFoundHeaders });
     }
@@ -226,9 +249,10 @@ async function handleGet(reqCtx, resourceIri) {
   }
 
   const isOwner = reqCtx.user === owner;
+  const publicModes = access.listed ? ['read'] : [];
   const wacAllow = isOwner
-    ? buildWacAllow({ user: ['read', 'write', 'append', 'control'], public: [] })
-    : buildWacAllow({ user: agent ? ['read'] : [], public: [] });
+    ? buildWacAllow({ user: ['read', 'write', 'append', 'control'], public: publicModes })
+    : buildWacAllow({ user: agent ? ['read'] : [], public: publicModes });
 
   const parsed = JSON.parse(idx);
 
@@ -260,16 +284,26 @@ async function handleGet(reqCtx, resourceIri) {
     if (nt) allTriples.push(...parseNTriples(nt));
   }
 
-  if (allTriples.length === 0 && isContainer(resourceIri)) {
-    // Empty containers still return a valid representation with their type triples
-    allTriples.push(
+  if (isContainer(resourceIri)) {
+    // Ensure container type triples are always present in the representation
+    const typeTriples = [
       { subject: `<${resourceIri}>`, predicate: `<${PREFIXES.rdf}type>`, object: `<${PREFIXES.ldp}BasicContainer>` },
       { subject: `<${resourceIri}>`, predicate: `<${PREFIXES.rdf}type>`, object: `<${PREFIXES.ldp}Container>` },
-    );
+      { subject: `<${resourceIri}>`, predicate: `<${PREFIXES.rdf}type>`, object: `<${PREFIXES.ldp}Resource>` },
+    ];
+    // Add pim:Storage type for storage root containers
+    if (isStorageRoot(resourceIri, config.baseUrl)) {
+      typeTriples.push({ subject: `<${resourceIri}>`, predicate: `<${PREFIXES.rdf}type>`, object: `<http://www.w3.org/ns/pim/space#Storage>` });
+    }
+    for (const tt of typeTriples) {
+      if (!allTriples.some(t => t.predicate === tt.predicate && t.object === tt.object && t.subject === tt.subject)) {
+        allTriples.push(tt);
+      }
+    }
   }
 
   // For OIDC apps reading an ancestor container, filter ldp:contains to only
-  // show resources the app is authorized to access
+  // show resources the app is authorized to access (must have Read mode)
   if (reqCtx.authMethod === 'oidc' && reqCtx.clientId && isContainer(resourceIri)) {
     const perm = await getAppPermission(env.APPDATA, owner, reqCtx.clientId);
     if (perm) {
@@ -279,7 +313,12 @@ async function handleGet(reqCtx, resourceIri) {
         const t = allTriples[i];
         if (t.predicate === ldpContains) {
           const childIri = t.object.startsWith('<') ? t.object.slice(1, -1) : t.object;
-          const visible = allowed.some(c => childIri.startsWith(c) || c.startsWith(childIri));
+          const visible = allowed.some(entry => {
+            const iri = entry.iri || entry;
+            const modes = entry.modes ? new Set(entry.modes) : null;
+            const iriMatch = childIri.startsWith(iri) || iri.startsWith(childIri);
+            return iriMatch && (!modes || modes.has('Read'));
+          });
           if (!visible) allTriples.splice(i, 1);
         }
       }
@@ -293,7 +332,8 @@ async function handleGet(reqCtx, resourceIri) {
   const contentType = negotiateType(accept);
   const body = serializeRdf(allTriples, contentType, prefixNames, mergedPrefixes);
 
-  const headers = solidHeaders(resourceIri, isContainer(resourceIri));
+  const isSR = isStorageRoot(resourceIri, config.baseUrl);
+  const headers = solidHeaders(resourceIri, isContainer(resourceIri), { isStorageRoot: isSR });
   headers.set('Content-Type', contentType);
   headers.set('WAC-Allow', wacAllow);
   headers.set('Cache-Control', access.listed ? 'public, max-age=300' : 'private, no-store');
@@ -314,16 +354,22 @@ async function handlePut(reqCtx, resourceIri) {
   const { request, orchestrator, config, storage, env } = reqCtx;
   const owner = extractOwner(resourceIri, config.baseUrl);
   const agent = reqCtx.userConfig ? reqCtx.userConfig.webId : null;
-  const contentType = resolveContentType(request.headers.get('Content-Type'), resourceIri);
 
   if (!agent) {
     console.log(`[ldp] PUT ${resourceIri} rejected: no authenticated agent`);
-    return new Response('Unauthorized', { status: 401 });
+    return unauthorizedResponse(config.baseUrl);
   }
 
-  // App write permission check (OIDC apps only) — skip for system paths
+  // Spec: MUST reject requests with body but no Content-Type with 400
+  if (!request.headers.get('Content-Type')) {
+    return new Response('Bad Request — missing Content-Type header', { status: 400 });
+  }
+
+  const contentType = resolveContentType(request.headers.get('Content-Type'), resourceIri);
+
+  // App permission check (OIDC apps only) — skip for system paths
   if (reqCtx.authMethod === 'oidc' && reqCtx.clientId && !isSystemPath(resourceIri, config.baseUrl, owner)) {
-    const allowed = await checkAppPermission(env.APPDATA, owner, reqCtx.clientId, resourceIri);
+    const allowed = await checkAppPermission(env.APPDATA, owner, reqCtx.clientId, resourceIri, 'Write');
     if (!allowed) {
       console.log(`[ldp] PUT ${resourceIri} rejected: app ${reqCtx.clientId} not authorized`);
       return new Response('Forbidden — app not authorized for this container', { status: 403 });
@@ -383,6 +429,14 @@ async function handlePut(reqCtx, resourceIri) {
     throw e;
   }
 
+  // Spec: MUST NOT allow PUT on container to update containment triples → 409
+  if (isContainer(resourceIri)) {
+    const hasContainment = triples.some(t => t.predicate.includes(`${PREFIXES.ldp}contains`));
+    if (hasContainment) {
+      return new Response('Conflict — cannot update containment triples via PUT', { status: 409 });
+    }
+  }
+
   // For containers, ensure container type triples are present
   if (isContainer(resourceIri)) {
     const hasContainerType = triples.some(t =>
@@ -420,8 +474,6 @@ async function handlePut(reqCtx, resourceIri) {
   }
 
   // Write triples directly to KV
-  if (!agent) return new Response('Forbidden', { status: 403 });
-
   const bySubject = new Map();
   for (const t of triples) {
     const s = t.subject.startsWith('<') && t.subject.endsWith('>') ? t.subject.slice(1, -1) : t.subject;
@@ -470,12 +522,27 @@ async function handlePost(reqCtx, resourceIri) {
   }
   if (!agent) {
     console.log(`[ldp] POST ${resourceIri} rejected: no authenticated agent`);
-    return new Response('Unauthorized', { status: 401 });
+    return unauthorizedResponse(config.baseUrl);
   }
 
-  // App write permission check (OIDC apps only) — skip for system paths
+  // Spec: MUST reject requests with body but no Content-Type with 400
+  if (!request.headers.get('Content-Type')) {
+    const linkHeader = request.headers.get('Link') || '';
+    // Container creation via Link header doesn't need Content-Type
+    if (!linkHeader.includes('BasicContainer')) {
+      return new Response('Bad Request — missing Content-Type header', { status: 400 });
+    }
+  }
+
+  // Spec: POST to non-existent container MUST return 404
+  const containerIdx = await storage.get(`idx:${resourceIri}`);
+  if (!containerIdx) {
+    return new Response('Not Found — target container does not exist', { status: 404 });
+  }
+
+  // App permission check (OIDC apps only) — skip for system paths
   if (reqCtx.authMethod === 'oidc' && reqCtx.clientId && !isSystemPath(resourceIri, config.baseUrl, owner)) {
-    const allowed = await checkAppPermission(env.APPDATA, owner, reqCtx.clientId, resourceIri);
+    const allowed = await checkAppPermission(env.APPDATA, owner, reqCtx.clientId, resourceIri, 'Append');
     if (!allowed) {
       console.log(`[ldp] POST ${resourceIri} rejected: app ${reqCtx.clientId} not authorized`);
       return new Response('Forbidden — app not authorized for this container', { status: 403 });
@@ -488,7 +555,14 @@ async function handlePost(reqCtx, resourceIri) {
   const linkHeader = request.headers.get('Link') || '';
   const wantsContainer = linkHeader.includes('BasicContainer');
   const name = slugToName(slug, wantsContainer);
-  const newResourceIri = resourceIri + name;
+  let newResourceIri = resourceIri + name;
+
+  // Spec: if slug conflicts with existing resource, mint a different URI
+  const existingResource = await storage.get(`idx:${newResourceIri}`);
+  if (existingResource) {
+    const unique = name.replace(/(\.[^.]+)?$/, `-${crypto.randomUUID().slice(0, 8)}$1`);
+    newResourceIri = resourceIri + unique;
+  }
 
   const contentType = resolveContentType(request.headers.get('Content-Type'), newResourceIri);
 
@@ -506,10 +580,9 @@ async function handlePost(reqCtx, resourceIri) {
     // Add containment to parent
     await appendContainment(storage, resourceIri, newResourceIri);
 
-    return new Response(null, {
-      status: 201,
-      headers: { 'Location': newResourceIri },
-    });
+    const postHeaders = solidHeaders(newResourceIri, true);
+    postHeaders.set('Location', newResourceIri);
+    return new Response(null, { status: 201, headers: postHeaders });
   }
 
   if (isBinaryType(contentType)) {
@@ -536,7 +609,9 @@ async function handlePost(reqCtx, resourceIri) {
     await addContainerBytes(env.APPDATA, resourceIri, binary.byteLength);
 
     await appendContainment(storage, resourceIri, newResourceIri);
-    return new Response(null, { status: 201, headers: { 'Location': newResourceIri } });
+    const binaryPostHeaders = solidHeaders(newResourceIri, false);
+    binaryPostHeaders.set('Location', newResourceIri);
+    return new Response(null, { status: 201, headers: binaryPostHeaders });
   }
 
   // RDF content — parse and store, allowing empty documents
@@ -558,7 +633,9 @@ async function handlePost(reqCtx, resourceIri) {
 
   await appendContainment(storage, resourceIri, newResourceIri);
 
-  return new Response(null, { status: 201, headers: { 'Location': newResourceIri } });
+  const rdfPostHeaders = solidHeaders(newResourceIri, false);
+  rdfPostHeaders.set('Location', newResourceIri);
+  return new Response(null, { status: 201, headers: rdfPostHeaders });
 }
 
 /**
@@ -570,12 +647,12 @@ async function handlePost(reqCtx, resourceIri) {
  */
 async function handlePatch(reqCtx, resourceIri) {
   const { request, config, storage, env } = reqCtx;
-  if (!reqCtx.user) return new Response('Unauthorized', { status: 401 });
+  if (!reqCtx.user) return unauthorizedResponse(config.baseUrl);
 
   const patchOwner = extractOwner(resourceIri, config.baseUrl);
-  // App write permission check (OIDC apps only) — skip for system paths
+  // App permission check (OIDC apps only) — skip for system paths
   if (reqCtx.authMethod === 'oidc' && reqCtx.clientId && !isSystemPath(resourceIri, config.baseUrl, patchOwner)) {
-    const allowed = await checkAppPermission(env.APPDATA, patchOwner, reqCtx.clientId, resourceIri);
+    const allowed = await checkAppPermission(env.APPDATA, patchOwner, reqCtx.clientId, resourceIri, 'Update');
     if (!allowed) {
       console.log(`[ldp] PATCH ${resourceIri} rejected: app ${reqCtx.clientId} not authorized`);
       return new Response('Forbidden — app not authorized for this container', { status: 403 });
@@ -590,6 +667,15 @@ async function handlePatch(reqCtx, resourceIri) {
   const body = await request.text();
   const { deleteTriples, insertTriples } = parseSparqlUpdate(body, resourceIri);
 
+  // Spec: MUST NOT allow PATCH on container to update containment triples → 409
+  if (isContainer(resourceIri)) {
+    const ldpContains = `<${PREFIXES.ldp}contains>`;
+    const touchesContainment = [...deleteTriples, ...insertTriples].some(t => t.predicate === ldpContains);
+    if (touchesContainment) {
+      return new Response('Conflict — cannot update containment triples via PATCH', { status: 409 });
+    }
+  }
+
   // Read existing triples from KV
   const idx = await storage.get(`idx:${resourceIri}`);
   let allTriples = [];
@@ -601,9 +687,15 @@ async function handlePatch(reqCtx, resourceIri) {
     }
   }
 
-  // Apply deletes
+  // Apply deletes — Spec: if triples to delete are not present, return 409
   if (deleteTriples.length > 0) {
     const delSet = new Set(deleteTriples.map(t => `${t.subject} ${t.predicate} ${t.object}`));
+    const existingSet = new Set(allTriples.map(t => `${t.subject} ${t.predicate} ${t.object}`));
+    for (const key of delSet) {
+      if (!existingSet.has(key)) {
+        return new Response('Conflict — delete triples not found in resource', { status: 409 });
+      }
+    }
     allTriples = allTriples.filter(t => !delSet.has(`${t.subject} ${t.predicate} ${t.object}`));
   }
 
@@ -649,15 +741,33 @@ async function handlePatch(reqCtx, resourceIri) {
 async function handleDelete(reqCtx, resourceIri) {
   const { config, storage, env } = reqCtx;
   const deleteOwner = extractOwner(resourceIri, config.baseUrl);
-  if (!reqCtx.user) return new Response('Unauthorized', { status: 401 });
+
+  // Spec: DELETE on storage root or its ACL MUST return 405
+  if (isStorageRoot(resourceIri, config.baseUrl)) {
+    return new Response('Method Not Allowed — cannot delete storage root', { status: 405 });
+  }
+
+  if (!reqCtx.user) return unauthorizedResponse(config.baseUrl);
   if (reqCtx.user !== deleteOwner) return new Response('Forbidden', { status: 403 });
 
-  // App write permission check (OIDC apps only) — skip for system paths
+  // App permission check (OIDC apps only) — skip for system paths
   if (reqCtx.authMethod === 'oidc' && reqCtx.clientId && !isSystemPath(resourceIri, config.baseUrl, deleteOwner)) {
-    const allowed = await checkAppPermission(env.APPDATA, deleteOwner, reqCtx.clientId, resourceIri);
+    const allowed = await checkAppPermission(env.APPDATA, deleteOwner, reqCtx.clientId, resourceIri, 'Delete');
     if (!allowed) {
       console.log(`[ldp] DELETE ${resourceIri} rejected: app ${reqCtx.clientId} not authorized`);
       return new Response('Forbidden — app not authorized for this container', { status: 403 });
+    }
+  }
+
+  // Spec: DELETE on non-empty container MUST return 409
+  if (isContainer(resourceIri)) {
+    const containerDoc = await storage.get(`doc:${resourceIri}:${resourceIri}`);
+    if (containerDoc) {
+      const containerTriples = parseNTriples(containerDoc);
+      const hasChildren = containerTriples.some(t => t.predicate.includes('contains'));
+      if (hasChildren) {
+        return new Response('Conflict — container is not empty', { status: 409 });
+      }
     }
   }
 
@@ -712,7 +822,8 @@ async function handleDelete(reqCtx, resourceIri) {
 }
 
 function handleOptions(reqCtx, resourceIri) {
-  const headers = solidHeaders(resourceIri, isContainer(resourceIri));
+  const isSR = isStorageRoot(resourceIri, reqCtx.config.baseUrl);
+  const headers = solidHeaders(resourceIri, isContainer(resourceIri), { isStorageRoot: isSR });
   return new Response(null, { status: 204, headers });
 }
 

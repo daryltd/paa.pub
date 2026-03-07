@@ -166,6 +166,18 @@ details > summary > h2 { display: inline; }
 /* ── Container label ─────────────────────────────────── */
 .container-label { font-weight: normal; font-size: 0.85rem; display: flex; align-items: center; gap: 0.5rem; }
 
+/* ── Permission rows (authorize screen) ─────────────── */
+.perm-row { padding: 0.5rem 0; border-bottom: 1px solid #eee; }
+.perm-row:last-child { border-bottom: none; }
+.perm-header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.25rem; }
+.perm-radios { display: flex; gap: 0.75rem; }
+.perm-options { display: flex; flex-wrap: wrap; gap: 0.25rem 0.75rem; margin-top: 0.375rem; padding-left: 0.25rem; }
+.perm-advanced { display: flex; flex-wrap: wrap; gap: 0.25rem 0.75rem; }
+.btn-link { background: none; border: none; color: var(--accent, #0055aa); cursor: pointer; padding: 0; text-decoration: underline; font-size: inherit; }
+.flex.justify-between { justify-content: space-between; }
+.flex.align-center { align-items: center; }
+.mb-0 { margin-bottom: 0; }
+
 /* Avatar */
 .avatar { width: 100%; max-width: 96px; border-radius: 50%; }
 

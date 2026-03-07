@@ -6,45 +6,74 @@
  * has unrestricted access.
  *
  * Storage (APPDATA KV):
- *   app_perm:{username}:{hash(clientId)} → { clientId, clientName, allowedContainers: string[], grantedAt }
+ *   app_perm:{username}:{hash(clientId)} → { clientId, clientName, allowedContainers, grantedAt }
  *   app_perms_index:{username} → [{ clientId, clientName, hash }]
+ *
+ * allowedContainers format:
+ *   Array of { iri: string, modes: string[] }
+ *   Modes: "Read", "Write", "Append", "Create", "Update", "Delete"
+ *   "Write" implies Append, Create, Update, and Delete.
+ *   Legacy format (plain string[]) is treated as all modes granted.
  */
 import { simpleHash } from '../utils.js';
 
+/** All access modes supported by the advanced permission UI. */
+export const ACCESS_MODES = ['Read', 'Write', 'Append', 'Create', 'Update', 'Delete'];
+
+/** Write sub-modes implied when "Write" is granted. */
+const WRITE_IMPLIED = new Set(['Append', 'Create', 'Update', 'Delete']);
+
 /**
- * Check if an OIDC app has permission to access a resource.
- * Uses prefix matching: if `/alice/public/` is allowed, writes to
- * `/alice/public/photos/cat.jpg` are also allowed.
+ * Normalize an allowedContainers entry from storage.
+ * Legacy entries are plain IRI strings; new entries are {iri, modes} objects.
+ */
+function normalizeEntry(entry) {
+  if (typeof entry === 'string') {
+    return { iri: entry, modes: [...ACCESS_MODES] };
+  }
+  return entry;
+}
+
+/**
+ * Check if an OIDC app has permission to access a resource with a given mode.
+ * Uses prefix matching: if `/alice/public/` is allowed, access to
+ * `/alice/public/photos/cat.jpg` is also allowed.
  *
  * @param {KVNamespace} kv - APPDATA
  * @param {string} username
  * @param {string} clientId - OIDC client_id
- * @param {string} resourceIri - Full resource IRI being written to
+ * @param {string} resourceIri - Full resource IRI being accessed
+ * @param {string} [mode='Write'] - Access mode: Read, Write, Append, Create, Update, Delete
  * @returns {Promise<boolean>}
  */
-export async function checkAppPermission(kv, username, clientId, resourceIri) {
+export async function checkAppPermission(kv, username, clientId, resourceIri, mode = 'Write') {
   const hash = simpleHash(clientId);
   const data = await kv.get(`app_perm:${username}:${hash}`);
   if (!data) return false;
 
   const perm = JSON.parse(data);
-  // Verify clientId matches (hash collision guard)
   if (perm.clientId !== clientId) return false;
 
-  const containers = perm.allowedContainers || [];
-  return containers.some(containerIri =>
-    resourceIri.startsWith(containerIri) || containerIri.startsWith(resourceIri)
-  );
+  const containers = (perm.allowedContainers || []).map(normalizeEntry);
+  return containers.some(entry => {
+    const iriMatch = resourceIri.startsWith(entry.iri);
+    if (!iriMatch) return false;
+    const modes = new Set(entry.modes);
+    if (modes.has(mode)) return true;
+    // "Write" implies all write sub-modes
+    if (WRITE_IMPLIED.has(mode) && modes.has('Write')) return true;
+    return false;
+  });
 }
 
 /**
- * Grant an app permission to write to specific containers.
+ * Grant an app permission to access specific containers.
  * @param {KVNamespace} kv - APPDATA
  * @param {string} username
  * @param {string} clientId
  * @param {string} clientName
  * @param {string} clientUri - Homepage URL of the app (optional)
- * @param {string[]} allowedContainers - Container IRIs
+ * @param {Array<{iri: string, modes: string[]}>} allowedContainers - Container entries with modes
  */
 export async function grantAppPermission(kv, username, clientId, clientName, clientUri, allowedContainers) {
   const hash = simpleHash(clientId);
@@ -98,9 +127,10 @@ export async function revokeAppPermission(kv, username, clientId) {
 
 /**
  * Get all app permissions for a user.
+ * Normalizes legacy string[] containers to {iri, modes} format.
  * @param {KVNamespace} kv - APPDATA
  * @param {string} username
- * @returns {Promise<Array<{clientId: string, clientName: string, allowedContainers: string[], grantedAt: string}>>}
+ * @returns {Promise<Array<{clientId: string, clientName: string, allowedContainers: Array<{iri: string, modes: string[]}>, grantedAt: string}>>}
  */
 export async function listAppPermissions(kv, username) {
   const indexData = await kv.get(`app_perms_index:${username}`);
@@ -111,7 +141,9 @@ export async function listAppPermissions(kv, username) {
   for (const entry of index) {
     const data = await kv.get(`app_perm:${username}:${entry.hash}`);
     if (data) {
-      perms.push(JSON.parse(data));
+      const perm = JSON.parse(data);
+      perm.allowedContainers = (perm.allowedContainers || []).map(normalizeEntry);
+      perms.push(perm);
     }
   }
   return perms;
@@ -119,10 +151,11 @@ export async function listAppPermissions(kv, username) {
 
 /**
  * Get permission for a specific app.
+ * Normalizes legacy string[] containers to {iri, modes} format.
  * @param {KVNamespace} kv - APPDATA
  * @param {string} username
  * @param {string} clientId
- * @returns {Promise<{clientId: string, clientName: string, allowedContainers: string[], grantedAt: string}|null>}
+ * @returns {Promise<{clientId: string, clientName: string, allowedContainers: Array<{iri: string, modes: string[]}>, grantedAt: string}|null>}
  */
 export async function getAppPermission(kv, username, clientId) {
   const hash = simpleHash(clientId);
@@ -130,6 +163,7 @@ export async function getAppPermission(kv, username, clientId) {
   if (!data) return null;
   const perm = JSON.parse(data);
   if (perm.clientId !== clientId) return null;
+  perm.allowedContainers = (perm.allowedContainers || []).map(normalizeEntry);
   return perm;
 }
 

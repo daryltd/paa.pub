@@ -145,14 +145,9 @@ export async function handleAuthorize(reqCtx) {
     const meta = await fetchClientMetadata(clientId);
     const isInternalClient = clientId.startsWith(config.baseUrl + '/clients/');
 
-    // Load top-level containers for permission checkboxes
+    // Load top-level containers for permission checkboxes (idx used for radio grouping)
     const containers = user ? await loadTopLevelContainers(reqCtx.storage, config, user) : [];
-    const containerCheckboxes = containers.map(c =>
-      `<label class="container-label">
-        <input type="checkbox" name="allowed_containers" value="${escapeHtml(c.iri)}">
-        <span class="mono">${escapeHtml(c.path)}</span>
-      </label>`
-    ).join('\n');
+    containers.forEach((c, i) => { c.idx = i; });
 
     return renderPage('Authorize', authorizeTemplate, {
       displayName: meta.displayName,
@@ -169,7 +164,7 @@ export async function handleAuthorize(reqCtx) {
       nonce,
       isLoggedIn: !!user,
       hasContainers: containers.length > 0,
-      containerCheckboxes,
+      containers,
       userPlaceholder: user || 'username',
     }, { lang: reqCtx.lang });
   }
@@ -220,10 +215,31 @@ export async function handleAuthorize(reqCtx) {
   const clientId = form.get('client_id') || '';
   const remember = form.get('remember') === '1';
 
-  // Save container permissions
-  const allowedContainers = form.getAll('allowed_containers');
+  // Parse container permissions from allowed_access values (format: "iri|Mode")
+  const accessEntries = form.getAll('allowed_access');
+  const permMode = form.get('perm_mode') || 'simple';
+  const containerMap = new Map();
+  for (const entry of accessEntries) {
+    const sep = entry.lastIndexOf('|');
+    if (sep < 0) continue;
+    const iri = entry.slice(0, sep);
+    const mode = entry.slice(sep + 1);
+    if (!containerMap.has(iri)) containerMap.set(iri, new Set());
+    containerMap.get(iri).add(mode);
+  }
+  // In simple mode, "Write" expands to all write sub-modes
+  if (permMode === 'simple') {
+    for (const [iri, modes] of containerMap) {
+      if (modes.has('Write')) {
+        modes.add('Append');
+        modes.add('Create');
+        modes.add('Update');
+        modes.add('Delete');
+      }
+    }
+  }
 
-  // Process manual container path
+  // Process manual container path (grants Read + Write in simple mode)
   const customContainer = (form.get('custom_container') || '').trim();
   if (customContainer) {
     let path = customContainer;
@@ -231,11 +247,16 @@ export async function handleAuthorize(reqCtx) {
     if (!path.endsWith('/')) path += '/';
     if (path.startsWith(`/${authUser}/`)) {
       const fullIri = config.baseUrl + path;
-      if (!allowedContainers.includes(fullIri)) {
-        allowedContainers.push(fullIri);
+      if (!containerMap.has(fullIri)) {
+        containerMap.set(fullIri, new Set(['Read', 'Write', 'Append', 'Create', 'Update', 'Delete']));
       }
     }
   }
+
+  const allowedContainers = [...containerMap.entries()].map(([iri, modes]) => ({
+    iri,
+    modes: [...modes],
+  }));
 
   const meta = await fetchClientMetadata(clientId);
   await grantAppPermission(reqCtx.env.APPDATA, authUser, clientId, meta.clientName || '', meta.clientUri || '', allowedContainers);
@@ -511,17 +532,17 @@ export async function verifyAccessToken(request, env, config) {
       return null;
     }
 
-    // For DPoP scheme, verify the DPoP proof's key matches the token binding.
-    // If verification fails, still accept the token since we issued it —
-    // the DPoP binding is a defense against token theft, and on a single-user
-    // server the owner is the only valid token holder.
+    // DPoP proof-of-possession validation (required for DPoP scheme)
     if (scheme === 'DPoP' && payload.cnf?.jkt) {
       const dpopHeader = request.headers.get('DPoP');
-      if (dpopHeader) {
-        const jkt = await extractDpopJkt(dpopHeader);
-        if (jkt && jkt !== payload.cnf.jkt) {
-          console.log(`[auth] DPoP thumbprint mismatch (proof=${jkt} token=${payload.cnf.jkt})`);
-        }
+      if (!dpopHeader) {
+        console.log(`[auth] rejected: DPoP scheme but no DPoP header`);
+        return null;
+      }
+      const dpopResult = await verifyDpopProof(dpopHeader, request, payload.cnf.jkt);
+      if (!dpopResult.valid) {
+        console.log(`[auth] rejected: DPoP validation failed — ${dpopResult.reason}`);
+        return null;
       }
     }
 
@@ -535,21 +556,77 @@ export async function verifyAccessToken(request, env, config) {
   }
 }
 
-async function extractDpopJkt(dpopJwt) {
+/**
+ * Verify a DPoP proof JWT per RFC 9449:
+ * - Verify the signature using the embedded JWK
+ * - Check htm (HTTP method) and htu (HTTP URI) match the request
+ * - Check iat (issued-at) is recent
+ * - Check jkt (JWK thumbprint) matches the token binding
+ */
+async function verifyDpopProof(dpopJwt, request, expectedJkt) {
   try {
-    const [headerB64] = dpopJwt.split('.');
+    const [headerB64, payloadB64, sigB64] = dpopJwt.split('.');
     const header = JSON.parse(atob(headerB64.replace(/-/g, '+').replace(/_/g, '/')));
+    const dpopPayload = JSON.parse(atob(payloadB64.replace(/-/g, '+').replace(/_/g, '/')));
     const jwk = header.jwk;
-    if (!jwk) return null;
-    // JWK thumbprint (RFC 7638) — SHA-256 of canonical JWK
+    if (!jwk) return { valid: false, reason: 'missing JWK in DPoP header' };
+    if (header.typ !== 'dpop+jwt') return { valid: false, reason: 'typ must be dpop+jwt' };
+
+    // Verify JWK thumbprint matches token binding
     const members = jwk.kty === 'EC'
       ? { crv: jwk.crv, kty: jwk.kty, x: jwk.x, y: jwk.y }
       : { e: jwk.e, kty: jwk.kty, n: jwk.n };
     const thumbprintInput = JSON.stringify(members);
     const hash = await sha256(thumbprintInput);
-    return bufferToBase64url(new Uint8Array(hash));
-  } catch {
-    return null;
+    const jkt = bufferToBase64url(new Uint8Array(hash));
+    if (jkt !== expectedJkt) {
+      return { valid: false, reason: `thumbprint mismatch (proof=${jkt} token=${expectedJkt})` };
+    }
+
+    // Verify htm (HTTP method)
+    if (dpopPayload.htm && dpopPayload.htm !== request.method) {
+      return { valid: false, reason: `htm mismatch (proof=${dpopPayload.htm} request=${request.method})` };
+    }
+
+    // Verify htu (HTTP URI) — compare without query/fragment
+    if (dpopPayload.htu) {
+      const proofUrl = new URL(dpopPayload.htu);
+      const requestUrl = new URL(request.url);
+      if (proofUrl.origin + proofUrl.pathname !== requestUrl.origin + requestUrl.pathname) {
+        return { valid: false, reason: `htu mismatch` };
+      }
+    }
+
+    // Verify iat (issued-at) is within 5 minutes
+    if (dpopPayload.iat) {
+      const now = Math.floor(Date.now() / 1000);
+      const skew = 300; // 5 minute tolerance
+      if (dpopPayload.iat > now + skew || dpopPayload.iat < now - skew) {
+        return { valid: false, reason: 'iat outside acceptable window' };
+      }
+    }
+
+    // Verify the DPoP proof signature
+    const algMap = { ES256: { name: 'ECDSA', namedCurve: 'P-256', hash: 'SHA-256' }, RS256: { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' } };
+    const algInfo = algMap[header.alg];
+    if (!algInfo) return { valid: false, reason: `unsupported algorithm: ${header.alg}` };
+
+    const importAlg = header.alg === 'ES256'
+      ? { name: algInfo.name, namedCurve: algInfo.namedCurve }
+      : { name: algInfo.name, hash: algInfo.hash };
+    const verifyAlg = header.alg === 'ES256'
+      ? { name: algInfo.name, hash: algInfo.hash }
+      : { name: algInfo.name };
+
+    const key = await crypto.subtle.importKey('jwk', jwk, importAlg, false, ['verify']);
+    const sigBytes = Uint8Array.from(atob(sigB64.replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0));
+    const data = new TextEncoder().encode(`${headerB64}.${payloadB64}`);
+    const valid = await crypto.subtle.verify(verifyAlg, key, sigBytes, data);
+    if (!valid) return { valid: false, reason: 'signature verification failed' };
+
+    return { valid: true };
+  } catch (e) {
+    return { valid: false, reason: `DPoP parse error: ${e.message}` };
   }
 }
 

@@ -215,7 +215,7 @@ const MODE_LABELS = {
  * @param {string} resourceIri
  * @returns {Promise<{mode: string, agents?: string[], inherit?: boolean}>}
  */
-async function loadPolicy(kv, resourceIri) {
+export async function loadPolicy(kv, resourceIri) {
   const data = await kv.get(`acp:${resourceIri}`);
   return data ? JSON.parse(data) : { ...DEFAULT_POLICY };
 }
@@ -246,7 +246,7 @@ async function resolveInheritedPolicy(kv, resourceIri) {
   }
 }
 
-async function loadFriends(kv, username) {
+export async function loadFriends(kv, username) {
   const data = await kv.get(`friends:${username}`);
   return data ? JSON.parse(data) : [];
 }
@@ -340,7 +340,7 @@ async function evaluatePolicy(policy, agentWebId, kv, username) {
   }
 }
 
-function policyToTurtle(policy, resourceIri, ownerWebId, friends) {
+export function policyToTurtle(policy, resourceIri, ownerWebId, friends) {
   if (policy.mode === 'inherit') {
     return '# No explicit policy — inheriting from parent container.';
   }

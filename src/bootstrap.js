@@ -163,6 +163,9 @@ export async function bootstrapUser(env, globalConfig, username, storage) {
   const acl = PREFIXES.acl;
   const foaf = PREFIXES.foaf;
 
+  const rootIri = `${baseUrl}/${username}/`;
+  const childContainmentTriples = [];
+
   for (const containerIri of containers) {
     // Write container type triple
     const containerNt = `${iri(containerIri)} ${iri(rdf + 'type')} ${iri(ldp + 'BasicContainer')} .`;
@@ -171,7 +174,7 @@ export async function bootstrapUser(env, globalConfig, username, storage) {
 
     // Write WAC ACL (for kernel compatibility)
     const isPublic = containerIri.endsWith('/public/');
-    const isRoot = containerIri === `${baseUrl}/${username}/`;
+    const isRoot = containerIri === rootIri;
     const aclNt = buildContainerAcl(containerIri, webId, isPublic || isRoot, acl, foaf);
     await storage.put(`acl:${containerIri}`, aclNt);
 
@@ -180,6 +183,20 @@ export async function bootstrapUser(env, globalConfig, username, storage) {
     await env.APPDATA.put(`acp:${containerIri}`, JSON.stringify({
       mode: acpMode, agents: [], inherit: true,
     }));
+
+    // Collect containment triples for children of the root container
+    if (containerIri !== rootIri) {
+      childContainmentTriples.push(
+        `${iri(rootIri)} ${iri(ldp + 'contains')} ${iri(containerIri)} .`
+      );
+    }
+  }
+
+  // Add ldp:contains triples to root container
+  if (childContainmentTriples.length > 0) {
+    const existingRoot = await storage.get(`doc:${rootIri}:${rootIri}`);
+    await storage.put(`doc:${rootIri}:${rootIri}`,
+      (existingRoot || '') + '\n' + childContainmentTriples.join('\n'));
   }
 
   // Create WebID profile document
