@@ -15,10 +15,11 @@
  *     own document (`doc:{containerIri}:{containerIri}`).
  *
  * Access control:
- *   All GET/HEAD requests run through `checkAcpAccess()` which evaluates
- *   the ACP policy for the resource, walking up the container hierarchy
- *   if the resource inherits its policy. Responses include Cache-Control
- *   headers based on the access level (public vs private).
+ *   All GET/HEAD requests run through `checkAccess()` which evaluates
+ *   both WAC ACLs and ACP policies. Access is granted if either system
+ *   allows it. WAC ACLs are checked via `checkWacAccess()` and ACP via
+ *   `checkAcpAccess()`. Responses include Cache-Control headers based
+ *   on the access level (public vs private).
  *
  * Special cases:
  *   - `.acl` suffixed URLs → WAC ACL management (delegated to acl.js)
@@ -33,6 +34,7 @@ import { parseNTriples, serializeNQuads, iri, unwrapIri, unwrapLiteral } from '.
 import { isContainer, slugToName, addContainment, containerTypeQuads, parentContainer } from './containers.js';
 import { handleAclGet, handleAclPut, handleAclPatch, handleAclDelete, handleAcrGet, defaultAclNTriples } from './acl.js';
 import { checkAcpAccess } from '../ui/pages/acl-editor.js';
+import { checkWacAccess, wacModesToAccess } from './wac.js';
 import { PREFIXES, loadMergedPrefixes } from '../rdf/prefixes.js';
 import { checkQuota, quotaExceededResponse, addQuota } from '../storage/quota.js';
 import { checkContainerQuota, containerQuotaExceededResponse, addContainerBytes } from '../storage/container-quota.js';
@@ -55,6 +57,31 @@ function extractOwner(resourceIri, baseUrl) {
 function isStorageRoot(resourceIri, baseUrl) {
   const owner = extractOwner(resourceIri, baseUrl);
   return resourceIri === `${baseUrl}/${owner}/`;
+}
+
+/**
+ * Combined access check: evaluates both WAC and ACP, grants access if either allows.
+ * Returns { readable, listed, wacModes } where wacModes is the raw WAC mode set.
+ */
+async function checkAccess(storage, appdata, resourceIri, agentWebId, ownerWebId, owner) {
+  // Owner always has full access
+  if (agentWebId === ownerWebId) {
+    return { readable: true, listed: true, wacModes: new Set([PREFIXES.acl + 'Read', PREFIXES.acl + 'Write', PREFIXES.acl + 'Control']) };
+  }
+
+  // Check both systems in parallel
+  const [acpResult, wacResult] = await Promise.all([
+    checkAcpAccess(appdata, resourceIri, agentWebId, ownerWebId, owner),
+    checkWacAccess(storage, resourceIri, agentWebId),
+  ]);
+
+  const wacAccess = wacModesToAccess(wacResult.modes);
+
+  // Grant access if either system allows it
+  const readable = acpResult.readable || wacAccess.readable;
+  const listed = acpResult.listed || wacAccess.readable; // WAC public read implies listed
+
+  return { readable, listed, wacModes: wacResult.modes };
 }
 
 /** Build a 401 response with WWW-Authenticate header. */
@@ -174,7 +201,7 @@ export async function handleLDP(reqCtx) {
     const indexBlob = await reqCtx.storage.getBlob(`blob:${indexIri}`);
     if (indexBlob) {
       const agent = reqCtx.userConfig ? reqCtx.userConfig.webId : null;
-      const access = await checkAcpAccess(reqCtx.env.APPDATA, indexIri, agent, containerOwnerUc.webId, containerOwner);
+      const access = await checkAccess(reqCtx.storage, reqCtx.env.APPDATA, indexIri, agent, containerOwnerUc.webId, containerOwner);
       if (!access.readable) {
         return denyAccess(agent, config.baseUrl);
       }
@@ -205,7 +232,7 @@ export async function handleLDP(reqCtx) {
  *
  * Flow:
  *   1. Look up `idx:{iri}` — if missing, check for an orphan blob in R2
- *   2. Run ACP access check (owner is handled inside checkAcpAccess)
+ *   2. Run WAC + ACP access check (owner always has full access)
  *   3. If binary (idx.binary === true) → fetch blob from R2, read content-type
  *      from metadata, serve with appropriate Cache-Control
  *   4. If RDF → fetch all subject documents in parallel, parse N-Triples,
@@ -230,8 +257,8 @@ async function handleGet(reqCtx, resourceIri) {
       return new Response('Not Found', { status: 404, headers: notFoundHeaders });
     }
 
-    // Serve orphan blob — always check ACP (owner handled inside checkAcpAccess)
-    const access = await checkAcpAccess(env.APPDATA, resourceIri, agent, ownerUc.webId, owner);
+    // Serve orphan blob — check WAC + ACP access
+    const access = await checkAccess(storage, env.APPDATA, resourceIri, agent, ownerUc.webId, owner);
     if (!access.readable) {
       return denyAccess(agent, config.baseUrl);
     }
@@ -242,17 +269,28 @@ async function handleGet(reqCtx, resourceIri) {
     return new Response(blob, { status: 200, headers });
   }
 
-  // Check ACP access — always run (owner is handled inside checkAcpAccess)
-  const access = await checkAcpAccess(env.APPDATA, resourceIri, agent, ownerUc.webId, owner);
+  // Check WAC + ACP access
+  const access = await checkAccess(storage, env.APPDATA, resourceIri, agent, ownerUc.webId, owner);
   if (!access.readable) {
     return denyAccess(agent, config.baseUrl);
   }
 
+  // Build WAC-Allow header from combined access results
   const isOwner = reqCtx.user === owner;
   const publicModes = access.listed ? ['read'] : [];
-  const wacAllow = isOwner
-    ? buildWacAllow({ user: ['read', 'write', 'append', 'control'], public: publicModes })
-    : buildWacAllow({ user: agent ? ['read'] : [], public: publicModes });
+  let userModes;
+  if (isOwner) {
+    userModes = ['read', 'write', 'append', 'control'];
+  } else if (agent) {
+    userModes = ['read'];
+    const wm = access.wacModes;
+    if (wm.has(PREFIXES.acl + 'Write')) userModes.push('write');
+    if (wm.has(PREFIXES.acl + 'Append') || wm.has(PREFIXES.acl + 'Write')) userModes.push('append');
+    if (wm.has(PREFIXES.acl + 'Control')) userModes.push('control');
+  } else {
+    userModes = [];
+  }
+  const wacAllow = buildWacAllow({ user: userModes, public: publicModes });
 
   const parsed = JSON.parse(idx);
 
@@ -356,8 +394,13 @@ async function handlePut(reqCtx, resourceIri) {
   const agent = reqCtx.userConfig ? reqCtx.userConfig.webId : null;
 
   if (!agent) {
-    console.log(`[ldp] PUT ${resourceIri} rejected: no authenticated agent`);
-    return unauthorizedResponse(config.baseUrl);
+    // Check if WAC grants public Write access before rejecting
+    const wacResult = await checkWacAccess(storage, resourceIri, null);
+    if (!wacResult.modes.has(PREFIXES.acl + 'Write')) {
+      console.log(`[ldp] PUT ${resourceIri} rejected: no authenticated agent and no public Write access`);
+      return unauthorizedResponse(config.baseUrl);
+    }
+    console.log(`[ldp] PUT ${resourceIri} by anonymous (public Write access granted by WAC)`);
   }
 
   // Spec: MUST reject requests with body but no Content-Type with 400
@@ -516,13 +559,21 @@ async function handlePost(reqCtx, resourceIri) {
   const owner = extractOwner(resourceIri, config.baseUrl);
   const agent = reqCtx.userConfig ? reqCtx.userConfig.webId : null;
 
+  // Check anonymous access BEFORE container normalization (ACL is on the original URI)
+  const originalIri = resourceIri;
   // Normalize: treat /path as /path/ for POST (container operations)
   if (!isContainer(resourceIri)) {
     resourceIri = resourceIri + '/';
   }
   if (!agent) {
-    console.log(`[ldp] POST ${resourceIri} rejected: no authenticated agent`);
-    return unauthorizedResponse(config.baseUrl);
+    // Check WAC on the original resource URI (before trailing slash normalization)
+    const wacResult = await checkWacAccess(storage, originalIri, null);
+    const appendable = wacResult.modes.has(PREFIXES.acl + 'Append') || wacResult.modes.has(PREFIXES.acl + 'Write');
+    if (!appendable) {
+      console.log(`[ldp] POST ${resourceIri} rejected: no authenticated agent and no public Append access`);
+      return unauthorizedResponse(config.baseUrl);
+    }
+    console.log(`[ldp] POST ${resourceIri} by anonymous (public Append access granted by WAC)`);
   }
 
   // Spec: MUST reject requests with body but no Content-Type with 400
@@ -647,7 +698,15 @@ async function handlePost(reqCtx, resourceIri) {
  */
 async function handlePatch(reqCtx, resourceIri) {
   const { request, config, storage, env } = reqCtx;
-  if (!reqCtx.user) return unauthorizedResponse(config.baseUrl);
+  if (!reqCtx.user) {
+    // Check if WAC grants public Append/Write access before rejecting
+    const wacResult = await checkWacAccess(storage, resourceIri, null);
+    const appendable = wacResult.modes.has(PREFIXES.acl + 'Append') || wacResult.modes.has(PREFIXES.acl + 'Write');
+    if (!appendable) {
+      return unauthorizedResponse(config.baseUrl);
+    }
+    console.log(`[ldp] PATCH ${resourceIri} by anonymous (public access granted by WAC)`);
+  }
 
   const patchOwner = extractOwner(resourceIri, config.baseUrl);
   // App permission check (OIDC apps only) — skip for system paths
