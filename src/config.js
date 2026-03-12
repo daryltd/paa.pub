@@ -48,6 +48,7 @@ export function getConfig(env, request) {
 
   return {
     adminUsername,
+    username: adminUsername,
     adminPassword,
     domain,
     baseUrl,

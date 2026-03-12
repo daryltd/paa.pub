@@ -40,7 +40,7 @@ import { handleWebFinger } from './activitypub/webfinger.js';
 import { handleUserDidDocument, handleServerDidDocument } from './did/document.js';
 import { handleActor } from './activitypub/actor.js';
 import { handleInbox } from './activitypub/inbox.js';
-import { handleOutbox, handleCompose, handleFollow, handleUnfollow, handleAcceptFollowRequest, handleRejectFollowRequest } from './activitypub/outbox.js';
+import { handleOutbox, handleOutboxPost, handleCompose, handleFollow, handleUnfollow, handleAcceptFollowRequest, handleRejectFollowRequest } from './activitypub/outbox.js';
 import { handleCollections } from './activitypub/collections.js';
 import { handleLDP } from './solid/ldp.js';
 import { applyCors } from './solid/cors.js';
@@ -174,6 +174,7 @@ function buildRouter() {
   router.post('/inbox', handleInbox);
   router.post('/:user/inbox', handleInbox);
   router.get('/:user/outbox', handleOutbox);
+  router.post('/:user/outbox', handleOutboxPost);
   router.get('/:user/followers', handleCollections);
   router.get('/:user/following', handleCollections);
   router.get('/:user/did.json', handleUserDidDocument);

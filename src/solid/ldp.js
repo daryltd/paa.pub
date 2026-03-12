@@ -32,7 +32,7 @@ import { solidHeaders, buildWacAllow } from './headers.js';
 import { parseTurtle } from '../rdf/turtle-parser.js';
 import { parseNTriples, serializeNQuads, iri, unwrapIri, unwrapLiteral } from '../rdf/ntriples.js';
 import { isContainer, slugToName, addContainment, containerTypeQuads, parentContainer } from './containers.js';
-import { handleAclGet, handleAclPut, handleAclPatch, handleAclDelete, handleAcrGet, defaultAclNTriples } from './acl.js';
+import { handleAclGet, handleAclPut, handleAclPatch, handleAclDelete, handleAclReset, handleAcrGet, defaultAclNTriples } from './acl.js';
 import { checkAcpAccess } from '../ui/pages/acl-editor.js';
 import { checkWacAccess, wacModesToAccess } from './wac.js';
 import { PREFIXES, loadMergedPrefixes } from '../rdf/prefixes.js';
@@ -140,9 +140,9 @@ export async function handleLDP(reqCtx) {
   // Handle .acl resources (WAC auxiliary resources)
   if (url.pathname.endsWith('.acl')) {
     const baseIri = resourceIri.slice(0, -4);
-    // Spec: DELETE on storage root ACL MUST return 405
+    // Storage root ACL cannot be deleted, but can be reset to default
     if (request.method === 'DELETE' && isStorageRoot(baseIri, config.baseUrl)) {
-      return new Response('Method Not Allowed — cannot delete storage root ACL', { status: 405 });
+      return handleAclReset(reqCtx, baseIri);
     }
     switch (request.method) {
       case 'GET': case 'HEAD': return handleAclGet(reqCtx, baseIri);
@@ -701,6 +701,7 @@ async function handlePatch(reqCtx, resourceIri) {
   if (!reqCtx.user) {
     // Check if WAC grants public Append/Write access before rejecting
     const wacResult = await checkWacAccess(storage, resourceIri, null);
+    console.log(`[ldp] PATCH ${resourceIri} anonymous WAC check: found=${wacResult.found} modes=[${[...wacResult.modes].join(', ')}]`);
     const appendable = wacResult.modes.has(PREFIXES.acl + 'Append') || wacResult.modes.has(PREFIXES.acl + 'Write');
     if (!appendable) {
       return unauthorizedResponse(config.baseUrl);

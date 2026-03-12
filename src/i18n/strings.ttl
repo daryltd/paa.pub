@@ -1072,6 +1072,16 @@ paa:stor_confirm_delete_container rdfs:label "Delete this container and all its 
     rdfs:label "¿Eliminar este contenedor y todo su contenido?"@es ;
     rdfs:label "למחוק מכולה זו וכל תוכנה?"@he ;
     rdfs:label "删除此容器及其所有内容？"@zh .
+paa:stor_reset_acl rdfs:label "Reset ACL"@en-US ;
+    rdfs:label "Réinitialiser ACL"@fr ;
+    rdfs:label "Restablecer ACL"@es ;
+    rdfs:label "איפוס ACL"@he ;
+    rdfs:label "重置 ACL"@zh .
+paa:stor_confirm_reset_acl rdfs:label "Reset the WAC access control to owner-only defaults?"@en-US ;
+    rdfs:label "Réinitialiser le contrôle d'accès WAC aux paramètres par défaut (propriétaire uniquement) ?"@fr ;
+    rdfs:label "¿Restablecer el control de acceso WAC a los valores predeterminados (solo propietario)?"@es ;
+    rdfs:label "לאפס את בקרת הגישה WAC לברירת המחדל (בעלים בלבד)?"@he ;
+    rdfs:label "将 WAC 访问控制重置为仅所有者默认值？"@zh .
 paa:stor_create_container rdfs:label "Create Container"@en-US ;
     rdfs:label "Créer un conteneur"@fr ;
     rdfs:label "Crear contenedor"@es ;

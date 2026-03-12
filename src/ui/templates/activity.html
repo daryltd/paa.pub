@@ -85,13 +85,20 @@
 
 <details>
   <summary><h2>{{t.act_feed}} <span class="text-muted text-sm font-normal">({{t.act_latest}} {{feedLimit}})</span></h2></summary>
-  <div class="flex justify-between items-center">
-    <div class="flex gap-05">
+  <div class="flex justify-between items-center mb-05">
+    <div class="flex gap-05 flex-wrap">
+      {{#feedReceived}}<span class="btn btn-xs">Received</span>{{/feedReceived}}
+      {{^feedReceived}}<a href="/activity?feed=received{{#showAll}}&show=all{{/showAll}}" class="btn btn-secondary btn-xs">Received</a>{{/feedReceived}}
+      {{#feedSent}}<span class="btn btn-xs">Sent</span>{{/feedSent}}
+      {{^feedSent}}<a href="/activity?feed=sent{{#showAll}}&show=all{{/showAll}}" class="btn btn-secondary btn-xs">Sent</a>{{/feedSent}}
+      {{#feedAll}}<span class="btn btn-xs">All</span>{{/feedAll}}
+      {{^feedAll}}<a href="/activity?feed=all{{#showAll}}&show=all{{/showAll}}" class="btn btn-secondary btn-xs">All</a>{{/feedAll}}
+      <span class="text-muted text-sm">|</span>
       {{#showAll}}
-      <a href="/activity" class="btn btn-secondary btn-xs">{{t.act_hide_read}}</a>
+      <a href="/activity?feed={{#feedSent}}sent{{/feedSent}}{{#feedAll}}all{{/feedAll}}{{#feedReceived}}received{{/feedReceived}}" class="btn btn-secondary btn-xs">{{t.act_hide_read}}</a>
       {{/showAll}}
       {{^showAll}}
-      <a href="/activity?show=all" class="btn btn-secondary btn-xs">{{t.act_show_all}}</a>
+      <a href="/activity?feed={{#feedSent}}sent{{/feedSent}}{{#feedAll}}all{{/feedAll}}{{#feedReceived}}received{{/feedReceived}}&show=all" class="btn btn-secondary btn-xs">{{t.act_show_all}}</a>
       {{/showAll}}
       {{#hasActivities}}
       <form method="POST" action="/activity/mark-all-read" class="inline-form">
@@ -118,22 +125,117 @@
         <button type="submit" class="btn btn-secondary btn-xs">{{t.act_mark_read}}</button>
       </form>
     </div>
-    {{#isCreate}}
+    {{#hasActivitySummary}}<div class="text-muted text-sm mb-05"><em>{{actSummary}}</em></div>{{/hasActivitySummary}}
+
+    {{! --- Content activities: Create, Update --- }}
+    {{#isContent}}
       {{#hasSummary}}<div class="text-muted"><em>{{t.act_cw_prefix}} {{summary}}</em></div>{{/hasSummary}}
       <div>{{{content}}}</div>
-    {{/isCreate}}
-    {{#isFollow}}
-      <div class="text-muted">{{t.act_follow_arrow}} {{target}}</div>
-    {{/isFollow}}
-    {{#isAccept}}
-      <div class="text-muted">{{t.act_accepted}}</div>
-    {{/isAccept}}
+      {{#hasObjectAttachments}}
+      <div class="mt-05">
+        {{#objectAttachments}}
+        <div class="text-sm mt-025">
+          {{#isImage}}<img src="{{attUrl}}" alt="{{attName}}" style="max-width:100%;max-height:200px;border-radius:4px;">{{/isImage}}
+          {{^isImage}}{{#hasAttUrl}}<a href="{{attUrl}}" target="_blank" rel="noopener" class="mono break-all">{{attName}}</a>{{/hasAttUrl}}{{/isImage}}
+        </div>
+        {{/objectAttachments}}
+      </div>
+      {{/hasObjectAttachments}}
+    {{/isContent}}
+
+    {{! --- Question activities --- }}
+    {{#isQuestion}}
+      {{#hasQuestionName}}<div>{{questionName}}</div>{{/hasQuestionName}}
+      {{#hasQuestionOptions}}
+      <ul class="mt-025 mb-025">
+        {{#questionOptions}}
+        <li>{{#hasOptUrl}}<a href="{{optUrl}}" target="_blank" rel="noopener">{{optName}}</a>{{/hasOptUrl}}{{^hasOptUrl}}{{optName}}{{/hasOptUrl}}</li>
+        {{/questionOptions}}
+      </ul>
+      {{/hasQuestionOptions}}
+      {{#hasObject}}<div class="text-sm text-muted mt-05">{{#hasObjectUrl}}<a href="{{objectUrl}}" target="_blank" rel="noopener" class="mono break-all">{{objectName}}</a>{{/hasObjectUrl}}</div>{{/hasObject}}
+    {{/isQuestion}}
+
+    {{! --- Response activities: Accept, Reject, TentativeAccept, TentativeReject --- }}
+    {{#isResponse}}
+      <div class="text-muted">
+        {{#hasInnerType}}<span class="badge badge-type">{{innerType}}</span> {{/hasInnerType}}
+        {{#hasInnerActor}}<span class="mono text-sm">{{innerActor}}</span>{{/hasInnerActor}}
+        {{^hasInnerType}}{{^hasInnerActor}}{{t.act_accepted}}{{/hasInnerActor}}{{/hasInnerType}}
+      </div>
+    {{/isResponse}}
+
+    {{! --- Undo activities --- }}
     {{#isUndo}}
-      <div class="text-muted">{{t.act_undid}}</div>
+      <div class="text-muted">
+        {{#hasInnerType}}<span class="badge badge-type">{{innerType}}</span> {{/hasInnerType}}
+        {{#hasInnerActor}}<span class="mono text-sm">{{innerActor}}</span>{{/hasInnerActor}}
+        {{^hasInnerType}}{{^hasInnerActor}}{{t.act_undid}}{{/hasInnerActor}}{{/hasInnerType}}
+      </div>
     {{/isUndo}}
-    {{#isOther}}
-      <div class="text-muted">{{type}} {{t.act_type_activity}}</div>
-    {{/isOther}}
+
+    {{! --- Delete activities --- }}
+    {{#isDelete}}
+      {{#hasObject}}
+      <div class="text-sm">{{#hasObjectType}}<span class="badge badge-type">{{objectType}}</span> {{/hasObjectType}}{{#hasObjectUrl}}<a href="{{objectUrl}}" target="_blank" rel="noopener" class="mono break-all">{{objectName}}</a>{{/hasObjectUrl}}{{^hasObjectUrl}}<span class="text-muted">{{objectName}}</span>{{/hasObjectUrl}}</div>
+      {{/hasObject}}
+    {{/isDelete}}
+
+    {{! --- All other activities: Like, Dislike, Read, View, Listen, Follow, --- }}
+    {{! --- Block, Ignore, Announce, Flag, Add, Remove, Invite, Offer,     --- }}
+    {{! --- Join, Leave, Arrive, Move, Travel, and extensions               --- }}
+    {{#isObject}}
+      {{#hasObject}}
+      <div>
+        {{#hasObjectType}}<span class="badge badge-type">{{objectType}}</span> {{/hasObjectType}}
+        {{#hasObjectUrl}}<a href="{{objectUrl}}" target="_blank" rel="noopener" class="mono break-all">{{objectName}}</a>{{/hasObjectUrl}}
+        {{^hasObjectUrl}}<span>{{objectName}}</span>{{/hasObjectUrl}}
+      </div>
+      {{#hasObjectContent}}<div class="text-sm text-muted mt-025">{{{objectContent}}}</div>{{/hasObjectContent}}
+      {{#hasObjectImage}}<img src="{{objectImageUrl}}" alt="{{objectName}}" style="max-width:100%;max-height:200px;border-radius:4px;margin-top:0.25rem;">{{/hasObjectImage}}
+      {{#objectIsVideo}}<video src="{{objectMediaUrl}}" controls style="max-width:100%;max-height:200px;border-radius:4px;margin-top:0.25rem;"></video>{{/objectIsVideo}}
+      {{#objectIsAudio}}<audio src="{{objectMediaUrl}}" controls style="width:100%;margin-top:0.25rem;"></audio>{{/objectIsAudio}}
+      {{#hasObjectAttachments}}
+      <div class="mt-05">
+        {{#objectAttachments}}
+        <div class="text-sm mt-025">
+          {{#isImage}}<img src="{{attUrl}}" alt="{{attName}}" style="max-width:100%;max-height:200px;border-radius:4px;">{{/isImage}}
+          {{^isImage}}{{#hasAttUrl}}<a href="{{attUrl}}" target="_blank" rel="noopener" class="mono break-all">{{attName}}</a>{{/hasAttUrl}}{{/isImage}}
+        </div>
+        {{/objectAttachments}}
+      </div>
+      {{/hasObjectAttachments}}
+      {{#hasObjectTags}}
+      <div class="flex gap-025 flex-wrap mt-025">
+        {{#objectTags}}
+        <span class="badge">{{#hasTagUrl}}<a href="{{tagUrl}}" target="_blank" rel="noopener">{{tagName}}</a>{{/hasTagUrl}}{{^hasTagUrl}}{{tagName}}{{/hasTagUrl}}</span>
+        {{/objectTags}}
+      </div>
+      {{/hasObjectTags}}
+      {{/hasObject}}
+      {{^hasObject}}<div class="text-muted">{{type}} {{t.act_type_activity}}</div>{{/hasObject}}
+    {{/isObject}}
+
+    {{! --- Target info (for Add, Remove, Move, etc.) --- }}
+    {{#hasTarget}}
+    <div class="text-sm text-muted mt-025">
+      &rarr; {{#hasTargetType}}<span class="badge badge-type">{{targetType}}</span> {{/hasTargetType}}{{#hasTargetUrl}}<a href="{{targetUrl}}" target="_blank" rel="noopener" class="mono break-all">{{targetName}}</a>{{/hasTargetUrl}}{{^hasTargetUrl}}{{targetName}}{{/hasTargetUrl}}
+    </div>
+    {{/hasTarget}}
+
+    {{! --- Origin info (for Move) --- }}
+    {{#hasOrigin}}
+    <div class="text-sm text-muted mt-025">
+      &larr; {{#hasOriginType}}<span class="badge badge-type">{{originType}}</span> {{/hasOriginType}}{{#hasOriginUrl}}<a href="{{originUrl}}" target="_blank" rel="noopener" class="mono break-all">{{originName}}</a>{{/hasOriginUrl}}{{^hasOriginUrl}}{{originName}}{{/hasOriginUrl}}
+    </div>
+    {{/hasOrigin}}
+
+    {{! --- Location info (for Arrive, Travel, or any activity with location) --- }}
+    {{#hasLocation}}
+    <div class="text-sm text-muted mt-025">
+      &#x1F4CD; {{#hasLocationUrl}}<a href="{{locationUrl}}" target="_blank" rel="noopener">{{locationName}}</a>{{/hasLocationUrl}}{{^hasLocationUrl}}{{locationName}}{{/hasLocationUrl}}
+    </div>
+    {{/hasLocation}}
   </div>
   {{/activities}}
 </details>

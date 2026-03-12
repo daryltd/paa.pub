@@ -424,6 +424,110 @@ export async function handleRejectFollowRequest(reqCtx) {
   return new Response(null, { status: 302, headers: { 'Location': '/activity' } });
 }
 
+/**
+ * Handle POST /{user}/outbox — Client-to-Server activity submission.
+ *
+ * Accepts an AS2 JSON activity from the authenticated resource owner.
+ * Stores the activity in the user's outbox (and inbox for self-visibility).
+ * For public activities, delivers to followers.
+ *
+ * Supported activity types: Like, Read, View, Question, Create, Follow, Announce.
+ * For Follow and Create(Note), prefer the dedicated /follow and /compose endpoints
+ * which handle additional side-effects (pending follow requests, etc.).
+ */
+export async function handleOutboxPost(reqCtx) {
+  const authCheck = requireAuth(reqCtx);
+  if (authCheck) return authCheck;
+
+  const { request, config, env, ctx, params } = reqCtx;
+  const username = reqCtx.user;
+
+  // Ensure the authenticated user matches the outbox owner
+  if (params.user && params.user !== username) {
+    return new Response('Forbidden', { status: 403 });
+  }
+
+  const contentType = request.headers.get('Content-Type') || '';
+  if (!contentType.includes('json')) {
+    return new Response('Content-Type must be application/activity+json or application/ld+json', { status: 415 });
+  }
+
+  let activity;
+  try {
+    activity = await request.json();
+  } catch {
+    return new Response('Invalid JSON', { status: 400 });
+  }
+
+  if (!activity.type) {
+    return new Response('Activity must have a type', { status: 400 });
+  }
+
+  const uc = getUserConfig(config, username);
+
+  // Ensure the activity has required fields
+  if (!activity.id) {
+    activity.id = `${config.baseUrl}/${username}/outbox/${crypto.randomUUID()}`;
+  }
+  if (!activity.actor) {
+    activity.actor = uc.actorId;
+  }
+  if (!activity.published) {
+    activity.published = new Date().toISOString();
+  }
+  if (!activity['@context']) {
+    activity['@context'] = 'https://www.w3.org/ns/activitystreams';
+  }
+
+  // Store in outbox
+  await storeOutboxActivity(activity, username, env);
+
+  // Store in own inbox so the user sees it in their feed
+  await storeInboxActivity(activity, username, env);
+
+  // Deliver to followers if the activity is public
+  const AS_PUBLIC = 'https://www.w3.org/ns/activitystreams#Public';
+  const to = Array.isArray(activity.to) ? activity.to : (activity.to ? [activity.to] : []);
+  const cc = Array.isArray(activity.cc) ? activity.cc : (activity.cc ? [activity.cc] : []);
+  const isPublic = to.includes(AS_PUBLIC) || cc.includes(AS_PUBLIC);
+
+  if (isPublic) {
+    const followersData = await env.APPDATA.get(`ap_followers:${username}`);
+    const followers = JSON.parse(followersData || '[]');
+    if (followers.length > 0) {
+      const remoteFollowers = [];
+      for (const followerUri of followers) {
+        const localUser = resolveLocalUser(followerUri, config);
+        if (localUser && await userExists(env.APPDATA, localUser)) {
+          await storeInboxActivity(activity, localUser, env);
+        } else {
+          remoteFollowers.push(followerUri);
+        }
+      }
+
+      if (remoteFollowers.length > 0) {
+        const privatePem = await env.APPDATA.get(`ap_private_key:${username}`);
+        const inboxUrls = await collectInboxes(remoteFollowers, env.APPDATA);
+        deliverActivity({
+          activityJson: JSON.stringify(activity),
+          inboxUrls,
+          keyId: uc.keyId,
+          privatePem,
+          ctx,
+        });
+      }
+    }
+  }
+
+  return new Response(JSON.stringify(activity), {
+    status: 201,
+    headers: {
+      'Content-Type': 'application/activity+json',
+      'Location': activity.id,
+    },
+  });
+}
+
 function jsonResponse(data) {
   return new Response(JSON.stringify(data, null, 2), {
     headers: { 'Content-Type': 'application/activity+json' },

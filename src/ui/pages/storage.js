@@ -27,6 +27,8 @@ import resourceTemplate from '../templates/storage-resource.html';
 import breadcrumbsPartial from '../templates/partials/breadcrumbs.html';
 import { requireAuth } from '../../auth/middleware.js';
 import { parseNTriples, unwrapIri, serializeNTriples, iri, literal, typedLiteral } from '../../rdf/ntriples.js';
+import { defaultAclNTriples } from '../../solid/acl.js';
+import { getUserConfig } from '../../config.js';
 import { PREFIXES, shortenPredicate, loadMergedPrefixes, loadPredicateCatalog } from '../../rdf/prefixes.js';
 import { checkQuota, quotaExceededResponse, addQuota } from '../../storage/quota.js';
 import { checkContainerQuota, containerQuotaExceededResponse, addContainerBytes, subtractContainerBytes } from '../../storage/container-quota.js';
@@ -90,6 +92,7 @@ async function renderContainerPage(reqCtx, path, resourceIri, username) {
   const isRoot = path === `${username}/`;
   const crumbs = buildBreadcrumbs(path);
   const breadcrumbs = renderPartial(breadcrumbsPartial, { crumbs });
+  const hasCustomAcl = !!(await storage.get(`acl:${resourceIri}`));
 
   return renderPage('Storage', containerTemplate, {
     path,
@@ -98,6 +101,7 @@ async function renderContainerPage(reqCtx, path, resourceIri, username) {
     items,
     hasItems: items.length > 0,
     isRoot,
+    hasCustomAcl,
   }, { user: username, config, nav: 'storage', storage, baseUrl: config.baseUrl, lang });
 }
 
@@ -150,6 +154,7 @@ async function renderResourcePage(reqCtx, path, resourceIri, username, editMode,
   const showEmpty = !showEditor && !showImage && !showBinaryDownload && !showContent;
 
   const copyDefault = computeCopyDefault(path);
+  const hasCustomAcl = !!(await storage.get(`acl:${resourceIri}`));
   return renderPage('Storage', resourceTemplate, {
     path,
     displayPath: '/' + path,
@@ -174,6 +179,7 @@ async function renderResourcePage(reqCtx, path, resourceIri, username, editMode,
     metaTriples: processedMeta,
     metaTriplesEditable,
     metaTurtle,
+    hasCustomAcl,
     prefixesJson: JSON.stringify(mergedPrefixes),
     namespaceCatalogJson: JSON.stringify(await loadPredicateCatalog(reqCtx.env.APPDATA, mergedPrefixes)),
   }, { user: username, config, nav: 'storage', storage, baseUrl: config.baseUrl, lang: reqCtx.lang });
@@ -300,6 +306,13 @@ export async function handleStorageAction(reqCtx) {
 
   if (action === 'copy' && destination) {
     return handleCopy(resourceIri, destination, path, config, storage, env, username);
+  }
+
+  if (action === 'reset_acl') {
+    const uc = getUserConfig(config, username);
+    const ntriples = defaultAclNTriples(resourceIri, uc.webId);
+    await storage.put(`acl:${resourceIri}`, ntriples);
+    return redirect(`/storage/${path}`);
   }
 
   return redirect(`/storage/${path}`);

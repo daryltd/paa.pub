@@ -55,6 +55,13 @@
         data-prompt-default="{{{copyDefault}}}">{{t.stor_copy_btn}}</button>
     </form>
     <a href="/acp/{{{path}}}" class="btn btn-secondary btn-small-text">{{t.stor_access_policy}}</a>
+    {{#hasCustomAcl}}
+    <form method="POST" action="/storage/{{{path}}}" class="inline-form">
+      <input type="hidden" name="action" value="reset_acl">
+      <button type="submit" class="btn btn-secondary btn-small-text"
+        data-confirm="{{t.stor_confirm_reset_acl}}">{{t.stor_reset_acl}}</button>
+    </form>
+    {{/hasCustomAcl}}
     <form method="POST" action="/storage/{{{path}}}" class="inline-form">
       <input type="hidden" name="action" value="delete">
       <button type="submit" class="btn btn-danger btn-small-text"

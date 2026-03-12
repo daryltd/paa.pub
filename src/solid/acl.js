@@ -11,6 +11,13 @@ import { parseSparqlUpdate } from './ldp.js';
 import { loadPolicy, loadFriends, policyToTurtle } from '../ui/pages/acl-editor.js';
 import { getUserConfig } from '../config.js';
 
+/** Extract the resource owner's username from a resource IRI. */
+function extractOwner(resourceIri, baseUrl) {
+  const path = resourceIri.slice(baseUrl.length + 1);
+  const slash = path.indexOf('/');
+  return slash > 0 ? path.slice(0, slash) : path;
+}
+
 /**
  * Handle GET/HEAD for .acl resources.
  * WAC spec: Servers MUST accept GET and HEAD targeting an ACL resource
@@ -23,7 +30,7 @@ export async function handleAclGet(reqCtx, resourceIri) {
   const { request, storage, config } = reqCtx;
 
   // ACL access requires acl:Control — for now, only the resource owner
-  if (reqCtx.user !== config.username) {
+  if (reqCtx.user !== extractOwner(resourceIri, config.baseUrl)) {
     return new Response('Forbidden', { status: 403 });
   }
 
@@ -55,7 +62,7 @@ export async function handleAclGet(reqCtx, resourceIri) {
 export async function handleAclPut(reqCtx, resourceIri) {
   const { request, storage, config } = reqCtx;
 
-  if (reqCtx.user !== config.username) {
+  if (reqCtx.user !== extractOwner(resourceIri, config.baseUrl)) {
     return new Response('Forbidden', { status: 403 });
   }
 
@@ -85,7 +92,7 @@ export async function handleAclPut(reqCtx, resourceIri) {
 export async function handleAclPatch(reqCtx, resourceIri) {
   const { request, storage, config } = reqCtx;
 
-  if (reqCtx.user !== config.username) {
+  if (reqCtx.user !== extractOwner(resourceIri, config.baseUrl)) {
     return new Response('Forbidden', { status: 403 });
   }
 
@@ -126,11 +133,33 @@ export async function handleAclPatch(reqCtx, resourceIri) {
  * @returns {Promise<Response>}
  */
 export async function handleAclDelete(reqCtx, resourceIri) {
-  if (reqCtx.user !== reqCtx.config.username) {
+  if (reqCtx.user !== extractOwner(resourceIri, reqCtx.config.baseUrl)) {
     return new Response('Forbidden', { status: 403 });
   }
   await reqCtx.storage.delete(`acl:${resourceIri}`);
   return new Response(null, { status: 204 });
+}
+
+/**
+ * Reset an ACL to the default owner-only policy.
+ * Useful for the storage root container where DELETE is not allowed,
+ * or any resource where the user wants to restore default access.
+ * @param {object} reqCtx
+ * @param {string} resourceIri
+ * @returns {Promise<Response>}
+ */
+export async function handleAclReset(reqCtx, resourceIri) {
+  const { storage, config } = reqCtx;
+  const owner = extractOwner(resourceIri, config.baseUrl);
+
+  if (reqCtx.user !== owner) {
+    return new Response('Forbidden', { status: 403 });
+  }
+
+  const ownerUc = getUserConfig(config, owner);
+  const ntriples = defaultAclNTriples(resourceIri, ownerUc.webId);
+  await storage.put(`acl:${resourceIri}`, ntriples);
+  return new Response(null, { status: 205 });
 }
 
 /**
@@ -143,7 +172,7 @@ export async function handleAclDelete(reqCtx, resourceIri) {
 export async function handleAcrGet(reqCtx, resourceIri) {
   const { request, config, env } = reqCtx;
 
-  if (reqCtx.user !== config.username) {
+  if (reqCtx.user !== extractOwner(resourceIri, config.baseUrl)) {
     return new Response('Forbidden', { status: 403 });
   }
 
@@ -181,12 +210,17 @@ export function defaultAclNTriples(resourceIri, webId) {
   const acl = PREFIXES.acl;
   const rdf = PREFIXES.rdf;
   const aclId = resourceIri + '.acl#owner';
-  return [
+  const lines = [
     `${iri(aclId)} ${iri(rdf + 'type')} ${iri(acl + 'Authorization')} .`,
     `${iri(aclId)} ${iri(acl + 'agent')} ${iri(webId)} .`,
     `${iri(aclId)} ${iri(acl + 'accessTo')} ${iri(resourceIri)} .`,
     `${iri(aclId)} ${iri(acl + 'mode')} ${iri(acl + 'Read')} .`,
     `${iri(aclId)} ${iri(acl + 'mode')} ${iri(acl + 'Write')} .`,
     `${iri(aclId)} ${iri(acl + 'mode')} ${iri(acl + 'Control')} .`,
-  ].join('\n');
+  ];
+  // Containers also get acl:default so children inherit owner access
+  if (resourceIri.endsWith('/')) {
+    lines.push(`${iri(aclId)} ${iri(acl + 'default')} ${iri(resourceIri)} .`);
+  }
+  return lines.join('\n');
 }
