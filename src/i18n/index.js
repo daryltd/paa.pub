@@ -13,7 +13,8 @@
  */
 
 import { parseTurtle } from '../rdf/turtle-parser.js';
-import STRINGS_TURTLE from './strings.ttl';
+import { loadHtml } from '../html-loader.js';
+const STRINGS_TURTLE = loadHtml(import.meta.url, './strings.ttl');
 
 const RDFS_LABEL = 'http://www.w3.org/2000/01/rdf-schema#label';
 const PAA_NS = 'http://paa.pub/i18n#';
@@ -53,7 +54,11 @@ for (const { subject, predicate, object } of triples) {
   const match = object.match(/^"((?:[^"\\]|\\.)*)"\s*@\s*(.+)$/);
   if (!match) continue;
   const text = match[1].replace(/\\"/g, '"').replace(/\\n/g, '\n').replace(/\\t/g, '\t').replace(/\\\\/g, '\\');
-  const lang = match[2];
+  // Normalize language tag — sparq lowercases (en-us), BCP 47 uses en-US
+  const rawLang = match[2];
+  const lang = rawLang.includes('-')
+    ? rawLang.split('-').map((p, i) => i === 0 ? p.toLowerCase() : p.toUpperCase()).join('-')
+    : rawLang.toLowerCase();
 
   if (!strings.has(key)) strings.set(key, new Map());
   strings.get(key).set(lang, text);

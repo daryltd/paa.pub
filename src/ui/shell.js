@@ -25,8 +25,9 @@
  *   - `{{#array}}...{{/array}}` — iteration
  */
 import Mustache from 'mustache';
-import layoutTemplate from './templates/layout.html';
-import navPartial from './templates/partials/nav.html';
+import { loadHtml } from '../html-loader.js';
+const layoutTemplate = loadHtml(import.meta.url, './templates/layout.html');
+const navPartial = loadHtml(import.meta.url, './templates/partials/nav.html');
 import { getTranslations, RTL_LANGUAGES } from '../i18n/index.js';
 
 function renderNav(user, active, opts = {}) {

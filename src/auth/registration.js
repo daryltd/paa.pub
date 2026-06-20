@@ -8,8 +8,9 @@ import { createUser, userExists, getUser } from '../users.js';
 import { bootstrapUser } from '../bootstrap.js';
 import { RESERVED_NAMES } from '../config.js';
 import { getTranslations } from '../i18n/index.js';
-import template from '../ui/templates/signup.html';
-import fedcmTemplate from '../ui/templates/signup-fedcm.html';
+import { loadHtml } from '../html-loader.js';
+const template = loadHtml(import.meta.url, '../ui/templates/signup.html');
+const fedcmTemplate = loadHtml(import.meta.url, '../ui/templates/signup-fedcm.html');
 
 /**
  * GET /signup — render the registration form.
@@ -21,7 +22,8 @@ export function renderSignupPage(reqCtx) {
     return new Response(t.err_registration_closed, { status: 403 });
   }
   const error = reqCtx.url.searchParams.get('error') || '';
-  return renderPage('Sign Up', template, { error, username: '' }, { lang });
+  const returnTo = reqCtx.url.searchParams.get('return_to') || '';
+  return renderPage('Sign Up', template, { error, username: '', returnTo }, { lang });
 }
 
 /**
@@ -81,12 +83,14 @@ export async function handleSignup(reqCtx) {
   // Bootstrap user pod (containers, keypair, WebID profile, ACLs, TypeIndex)
   await bootstrapUser(env, config, username, reqCtx.storage);
 
-  // Auto-login: create session and redirect to dashboard
+  // Auto-login: create session and redirect
   const token = await createSession(env.APPDATA, username);
+  const returnTo = form.get('return_to') || reqCtx.url?.searchParams.get('return_to') || '';
+  const location = returnTo && returnTo.startsWith('/') && !returnTo.startsWith('//') ? returnTo : '/dashboard';
   return new Response(null, {
     status: 302,
     headers: {
-      'Location': '/dashboard',
+      'Location': location,
       'Set-Cookie': `session=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=86400${config.protocol === 'https' ? '; Secure' : ''}`,
       'Set-Login': 'logged-in',
     },

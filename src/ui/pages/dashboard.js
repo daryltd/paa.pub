@@ -2,7 +2,8 @@
  * Dashboard page.
  */
 import { renderPage } from '../shell.js';
-import template from '../templates/dashboard.html';
+import { loadHtml } from '../../html-loader.js';
+const template = loadHtml(import.meta.url, '../templates/dashboard.html');
 import { requireAuth } from '../../auth/middleware.js';
 import { parseNTriples, unwrapIri, unwrapLiteral } from '../../rdf/ntriples.js';
 import { PREFIXES } from '../../rdf/prefixes.js';

@@ -28,6 +28,7 @@ export async function fetchRemoteActor(actorUri, kv) {
         Accept: 'application/activity+json, application/ld+json',
         'User-Agent': 'paa.pub/1.0',
       },
+      signal: AbortSignal.timeout(10000),
     });
     if (!response.ok) return null;
 
@@ -72,25 +73,36 @@ export function getActorPublicKey(actor) {
  * @returns {Promise<string|null>}
  */
 export async function resolveHandle(handle) {
-  const [user, domain] = handle.split('@');
+  // Strip leading @ if present (@user@domain → user@domain)
+  const normalized = (handle.startsWith('@') ? handle.slice(1) : handle).trim();
+  const parts = normalized.split('@');
+  const user = parts[0];
+  const domain = parts.slice(1).join('@');
+  console.log(`[webfinger] resolveHandle: raw="${handle}" normalized="${normalized}" user="${user}" domain="${domain}"`);
   if (!user || !domain) return null;
 
-  const url = `https://${domain}/.well-known/webfinger?resource=acct:${encodeURIComponent(handle)}`;
+  const url = `https://${domain}/.well-known/webfinger?resource=acct:${encodeURIComponent(normalized)}`;
   if (!validateExternalUrl(url)) {
     console.log(`[remote] SSRF blocked webfinger: ${url}`);
     return null;
   }
 
   try {
+    console.log(`[webfinger] Fetching: ${url}`);
     const response = await fetch(url, {
       headers: { Accept: 'application/jrd+json' },
+      signal: AbortSignal.timeout(10000),
     });
+    console.log(`[webfinger] Response: ${response.status}`);
     if (!response.ok) return null;
 
     const jrd = await response.json();
+    console.log(`[webfinger] Links: ${JSON.stringify(jrd.links)}`);
     const selfLink = jrd.links?.find(l => l.rel === 'self' && l.type === 'application/activity+json');
+    console.log(`[webfinger] selfLink: ${JSON.stringify(selfLink)}`);
     return selfLink?.href || null;
-  } catch {
+  } catch (e) {
+    console.error(`[webfinger] Error: ${e.message}`);
     return null;
   }
 }

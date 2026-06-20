@@ -4,7 +4,7 @@
  * This is the single fetch handler that processes every incoming HTTP request.
  * On each request it:
  *
- *   1. Initializes the s20e WASM kernel (once, on cold start)
+ *   1. Initializes the sparq WASM engine (once, on cold start)
  *   2. Creates a CloudflareAdapter wrapping KV (TRIPLESTORE) and R2 (BLOBS)
  *   3. Bootstraps the server on first-ever request (creates user, containers, keys)
  *   4. Extracts the authenticated user from session cookie or OIDC bearer token
@@ -22,13 +22,11 @@
  *   - authMethod — 'session' | 'oidc' | null
  *   - clientId   — OIDC client_id (from JWT) or null
  *   - params     — URL pattern parameters (e.g. { user: 'alice' })
- *   - orchestrator — s20e Orchestrator for SPARQL/WAC operations
  *   - storage    — CloudflareAdapter for direct KV/R2 access
  */
-import { Orchestrator } from '@s20e/host-core';
-import { CloudflareAdapter } from '@s20e/adapters/cloudflare';
-import { initSync, Kernel } from '@s20e/kernel';
-import wasmModule from '@s20e/kernel/_wasm/s20e-kernel_bg.wasm';
+import { initSparq } from './rdf/sparq.js';
+import wasmModule from './pkg/sparq_wasm_bg.wasm';
+import { CloudflareAdapter } from './storage/cloudflare-adapter.js';
 import { Router } from './router.js';
 import { getConfig, getUserConfig } from './config.js';
 import { ensureBootstrapped } from './bootstrap.js';
@@ -65,9 +63,6 @@ import { renderAdminFedCMIdps, handleAdminFedCMIdpAction } from './admin/fedcm-i
 import { checkRateLimit, rateLimitResponse } from './security/rate-limit.js';
 import { checkContentLength, getSizeLimit } from './security/size-limit.js';
 
-/** Singleton WASM kernel instance — initialized on first request. */
-let kernel = null;
-
 /**
  * Build the application route table.
  *
@@ -81,6 +76,7 @@ function buildRouter() {
 
   // OIDC endpoints
   router.get('/.well-known/openid-configuration', handleDiscovery);
+  router.get('/.well-known/oauth-authorization-server', handleDiscovery);
   router.get('/jwks', handleJwks);
   router.add('*', '/authorize', handleAuthorize);
   router.post('/token', handleToken);
@@ -223,14 +219,10 @@ function extractUsernameFromWebId(webId, baseUrl) {
 export default {
   async fetch(request, env, ctx) {
    try {
-    // Init WASM kernel once
-    if (!kernel) {
-      initSync(wasmModule);
-      kernel = new Kernel();
-    }
+    // Init sparq WASM once (no-op after first call)
+    initSparq(wasmModule);
 
     const storage = new CloudflareAdapter(env.TRIPLESTORE, env.BLOBS);
-    const orchestrator = new Orchestrator(kernel, storage);
     const config = getConfig(env, request);
     const url = new URL(request.url);
 
@@ -335,7 +327,6 @@ export default {
       authMethod,
       clientId,
       params: match.params,
-      orchestrator,
       storage,
       lang,
       userPrefs,

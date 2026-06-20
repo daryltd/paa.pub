@@ -110,15 +110,25 @@ export async function rejectFollowRequest(followerUri, config, env) {
 export async function processAccept(activity, config, env) {
   const username = config.username;
 
-  // If this accepts our Follow, add to following
+  // If this accepts our Follow, add the accepting actor to our following list.
+  // The object can be:
+  //   - an inline Follow activity: { type: "Follow", ... }
+  //   - the string "Follow"
+  //   - a URI referencing our original Follow activity
   const inner = activity.object;
-  if (inner && (inner.type === 'Follow' || inner === 'Follow')) {
+  const isFollowAccept = inner && (
+    inner.type === 'Follow' ||
+    inner === 'Follow' ||
+    (typeof inner === 'string' && inner.startsWith(config.baseUrl))
+  );
+  if (isFollowAccept) {
     const targetActor = activity.actor;
     const followingData = await env.APPDATA.get(`ap_following:${username}`);
     const following = JSON.parse(followingData || '[]');
     if (!following.includes(targetActor)) {
       following.push(targetActor);
       await env.APPDATA.put(`ap_following:${username}`, JSON.stringify(following));
+      console.log(`[activity] Now following ${targetActor}`);
     }
   }
 
@@ -157,7 +167,7 @@ export async function processCreate(activity, config, env) {
 /**
  * Create a Note activity for the outbox.
  */
-export function buildCreateNote(config, content, summary, audience) {
+export function buildCreateNote(config, content, summary, audience, opts = {}) {
   const username = config.username;
   const activityId = `${config.baseUrl}/${username}/outbox/${crypto.randomUUID()}`;
   const noteId = `${config.baseUrl}/${username}/posts/${crypto.randomUUID()}`;
@@ -172,6 +182,10 @@ export function buildCreateNote(config, content, summary, audience) {
       break;
     case 'followers':
       to = [followersUrl];
+      cc = [];
+      break;
+    case 'direct':
+      to = opts.recipient ? [opts.recipient] : [];
       cc = [];
       break;
     case 'private':
@@ -193,6 +207,7 @@ export function buildCreateNote(config, content, summary, audience) {
     cc,
   };
   if (summary) note.summary = summary;
+  if (opts.inReplyTo) note.inReplyTo = opts.inReplyTo;
 
   return {
     '@context': 'https://www.w3.org/ns/activitystreams',

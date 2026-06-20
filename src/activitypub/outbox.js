@@ -5,11 +5,18 @@ import { requireAuth } from '../auth/middleware.js';
 import { buildCreateNote, buildFollow, buildUnfollow, storeOutboxActivity, storeInboxActivity, acceptFollowRequest, rejectFollowRequest } from './activities.js';
 import { deliverActivity, collectInboxes } from './delivery.js';
 import { resolveHandle, fetchRemoteActor, getActorInbox } from './remote.js';
-import { simpleHash } from '../utils.js';
+import { simpleHash, wantsJson } from '../utils.js';
 import { userExists } from '../users.js';
 import { getUserConfig } from '../config.js';
 
 const PAGE_SIZE = 20;
+
+function jsonResp(data, status = 200) {
+  return new Response(JSON.stringify(data), {
+    status,
+    headers: { 'Content-Type': 'application/json' },
+  });
+}
 
 /**
  * Handle GET /{user}/outbox — OrderedCollection (paginated)
@@ -106,32 +113,55 @@ export async function handleCompose(reqCtx) {
   const form = await request.formData();
   const content = form.get('content');
   if (!content) {
+    if (wantsJson(request)) return jsonResp({ ok: false, error: 'empty' });
     return new Response(null, { status: 302, headers: { 'Location': '/activity?error=empty' } });
   }
   const summary = form.get('summary') || '';
   const audience = form.get('audience') || 'public';
+  const recipient = form.get('recipient') || '';
+  const inReplyTo = form.get('inReplyTo') || '';
 
-  const activity = buildCreateNote(userScopedConfig, content, summary, audience);
+  const activity = buildCreateNote(userScopedConfig, content, summary, audience, { recipient, inReplyTo });
   await storeOutboxActivity(activity, username, env);
 
-  // Deliver to followers
-  if (audience !== 'private') {
+  // Deliver based on audience
+  console.log(`[compose] audience=${audience} recipient="${recipient}" inReplyTo="${inReplyTo}"`);
+  if (audience === 'direct' && recipient) {
+    const localTarget = resolveLocalUser(recipient, config);
+    console.log(`[compose] DM to ${recipient} (local=${localTarget})`);
+    if (localTarget && await userExists(env.APPDATA, localTarget)) {
+      await storeInboxActivity(activity, localTarget, env);
+    } else {
+      const remoteActor = await fetchRemoteActor(recipient, env.APPDATA);
+      console.log(`[compose] Remote actor fetched: ${!!remoteActor}`);
+      if (remoteActor) {
+        const inboxUrl = getActorInbox(remoteActor);
+        if (inboxUrl) {
+          const privatePem = await env.APPDATA.get(`ap_private_key:${username}`);
+          deliverActivity({
+            activityJson: JSON.stringify(activity),
+            inboxUrls: [inboxUrl],
+            keyId: uc.keyId,
+            privatePem,
+            ctx,
+          });
+        }
+      }
+    }
+  } else if (audience !== 'private') {
     const followersData = await env.APPDATA.get(`ap_followers:${username}`);
     const followers = JSON.parse(followersData || '[]');
     if (followers.length > 0) {
-      // Separate local and remote followers
       const remoteFollowers = [];
       for (const followerUri of followers) {
         const localUser = resolveLocalUser(followerUri, config);
         if (localUser && await userExists(env.APPDATA, localUser)) {
-          // Deliver directly to local user's inbox via KV
           await storeInboxActivity(activity, localUser, env);
         } else {
           remoteFollowers.push(followerUri);
         }
       }
 
-      // Deliver to remote followers via HTTP
       if (remoteFollowers.length > 0) {
         const privatePem = await env.APPDATA.get(`ap_private_key:${username}`);
         const inboxUrls = await collectInboxes(remoteFollowers, env.APPDATA);
@@ -146,6 +176,9 @@ export async function handleCompose(reqCtx) {
     }
   }
 
+  if (wantsJson(request)) {
+    return jsonResp({ ok: true, activity: { id: activity.id, content, audience, published: activity.published } });
+  }
   return new Response(null, { status: 302, headers: { 'Location': '/activity' } });
 }
 
@@ -176,30 +209,39 @@ export async function handleFollow(reqCtx) {
   // Remote follow
   let actorUri = target;
   if (target.includes('@') && !target.startsWith('http')) {
+    console.log(`[follow] Resolving handle: "${target}"`);
     actorUri = await resolveHandle(target);
+    console.log(`[follow] Resolved to: ${actorUri}`);
     if (!actorUri) {
       return new Response(null, { status: 302, headers: { 'Location': '/activity?error=not_found' } });
     }
   }
 
   const activity = buildFollow(userScopedConfig, actorUri);
-  await storeOutboxActivity(activity, username, env);
 
   // Deliver Follow to target
   const remoteActor = await fetchRemoteActor(actorUri, env.APPDATA);
-  if (remoteActor) {
-    const inboxUrl = getActorInbox(remoteActor);
-    if (inboxUrl) {
-      const privatePem = await env.APPDATA.get(`ap_private_key:${username}`);
-      deliverActivity({
-        activityJson: JSON.stringify(activity),
-        inboxUrls: [inboxUrl],
-        keyId: uc.keyId,
-        privatePem,
-        ctx,
-      });
-    }
+  if (!remoteActor) {
+    console.log(`[follow] Could not fetch remote actor: ${actorUri}`);
+    return new Response(null, { status: 302, headers: { 'Location': '/activity?error=actor_unreachable' } });
   }
+
+  const inboxUrl = getActorInbox(remoteActor);
+  if (!inboxUrl) {
+    console.log(`[follow] Remote actor has no inbox: ${actorUri}`);
+    return new Response(null, { status: 302, headers: { 'Location': '/activity?error=no_inbox' } });
+  }
+
+  await storeOutboxActivity(activity, username, env);
+
+  const privatePem = await env.APPDATA.get(`ap_private_key:${username}`);
+  deliverActivity({
+    activityJson: JSON.stringify(activity),
+    inboxUrls: [inboxUrl],
+    keyId: uc.keyId,
+    privatePem,
+    ctx,
+  });
 
   return new Response(null, { status: 302, headers: { 'Location': '/activity' } });
 }
@@ -271,6 +313,25 @@ export async function handleUnfollow(reqCtx) {
   if (idx >= 0) {
     following.splice(idx, 1);
     await env.APPDATA.put(`ap_following:${username}`, JSON.stringify(following));
+  }
+
+  // Remove the original Follow from the outbox so it clears from pending
+  const outboxData = await env.APPDATA.get(`ap_outbox_index:${username}`);
+  if (outboxData) {
+    const outboxIndex = JSON.parse(outboxData);
+    const cleaned = [];
+    for (const id of outboxIndex) {
+      const item = await env.APPDATA.get(`ap_outbox_item:${id}`);
+      if (item) {
+        const parsed = JSON.parse(item);
+        if (parsed.type === 'Follow' && (parsed.object === target || parsed.object?.id === target)) {
+          await env.APPDATA.delete(`ap_outbox_item:${id}`);
+          continue;
+        }
+      }
+      cleaned.push(id);
+    }
+    await env.APPDATA.put(`ap_outbox_index:${username}`, JSON.stringify(cleaned));
   }
 
   const activity = buildUnfollow(userScopedConfig, target);

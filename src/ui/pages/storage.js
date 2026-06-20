@@ -22,9 +22,10 @@
  *   - `quota:{username}` — storage usage counter
  */
 import { renderPage, renderPartial } from '../shell.js';
-import containerTemplate from '../templates/storage-container.html';
-import resourceTemplate from '../templates/storage-resource.html';
-import breadcrumbsPartial from '../templates/partials/breadcrumbs.html';
+import { loadHtml } from '../../html-loader.js';
+const containerTemplate = loadHtml(import.meta.url, '../templates/storage-container.html');
+const resourceTemplate = loadHtml(import.meta.url, '../templates/storage-resource.html');
+const breadcrumbsPartial = loadHtml(import.meta.url, '../templates/partials/breadcrumbs.html');
 import { requireAuth } from '../../auth/middleware.js';
 import { parseNTriples, unwrapIri, serializeNTriples, iri, literal, typedLiteral } from '../../rdf/ntriples.js';
 import { defaultAclNTriples } from '../../solid/acl.js';
@@ -289,13 +290,17 @@ export async function handleStorageAction(reqCtx) {
   }
 
   if (action === 'delete') {
+    console.log(`[storage] Deleting: ${resourceIri} (container=${path.endsWith('/')})`);
     if (path.endsWith('/')) {
       await deleteContainerRecursive(storage, resourceIri, env.APPDATA);
     } else {
       await deleteResource(storage, resourceIri, env.APPDATA);
     }
     const parent = computeParent(resourceIri);
-    if (parent) await removeContainment(storage, parent, resourceIri);
+    if (parent) {
+      await removeContainment(storage, parent, resourceIri);
+      console.log(`[storage] Removed containment from ${parent}`);
+    }
     const parentPath = parent ? parent.replace(config.baseUrl + '/', '') : `${username}/`;
     return redirect(`/storage/${parentPath}`);
   }

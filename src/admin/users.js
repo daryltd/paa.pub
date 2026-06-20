@@ -8,7 +8,8 @@ import { hashPassword } from '../auth/password.js';
 import { bootstrapUser } from '../bootstrap.js';
 import { RESERVED_NAMES } from '../config.js';
 import { renderPage } from '../ui/shell.js';
-import template from '../ui/templates/admin-users.html';
+import { loadHtml } from '../html-loader.js';
+const template = loadHtml(import.meta.url, '../ui/templates/admin-users.html');
 import { formatBytes } from '../i18n/format.js';
 import { getTranslations } from '../i18n/index.js';
 

@@ -79,6 +79,11 @@ paa:land_or_sign_in_with rdfs:label "Or sign in with:"@en-US ;
     rdfs:label "O iniciar sesión con:"@es ;
     rdfs:label "או התחברות עם:"@he ;
     rdfs:label "或使用以下方式登录："@zh .
+paa:land_no_account rdfs:label "Don't have an account?"@en-US ;
+    rdfs:label "Vous n'avez pas de compte ?"@fr ;
+    rdfs:label "¿No tienes una cuenta?"@es ;
+    rdfs:label "אין לך חשבון?"@he ;
+    rdfs:label "没有账户？"@zh .
 paa:land_create_account rdfs:label "Create Account"@en-US ;
     rdfs:label "Créer un compte"@fr ;
     rdfs:label "Crear cuenta"@es ;
@@ -369,6 +374,41 @@ paa:aud_private rdfs:label "Private"@en-US ;
     rdfs:label "Privado"@es ;
     rdfs:label "פרטי"@he ;
     rdfs:label "私密"@zh .
+paa:aud_direct rdfs:label "Direct Message"@en-US ;
+    rdfs:label "Message direct"@fr ;
+    rdfs:label "Mensaje directo"@es ;
+    rdfs:label "הודעה ישירה"@he ;
+    rdfs:label "私信"@zh .
+paa:act_recipient rdfs:label "Recipient"@en-US ;
+    rdfs:label "Destinataire"@fr ;
+    rdfs:label "Destinatario"@es ;
+    rdfs:label "נמען"@he ;
+    rdfs:label "收件人"@zh .
+paa:act_select_recipient rdfs:label "Select a recipient..."@en-US ;
+    rdfs:label "Sélectionner un destinataire..."@fr ;
+    rdfs:label "Seleccionar un destinatario..."@es ;
+    rdfs:label "בחר נמען..."@he ;
+    rdfs:label "选择收件人..."@zh .
+paa:act_reply rdfs:label "Reply"@en-US ;
+    rdfs:label "Répondre"@fr ;
+    rdfs:label "Responder"@es ;
+    rdfs:label "הגב"@he ;
+    rdfs:label "回复"@zh .
+paa:act_replying_to rdfs:label "Replying to"@en-US ;
+    rdfs:label "En réponse à"@fr ;
+    rdfs:label "Respondiendo a"@es ;
+    rdfs:label "מגיב ל"@he ;
+    rdfs:label "回复"@zh .
+paa:act_cancel_reply rdfs:label "Cancel"@en-US ;
+    rdfs:label "Annuler"@fr ;
+    rdfs:label "Cancelar"@es ;
+    rdfs:label "ביטול"@he ;
+    rdfs:label "取消"@zh .
+paa:act_in_reply_to rdfs:label "In reply to"@en-US ;
+    rdfs:label "En réponse à"@fr ;
+    rdfs:label "En respuesta a"@es ;
+    rdfs:label "בתגובה ל"@he ;
+    rdfs:label "回复"@zh .
 paa:act_cw rdfs:label "Content warning (optional)"@en-US ;
     rdfs:label "Avertissement de contenu (facultatif)"@fr ;
     rdfs:label "Advertencia de contenido (opcional)"@es ;

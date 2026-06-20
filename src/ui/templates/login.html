@@ -33,6 +33,9 @@
     {{/externalIdps}}
   </div>
   {{/hasExternalIdps}}
+  <div class="mt-1 text-center">
+    <p class="text-muted text-sm">{{t.land_no_account}} <a href="/signup{{#returnTo}}?return_to={{returnTo}}{{/returnTo}}">{{t.land_create_account}}</a></p>
+  </div>
   <script src="/scripts/webauthn-utils.js"></script>
   <script src="/scripts/passkey-login.js"></script>
   <script src="/scripts/fedcm-login.js"></script>

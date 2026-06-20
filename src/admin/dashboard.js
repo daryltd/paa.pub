@@ -4,7 +4,8 @@
 import { requireAdmin } from './middleware.js';
 import { listUsers } from '../users.js';
 import { renderPage } from '../ui/shell.js';
-import template from '../ui/templates/admin-dashboard.html';
+import { loadHtml } from '../html-loader.js';
+const template = loadHtml(import.meta.url, '../ui/templates/admin-dashboard.html');
 import { formatBytes } from '../i18n/format.js';
 
 /**

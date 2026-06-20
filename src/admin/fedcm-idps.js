@@ -3,7 +3,8 @@
  */
 import { requireAdmin } from './middleware.js';
 import { renderPage } from '../ui/shell.js';
-import template from '../ui/templates/admin-fedcm-idps.html';
+import { loadHtml } from '../html-loader.js';
+const template = loadHtml(import.meta.url, '../ui/templates/admin-fedcm-idps.html');
 
 /**
  * Read the external IdP list from KV.

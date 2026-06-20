@@ -38,7 +38,8 @@ import { sha256 } from './crypto/digest.js';
 import { createSession } from './auth/session.js';
 import { renderPage, htmlPage, htmlResponse, escapeHtml } from './ui/shell.js';
 import { getTranslations } from './i18n/index.js';
-import authorizeTemplate from './ui/templates/authorize.html';
+import { loadHtml } from './html-loader.js';
+const authorizeTemplate = loadHtml(import.meta.url, './ui/templates/authorize.html');
 import { bufferToBase64url } from './utils.js';
 import { grantAppPermission, hasAppPermissions } from './solid/app-permissions.js';
 import { parseNTriples, unwrapIri } from './rdf/ntriples.js';
@@ -129,24 +130,34 @@ export async function handleAuthorize(reqCtx) {
     const nonce = url.searchParams.get('nonce') || '';
     const prompt = url.searchParams.get('prompt') || '';
 
+    // If not logged in, redirect to login with a return URL back to authorize
+    if (!user) {
+      const returnUrl = url.pathname + url.search;
+      return new Response(null, {
+        status: 302,
+        headers: { 'Location': `/login?return_to=${encodeURIComponent(returnUrl)}` },
+      });
+    }
+
     // Check if this client has been previously approved (remembered)
-    const isRemembered = user && await isClientRemembered(reqCtx.env.APPDATA, user, clientId);
+    const isRemembered = await isClientRemembered(reqCtx.env.APPDATA, user, clientId);
 
     // Auto-approve only if the app has stored permissions (went through new consent flow).
-    // If remembered but no permissions, fall through to show consent with container selection.
     const hasPerms = isRemembered && await hasAppPermissions(reqCtx.env.APPDATA, user, clientId);
-    if (user && prompt !== 'login' && prompt !== 'consent' && hasPerms) {
+    if (prompt !== 'login' && prompt !== 'consent' && hasPerms) {
       return issueCode(reqCtx, {
         clientId, redirectUri, scope, state, codeChallenge, codeChallengeMethod, nonce,
       }, user);
     }
 
-    // Fetch client metadata to display app identity
-    const meta = await fetchClientMetadata(clientId);
+    // Fetch client metadata and containers in parallel
     const isInternalClient = clientId.startsWith(config.baseUrl + '/clients/');
-
-    // Load top-level containers for permission checkboxes (idx used for radio grouping)
-    const containers = user ? await loadTopLevelContainers(reqCtx.storage, config, user) : [];
+    const [meta, containers] = await Promise.all([
+      isInternalClient
+        ? { displayName: clientId, clientUri: null, displayOrigin: null }
+        : fetchClientMetadata(clientId),
+      loadTopLevelContainers(reqCtx.storage, config, user),
+    ]);
     containers.forEach((c, i) => { c.idx = i; });
 
     return renderPage('Authorize', authorizeTemplate, {
@@ -162,10 +173,10 @@ export async function handleAuthorize(reqCtx) {
       codeChallengeMethod,
       responseType,
       nonce,
-      isLoggedIn: !!user,
+      isLoggedIn: true,
       hasContainers: containers.length > 0,
       containers,
-      userPlaceholder: user || 'username',
+      userPlaceholder: user,
     }, { lang: reqCtx.lang });
   }
 
@@ -674,7 +685,7 @@ async function fetchClientMetadata(clientId) {
   try {
     const res = await fetch(clientId, {
       headers: { 'Accept': 'application/ld+json, application/json' },
-      signal: AbortSignal.timeout(5000),
+      signal: AbortSignal.timeout(2000),
     });
     if (!res.ok) {
       return { ...empty, displayName: clientIdHost || clientId, displayOrigin: clientIdOrigin };

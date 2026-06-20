@@ -20,7 +20,8 @@
  *   and cannot use inherit mode.
  */
 import { renderPage } from '../shell.js';
-import template from '../templates/acl-editor.html';
+import { loadHtml } from '../../html-loader.js';
+const template = loadHtml(import.meta.url, '../templates/acl-editor.html');
 import { requireAuth } from '../../auth/middleware.js';
 import { getContainerQuota, setContainerQuotaLimit } from '../../storage/container-quota.js';
 import { getUserConfig } from '../../config.js';
