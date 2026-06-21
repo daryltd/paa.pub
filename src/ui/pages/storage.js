@@ -102,7 +102,7 @@ async function renderContainerPage(reqCtx, path, resourceIri, username) {
     hasItems: items.length > 0,
     isRoot,
     hasCustomAcl,
-  }, { user: username, config, nav: 'storage', storage, baseUrl: config.baseUrl, lang });
+  }, { user: username, config, nav: 'storage', storage, baseUrl: config.baseUrl, lang, request: reqCtx.request });
 }
 
 // ── Resource page ────────────────────────────────────
@@ -289,13 +289,17 @@ export async function handleStorageAction(reqCtx) {
   }
 
   if (action === 'delete') {
+    console.log(`[storage] Deleting: ${resourceIri} (container=${path.endsWith('/')})`);
     if (path.endsWith('/')) {
       await deleteContainerRecursive(storage, resourceIri, env.APPDATA);
     } else {
       await deleteResource(storage, resourceIri, env.APPDATA);
     }
     const parent = computeParent(resourceIri);
-    if (parent) await removeContainment(storage, parent, resourceIri);
+    if (parent) {
+      await removeContainment(storage, parent, resourceIri);
+      console.log(`[storage] Removed containment from ${parent}`);
+    }
     const parentPath = parent ? parent.replace(config.baseUrl + '/', '') : `${username}/`;
     return redirect(`/storage/${parentPath}`);
   }

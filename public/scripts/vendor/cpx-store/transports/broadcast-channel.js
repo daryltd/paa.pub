@@ -1,0 +1,2 @@
+var e=class{_channelName;_channel=null;_handler=null;constructor(n){this._channelName=n}send(n){this._channel&&this._channel.postMessage(n)}onReceive(n){this._handler=n}connect(){return this._channel=new BroadcastChannel(this._channelName),this._channel.onmessage=n=>{this._handler&&this._handler(n.data)},Promise.resolve()}disconnect(){this._channel&&(this._channel.close(),this._channel=null)}};export{e as BroadcastChannelTransport};
+//# sourceMappingURL=broadcast-channel.js.map

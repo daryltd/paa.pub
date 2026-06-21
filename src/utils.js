@@ -3,6 +3,14 @@
  */
 
 /**
+ * Check if a request wants a JSON response (for fetch-based form submission).
+ */
+export function wantsJson(request) {
+  const accept = request.headers.get('Accept') || '';
+  return accept.includes('application/json');
+}
+
+/**
  * Simple string hash (DJB2-like). Returns a base-36 string.
  * @param {string} str
  * @returns {string}

@@ -8,7 +8,8 @@
 import { renderPage } from '../shell.js';
 import template from '../templates/activity.html';
 import { requireAuth } from '../../auth/middleware.js';
-import { simpleHash } from '../../utils.js';
+import { simpleHash, wantsJson } from '../../utils.js';
+import { publish } from '../../events.js';
 import { fetchRemoteActor } from '../../activitypub/remote.js';
 import { userExists } from '../../users.js';
 import { getTranslations } from '../../i18n/index.js';
@@ -20,7 +21,14 @@ export async function renderActivityPage(reqCtx) {
 
   const { config, env, url, lang } = reqCtx;
   const username = reqCtx.user;
-  const error = url.searchParams.get('error');
+  const errorCode = url.searchParams.get('error');
+  const errorMessages = {
+    not_found: 'Could not find that user — WebFinger lookup failed.',
+    actor_unreachable: 'Could not reach the remote server to fetch the actor profile.',
+    no_inbox: 'The remote actor does not have an inbox to deliver to.',
+    no_target: 'No follow target specified.',
+  };
+  const error = errorCode ? (errorMessages[errorCode] || errorCode) : null;
   const feedLimit = config.feedLimit;
   const t = getTranslations(lang);
 
@@ -172,9 +180,15 @@ export async function renderActivityPage(reqCtx) {
     const instrumentName = inst ? (typeof inst === 'string' ? inst : inst.name || inst.id || '') : '';
     const hasInstrument = !!instrumentName;
 
+    // Extract inReplyTo for thread display
+    const inReplyToRaw = a.object?.inReplyTo || a.inReplyTo;
+    const inReplyToUrl = typeof inReplyToRaw === 'string' ? inReplyToRaw : (inReplyToRaw?.id || '');
+    const hasInReplyTo = !!inReplyToUrl;
+
     return {
       activityId: a.id, source, type, actor, published, isReceived,
       isContent, isQuestion, isResponse, isUndo, isDelete, isObject,
+      hasInReplyTo, inReplyToUrl,
       content, summary, hasSummary,
       actSummary, hasActivitySummary,
       innerType, innerActor, hasInnerType: !!innerType, hasInnerActor: !!innerActor,
@@ -187,11 +201,20 @@ export async function renderActivityPage(reqCtx) {
     };
   });
 
-  // Format pending follow requests for template
+  // Format pending incoming follow requests for template
   const pendingRequests = pendingFollows.map(p => ({
     actor: p.actor,
     receivedAt: p.receivedAt ? formatDateTime(p.receivedAt, lang) : '',
   }));
+
+  // Find outgoing follows not yet accepted (in outbox but not in following list)
+  const followingSet = new Set(following);
+  const pendingOutgoing = outboxItems
+    .filter(a => a.type === 'Follow' && a.object && !followingSet.has(typeof a.object === 'string' ? a.object : a.object?.id))
+    .map(a => ({
+      target: typeof a.object === 'string' ? a.object : a.object?.id || '',
+      sentAt: a.published ? formatDateTime(a.published, lang) : '',
+    }));
 
   // Format followers and following with profile feed links
   const followingList = following.map(uri => ({
@@ -203,8 +226,17 @@ export async function renderActivityPage(reqCtx) {
     feedUrl: `/activity/remote?actor=${encodeURIComponent(uri)}`,
   }));
 
+  const handle = `@${username}@${config.domain}`;
+
+  // Combined contacts list for DM recipient selector
+  const contactSet = new Set([...following, ...followers]);
+  const contacts = [...contactSet].map(uri => ({ uri }));
+
   return renderPage('Activity', template, {
+    handle,
     error,
+    contacts,
+    hasContacts: contacts.length > 0,
     following: followingList,
     hasFollowing: followingList.length > 0,
     followingCount: followingList.length,
@@ -214,6 +246,9 @@ export async function renderActivityPage(reqCtx) {
     pendingRequests,
     hasPendingRequests: pendingRequests.length > 0,
     pendingCount: pendingRequests.length,
+    pendingOutgoing,
+    hasPendingOutgoing: pendingOutgoing.length > 0,
+    pendingOutgoingCount: pendingOutgoing.length,
     activities,
     hasActivities: activities.length > 0,
     feedLimit,
@@ -221,7 +256,7 @@ export async function renderActivityPage(reqCtx) {
     feedReceived,
     feedSent,
     feedAll,
-  }, { user: username, config, nav: 'activity', storage: reqCtx.storage, baseUrl: config.baseUrl, lang });
+  }, { user: username, config, nav: 'activity', storage: reqCtx.storage, baseUrl: config.baseUrl, lang, request: reqCtx.request });
 }
 
 /**
@@ -259,7 +294,7 @@ export async function renderRemoteFeed(reqCtx) {
     // Remote actor: fetch via HTTP
     actor = await fetchRemoteActor(actorUri, env.APPDATA);
     if (!actor || !actor.outbox) {
-      return renderPage(t.act_remote_feed, `<h1>${escapeHtml(t.act_remote_feed)}</h1><div class="card"><div class="text-muted">${escapeHtml(t.act_could_not_load)}</div><a href="/activity" class="btn mt-05">${escapeHtml(t.act_back)}</a></div>`, {}, { user: username, config, nav: 'activity', storage: reqCtx.storage, baseUrl: config.baseUrl, lang });
+      return renderPage(t.act_remote_feed, `<h1>${escapeHtml(t.act_remote_feed)}</h1><div class="card"><div class="text-muted">${escapeHtml(t.act_could_not_load)}</div><a href="/activity" class="btn mt-05">${escapeHtml(t.act_back)}</a></div>`, {}, { user: username, config, nav: 'activity', storage: reqCtx.storage, baseUrl: config.baseUrl, lang, request: reqCtx.request });
     }
 
     // Fetch the outbox collection
@@ -330,7 +365,7 @@ ${activities.map(a => `<div class="card">
   <div>${a.content}</div>` : `${a.hasObjectUrl ? `<div>${a.hasObjectType ? `<span class="badge badge-type">${escapeHtml(a.objectType)}</span> ` : ''}<a href="${escapeHtml(a.objectUrl)}" target="_blank" rel="noopener" class="mono break-all text-sm">${escapeHtml(a.objectName)}</a></div>` : `<div class="text-muted">${escapeHtml(a.type)} ${escapeHtml(t.act_type_activity)}</div>`}`}
 </div>`).join('\n')}`;
 
-  return renderPage(t.act_remote_feed, body, {}, { user: username, config, nav: 'activity', storage: reqCtx.storage, baseUrl: config.baseUrl, lang });
+  return renderPage(t.act_remote_feed, body, {}, { user: username, config, nav: 'activity', storage: reqCtx.storage, baseUrl: config.baseUrl, lang, request: reqCtx.request });
 }
 
 function resolveLocalUsername(actorUri, config) {
@@ -447,6 +482,8 @@ export async function handleMarkRead(reqCtx) {
     }
   }
 
+  publish(username, { type: 'read', data: { id } });
+  if (wantsJson(request)) return new Response(JSON.stringify({ ok: true, action: 'mark-read' }), { headers: { 'Content-Type': 'application/json' } });
   return new Response(null, { status: 302, headers: { 'Location': '/activity' } });
 }
 
@@ -454,7 +491,7 @@ export async function handleMarkAllRead(reqCtx) {
   const authCheck = requireAuth(reqCtx);
   if (authCheck) return authCheck;
 
-  const { env } = reqCtx;
+  const { request, env } = reqCtx;
   const username = reqCtx.user;
 
   await Promise.all([
@@ -462,6 +499,8 @@ export async function handleMarkAllRead(reqCtx) {
     env.APPDATA.put(`ap_read_items:${username}`, JSON.stringify([])),
   ]);
 
+  publish(username, { type: 'read-all' });
+  if (wantsJson(request)) return new Response(JSON.stringify({ ok: true, action: 'mark-all-read' }), { headers: { 'Content-Type': 'application/json' } });
   return new Response(null, { status: 302, headers: { 'Location': '/activity' } });
 }
 

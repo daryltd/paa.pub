@@ -1,9 +1,9 @@
 {
   "name": "paa-pub",
-  "version": "0.1.0",
+  "version": "0.3.0",
   "private": true,
   "license": "MIT",
-  "description": "Single-user Solid + ActivityPub server on Cloudflare Workers",
+  "description": "Multi-user Solid + ActivityPub server powered by sparq",
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler deploy"
@@ -12,9 +12,6 @@
     "wrangler": "^4.67.0"
   },
   "dependencies": {
-    "@s20e/adapters": "npm:@jsr/s20e__adapters@^0.2.0",
-    "@s20e/host-core": "npm:@jsr/s20e__host-core@^0.2.0",
-    "@s20e/kernel": "npm:@jsr/s20e__kernel@^0.2.0",
     "mustache": "^4.2.0"
   }
 }

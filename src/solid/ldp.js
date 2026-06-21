@@ -389,7 +389,7 @@ async function handleGet(reqCtx, resourceIri) {
  * Creates parent containers if they don't exist.
  */
 async function handlePut(reqCtx, resourceIri) {
-  const { request, orchestrator, config, storage, env } = reqCtx;
+  const { request, config, storage, env } = reqCtx;
   const owner = extractOwner(resourceIri, config.baseUrl);
   const agent = reqCtx.userConfig ? reqCtx.userConfig.webId : null;
 
@@ -496,21 +496,13 @@ async function handlePut(reqCtx, resourceIri) {
     `${t.subject} ${t.predicate} ${t.object} <${resourceIri}> .`
   ).join('\n');
 
-  // Check if resource already exists — if so, delete old triples first
+  // Check if resource already exists — if so, delete old KV entries
   const existingIdx = await storage.get(`idx:${resourceIri}`);
   if (existingIdx) {
     try {
-      const delSparql = `CONSTRUCT { ?s ?p ?o } WHERE { GRAPH <${resourceIri}> { ?s ?p ?o } }`;
-      const existing = await orchestrator.query(delSparql, [resourceIri], agent);
-      if (existing.type === 'query_results') {
-        const existingTriples = sparqlJsonToTriples(JSON.parse(existing.sparql_json));
-        if (existingTriples.length > 0) {
-          const delNquads = existingTriples.map(t =>
-            `${t.subject} ${t.predicate} ${t.object} <${resourceIri}> .`
-          ).join('\n');
-          await orchestrator.delete(delNquads, agent);
-        }
-      }
+      const parsed = JSON.parse(existingIdx);
+      const subjects = parsed.subjects || [];
+      await Promise.all(subjects.map(s => storage.delete(`doc:${resourceIri}:${s}`)));
     } catch (e) {
       console.error('Error deleting existing triples:', e);
     }
@@ -555,7 +547,7 @@ async function handlePut(reqCtx, resourceIri) {
  * Adds an ldp:contains triple to the parent container.
  */
 async function handlePost(reqCtx, resourceIri) {
-  const { request, orchestrator, config, url, storage, env } = reqCtx;
+  const { request, config, url, storage, env } = reqCtx;
   const owner = extractOwner(resourceIri, config.baseUrl);
   const agent = reqCtx.userConfig ? reqCtx.userConfig.webId : null;
 
@@ -899,7 +891,14 @@ function handleOptions(reqCtx, resourceIri) {
  */
 function parseBody(body, contentType, baseIri) {
   if (contentType.includes('text/turtle')) {
-    return parseTurtle(body, baseIri);
+    try {
+      return parseTurtle(body, baseIri);
+    } catch (e) {
+      console.error(`[ldp] Turtle parse error: ${e.message}`);
+      const err = new Error('Invalid Turtle: ' + e.message);
+      err.status = 400;
+      throw err;
+    }
   }
   if (contentType.includes('application/n-triples') || contentType.includes('application/n-quads')) {
     return parseNTriples(body);

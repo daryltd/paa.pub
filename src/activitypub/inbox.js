@@ -14,9 +14,31 @@ import { getUserConfig } from '../config.js';
  */
 export async function handleInbox(reqCtx) {
   const { request, params, config, env, ctx } = reqCtx;
-  const username = params.user;
+  let username = params.user;
 
-  if (!await userExists(env.APPDATA, username)) {
+  // Shared inbox (/inbox): resolve target user from the activity body
+  if (!username) {
+    try {
+      const body = await request.clone().json();
+      const prefix = config.baseUrl + '/';
+      // Try object (Follow target), then to/cc recipients
+      const candidates = [
+        typeof body.object === 'string' ? body.object : body.object?.id,
+        ...[].concat(body.to || [], body.cc || []).map(r => typeof r === 'string' ? r : r?.id),
+      ];
+      for (const uri of candidates) {
+        if (uri?.startsWith(prefix)) {
+          const candidate = uri.slice(prefix.length).split('/')[0];
+          if (candidate && await userExists(env.APPDATA, candidate)) {
+            username = candidate;
+            break;
+          }
+        }
+      }
+    } catch {}
+  }
+
+  if (!username || !await userExists(env.APPDATA, username)) {
     return new Response('Not Found', { status: 404 });
   }
 
@@ -35,8 +57,8 @@ export async function handleInbox(reqCtx) {
     return new Response('Missing type or actor', { status: 400 });
   }
 
-  // Reject activities missing an id field
-  if (!activity.id) {
+  // Reject activities missing an id field (Accept/Reject may omit it)
+  if (!activity.id && !['Accept', 'Reject'].includes(activity.type)) {
     console.log(`[inbox] rejected: missing activity id (type=${activity.type})`);
     return new Response('Missing activity id', { status: 400 });
   }

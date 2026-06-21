@@ -17,7 +17,7 @@ let bootstrapped = false;
  * Ensure the system is bootstrapped. Idempotent.
  * @param {object} env
  * @param {object} config
- * @param {import('@s20e/adapters/cloudflare').CloudflareAdapter} storage
+ * @param {import('./storage/cloudflare-adapter.js').CloudflareAdapter} storage
  */
 export async function ensureBootstrapped(env, config, storage) {
   if (bootstrapped) return;
@@ -121,7 +121,7 @@ export async function ensureBootstrapped(env, config, storage) {
  * @param {object} env
  * @param {object} globalConfig - global config from getConfig()
  * @param {string} username
- * @param {import('@s20e/adapters/cloudflare').CloudflareAdapter} storage
+ * @param {import('./storage/cloudflare-adapter.js').CloudflareAdapter} storage
  */
 export async function bootstrapUser(env, globalConfig, username, storage) {
   const userConfig = getUserConfig(globalConfig, username);

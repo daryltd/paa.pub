@@ -129,7 +129,7 @@ export async function renderSettings(reqCtx) {
     username,
     apps: appsData,
     hasApps: appsData.length > 0,
-  }, { user: username, config, nav: 'settings', storage, baseUrl: config.baseUrl, lang });
+  }, { user: username, config, nav: 'settings', storage, baseUrl: config.baseUrl, lang, request: reqCtx.request });
 }
 
 /**
