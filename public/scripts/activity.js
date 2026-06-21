@@ -1,196 +1,254 @@
 import { CPXStore } from './vendor/cpx-store/cpx-store.js';
 import { persistencePlugin } from './vendor/cpx-store/plugins/persistence.js';
+import { collabPlugin } from './vendor/cpx-store/plugins/collab.js';
+import { SSETransport } from './sse-transport.js';
 
-// --- Activity Store ---
-class ActivityStore extends CPXStore {
-  constructor() {
-    super({
-      details: {
-        compose: false,
-        feed: true,
-        follow: false,
-        following: false,
-        followers: false,
-        'pending-requests': false,
-        'pending-outgoing': true,
-      },
-      feedFilter: 'received',
-      draft: { content: '', audience: 'public', summary: '', inReplyTo: '', replyActor: '' },
-    }, persistencePlugin({ key: 'paa-activity' }));
+let store = null;
+let sseTransport = null;
+
+function init() {
+  // --- Activity Store ---
+  if (!document.getElementById('store')) return;
+
+  if (!store) {
+    sseTransport = new SSETransport('/activity/stream');
+
+    class ActivityStore extends CPXStore {
+      constructor() {
+        super({
+          details: {
+            compose: false,
+            feed: true,
+            follow: false,
+            following: false,
+            followers: false,
+            'pending-requests': false,
+            'pending-outgoing': true,
+          },
+          feedFilter: 'received',
+          draft: { content: '', audience: 'public', summary: '', inReplyTo: '', replyActor: '' },
+        },
+          persistencePlugin({ key: 'paa-activity' }),
+          collabPlugin({ transport: sseTransport }),
+        );
+      }
+    }
+
+    if (!customElements.get('activity-store')) {
+      customElements.define('activity-store', ActivityStore);
+    }
+    store = document.getElementById('store');
   }
-}
-customElements.define('activity-store', ActivityStore);
 
-const store = document.getElementById('store');
-
-// --- Details State Persistence ---
-document.querySelectorAll('details[id^="details-"]').forEach(function(el) {
-  const key = el.id.replace('details-', '');
-  if (store.state.details[key] !== undefined) {
-    el.open = store.state.details[key];
-  }
-  el.addEventListener('toggle', function() {
-    store.state.details[key] = el.open;
+  // --- Details State Persistence ---
+  document.querySelectorAll('details[id^="details-"]').forEach(function(el) {
+    var key = el.id.replace('details-', '');
+    if (store.state.details[key] !== undefined) {
+      el.open = store.state.details[key];
+    }
+    el.addEventListener('toggle', function() {
+      store.state.details[key] = el.open;
+    });
   });
-});
 
-// --- Feed Filter Persistence ---
-(function() {
-  const params = new URLSearchParams(location.search);
-  const feed = params.get('feed');
-  if (feed) {
-    store.state.feedFilter = feed;
-  } else if (store.state.feedFilter && store.state.feedFilter !== 'received') {
-    params.set('feed', store.state.feedFilter);
-    location.replace('/activity?' + params.toString());
-  }
-})();
+  // --- Feed Filter Persistence ---
+  (function() {
+    var params = new URLSearchParams(location.search);
+    var feed = params.get('feed');
+    if (feed) {
+      store.state.feedFilter = feed;
+    } else if (store.state.feedFilter && store.state.feedFilter !== 'received') {
+      params.set('feed', store.state.feedFilter);
+      location.replace('/activity?' + params.toString());
+    }
+  })();
 
-// --- Compose Draft Persistence ---
-(function() {
-  const content = document.getElementById('compose-content');
-  const audience = document.getElementById('audience');
-  const summary = document.getElementById('compose-summary');
-  if (!content) return;
+  // --- Compose Draft Persistence ---
+  (function() {
+    var content = document.getElementById('compose-content');
+    var audience = document.getElementById('audience');
+    var summary = document.getElementById('compose-summary');
+    if (!content) return;
 
-  // Restore draft
-  const draft = store.state.draft;
-  if (draft.content) content.value = draft.content;
-  if (draft.audience) audience.value = draft.audience;
-  if (draft.summary) summary.value = draft.summary;
+    var draft = store.state.draft;
+    if (draft.content) content.value = draft.content;
+    if (draft.audience) audience.value = draft.audience;
+    if (draft.summary) summary.value = draft.summary;
 
-  // Save on input
-  content.addEventListener('input', () => { store.state.draft.content = content.value; });
-  audience.addEventListener('change', () => { store.state.draft.audience = audience.value; });
-  summary.addEventListener('input', () => { store.state.draft.summary = summary.value; });
-})();
+    content.addEventListener('input', function() { store.state.draft.content = content.value; });
+    audience.addEventListener('change', function() { store.state.draft.audience = audience.value; });
+    summary.addEventListener('input', function() { store.state.draft.summary = summary.value; });
+  })();
 
-// --- DM Recipient Toggle ---
-(function() {
-  const audience = document.getElementById('audience');
-  const recipientGroup = document.getElementById('recipient-group');
-  const recipient = document.getElementById('recipient');
-  if (!audience || !recipientGroup) return;
+  // --- DM Recipient Toggle ---
+  (function() {
+    var audience = document.getElementById('audience');
+    var recipientGroup = document.getElementById('recipient-group');
+    var recipient = document.getElementById('recipient');
+    if (!audience || !recipientGroup) return;
 
-  function toggle() {
-    const isDirect = audience.value === 'direct';
-    recipientGroup.classList.toggle('hidden', !isDirect);
-    if (recipient) recipient.required = isDirect;
-  }
-  audience.addEventListener('change', toggle);
-  toggle();
-})();
+    function toggle() {
+      var isDirect = audience.value === 'direct';
+      recipientGroup.classList.toggle('hidden', !isDirect);
+      if (recipient) recipient.required = isDirect;
+    }
+    audience.addEventListener('change', toggle);
+    toggle();
+  })();
 
-// --- Reply Handler ---
-(function() {
-  const inReplyToInput = document.getElementById('compose-in-reply-to');
-  const replyContext = document.getElementById('reply-context');
-  const replyTarget = document.getElementById('reply-context-target');
-  const composeDetails = document.getElementById('details-compose');
-  const cancelBtn = document.getElementById('cancel-reply');
+  // --- Reply Handler ---
+  (function() {
+    var inReplyToInput = document.getElementById('compose-in-reply-to');
+    var replyContext = document.getElementById('reply-context');
+    var replyTarget = document.getElementById('reply-context-target');
+    var composeDetails = document.getElementById('details-compose');
+    var cancelBtn = document.getElementById('cancel-reply');
 
-  document.addEventListener('click', function(e) {
-    const btn = e.target.closest('[data-reply-to]');
-    if (!btn) return;
+    document.addEventListener('click', function(e) {
+      var btn = e.target.closest('[data-reply-to]');
+      if (!btn) return;
 
-    const activityId = btn.getAttribute('data-reply-to');
-    const actor = btn.getAttribute('data-reply-actor');
+      var activityId = btn.getAttribute('data-reply-to');
+      var actor = btn.getAttribute('data-reply-actor');
 
-    store.batch(() => {
-      store.state.draft.inReplyTo = activityId;
-      store.state.draft.replyActor = actor;
-      store.state.details.compose = true;
+      store.batch(function() {
+        store.state.draft.inReplyTo = activityId;
+        store.state.draft.replyActor = actor;
+        store.state.details.compose = true;
+      });
+
+      if (inReplyToInput) inReplyToInput.value = activityId;
+      if (replyTarget) replyTarget.textContent = actor;
+      if (replyContext) replyContext.classList.remove('hidden');
+      if (composeDetails) composeDetails.open = true;
+
+      var textarea = document.getElementById('compose-content');
+      if (textarea) {
+        textarea.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        textarea.focus();
+      }
     });
 
-    if (inReplyToInput) inReplyToInput.value = activityId;
-    if (replyTarget) replyTarget.textContent = actor;
-    if (replyContext) replyContext.classList.remove('hidden');
-    if (composeDetails) composeDetails.open = true;
+    if (cancelBtn) {
+      cancelBtn.addEventListener('click', function() {
+        store.batch(function() {
+          store.state.draft.inReplyTo = '';
+          store.state.draft.replyActor = '';
+        });
+        if (inReplyToInput) inReplyToInput.value = '';
+        if (replyContext) replyContext.classList.add('hidden');
+      });
+    }
 
-    const textarea = document.getElementById('compose-content');
-    if (textarea) {
-      textarea.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      textarea.focus();
+    if (store.state.draft.inReplyTo && inReplyToInput) {
+      inReplyToInput.value = store.state.draft.inReplyTo;
+      if (replyTarget) replyTarget.textContent = store.state.draft.replyActor;
+      if (replyContext) replyContext.classList.remove('hidden');
+    }
+  })();
+
+  // --- Real-Time Updates via SSE (cpx-store collab) ---
+  store.addEventListener('change', function(e) {
+    var changes = e.detail?.changes;
+    if (!changes) return;
+
+    // Handle SSE events flowing through the collab plugin
+    var activityChange = changes.activity;
+    var readChange = changes.read;
+    var readAllChange = changes['read-all'];
+
+    if (activityChange?.val) {
+      var event = activityChange.val;
+      if (event.type === 'activity' && event.activity) {
+        var feedList = document.getElementById('activity-feed-list');
+        if (feedList) {
+          var noAct = feedList.querySelector('.text-muted');
+          if (noAct) noAct.remove();
+
+          var card = document.createElement('div');
+          card.className = 'card';
+          var actor = event.activity.actor || 'unknown';
+          var content = event.activity.object?.content || event.activity.content || '';
+          var type = event.activity.type || 'Activity';
+          card.innerHTML =
+            '<div class="flex justify-between mb-05"><span class="mono text-sm">' + escapeHtml(actor) + '</span><span class="text-muted">just now</span></div>' +
+            '<div class="flex gap-05 mb-05"><span class="badge badge-type">' + escapeHtml(type) + '</span><span class="badge badge-received">received</span></div>' +
+            '<div>' + content + '</div>';
+          feedList.prepend(card);
+        }
+      }
+    }
+
+    if (readChange?.val) {
+      var evt = readChange.val;
+      if (evt.type === 'read' && evt.data?.id) {
+        var el = document.querySelector('[data-activity-id="' + CSS.escape(evt.data.id) + '"]');
+        if (el) el.remove();
+      }
+    }
+
+    if (readAllChange?.val) {
+      var fl = document.getElementById('activity-feed-list');
+      if (fl) fl.innerHTML = '<div class="card text-muted">No activities.</div>';
     }
   });
 
-  if (cancelBtn) {
-    cancelBtn.addEventListener('click', function() {
-      store.batch(() => {
-        store.state.draft.inReplyTo = '';
-        store.state.draft.replyActor = '';
-      });
-      if (inReplyToInput) inReplyToInput.value = '';
-      if (replyContext) replyContext.classList.add('hidden');
-    });
-  }
-
-  // Restore reply state from store
-  if (store.state.draft.inReplyTo && inReplyToInput) {
-    inReplyToInput.value = store.state.draft.inReplyTo;
-    if (replyTarget) replyTarget.textContent = store.state.draft.replyActor;
-    if (replyContext) replyContext.classList.remove('hidden');
-  }
-})();
-
-// --- No-Refresh Form Submission ---
-(function() {
-  const handlers = {
-    '/compose': function(json, form) {
-      form.reset();
-      store.batch(() => {
-        store.state.draft.content = '';
-        store.state.draft.audience = 'public';
-        store.state.draft.summary = '';
-        store.state.draft.inReplyTo = '';
-        store.state.draft.replyActor = '';
-      });
-      const replyContext = document.getElementById('reply-context');
-      if (replyContext) replyContext.classList.add('hidden');
-      const inReplyToInput = document.getElementById('compose-in-reply-to');
-      if (inReplyToInput) inReplyToInput.value = '';
-      // Prepend new activity indicator or reload feed
-      const feedList = document.getElementById('activity-feed-list');
-      if (feedList && json.activity) {
-        const card = document.createElement('div');
-        card.className = 'card';
-        card.innerHTML = '<div class="flex justify-between mb-05"><span class="mono text-sm">You</span><span class="text-muted">just now</span></div><div>' + escapeHtml(json.activity.content || '') + '</div>';
-        feedList.prepend(card);
-      }
-    },
-    '/activity/mark-read': function(json, form) {
-      const card = form.closest('.card');
-      if (card) card.remove();
-    },
-    '/activity/mark-all-read': function() {
-      const feedList = document.getElementById('activity-feed-list');
-      if (feedList) feedList.innerHTML = '<div class="card text-muted">No activities.</div>';
-    },
-    '/follow': function() { location.reload(); },
-    '/unfollow': function(json, form) {
-      const li = form.closest('li');
-      if (li) li.remove();
-    },
-    '/follow-requests/accept': function(json, form) {
-      const li = form.closest('li');
-      if (li) li.remove();
-    },
-    '/follow-requests/reject': function(json, form) {
-      const li = form.closest('li');
-      if (li) li.remove();
-    },
-  };
-
-  document.addEventListener('submit', function(e) {
-    const form = e.target;
+  // --- No-Refresh Form Submission ---
+  var formHandler = function(e) {
+    var form = e.target;
     if (!form || form.tagName !== 'FORM' || form.method.toUpperCase() !== 'POST') return;
 
-    const action = form.getAttribute('action');
+    var action = form.getAttribute('action');
+    var handlers = {
+      '/compose': function(json, frm) {
+        frm.reset();
+        store.batch(function() {
+          store.state.draft.content = '';
+          store.state.draft.audience = 'public';
+          store.state.draft.summary = '';
+          store.state.draft.inReplyTo = '';
+          store.state.draft.replyActor = '';
+        });
+        var rc = document.getElementById('reply-context');
+        if (rc) rc.classList.add('hidden');
+        var irt = document.getElementById('compose-in-reply-to');
+        if (irt) irt.value = '';
+        var fl = document.getElementById('activity-feed-list');
+        if (fl && json.activity) {
+          var card = document.createElement('div');
+          card.className = 'card';
+          card.innerHTML = '<div class="flex justify-between mb-05"><span class="mono text-sm">You</span><span class="text-muted">just now</span></div><div>' + escapeHtml(json.activity.content || '') + '</div>';
+          fl.prepend(card);
+        }
+      },
+      '/activity/mark-read': function(json, frm) {
+        var card = frm.closest('.card');
+        if (card) card.remove();
+      },
+      '/activity/mark-all-read': function() {
+        var fl = document.getElementById('activity-feed-list');
+        if (fl) fl.innerHTML = '<div class="card text-muted">No activities.</div>';
+      },
+      '/follow': function() { location.reload(); },
+      '/unfollow': function(json, frm) {
+        var li = frm.closest('li');
+        if (li) li.remove();
+      },
+      '/follow-requests/accept': function(json, frm) {
+        var li = frm.closest('li');
+        if (li) li.remove();
+      },
+      '/follow-requests/reject': function(json, frm) {
+        var li = frm.closest('li');
+        if (li) li.remove();
+      },
+    };
+
     if (!handlers[action]) return;
 
     e.preventDefault();
-    const data = new FormData(form);
-    const btn = form.querySelector('button[type="submit"]');
+    var data = new FormData(form);
+    var btn = form.querySelector('button[type="submit"]');
     if (btn) btn.disabled = true;
 
     fetch(action, {
@@ -205,11 +263,28 @@ document.querySelectorAll('details[id^="details-"]').forEach(function(el) {
     })
     .catch(function() { location.reload(); })
     .finally(function() { if (btn) btn.disabled = false; });
-  });
+  };
 
-  function escapeHtml(str) {
-    const div = document.createElement('div');
-    div.textContent = str;
-    return div.innerHTML;
+  document.addEventListener('submit', formHandler);
+
+  // --- Cleanup on SPA navigation ---
+  window.addEventListener('paa:navigate', function() {
+    if (sseTransport) sseTransport.disconnect();
+  });
+}
+
+function escapeHtml(str) {
+  var div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+// Initialize on load
+init();
+
+// Re-initialize on SPA navigation
+window.addEventListener('paa:page-loaded', function() {
+  if (location.pathname === '/activity' || location.pathname.startsWith('/activity?')) {
+    init();
   }
-})();
+});

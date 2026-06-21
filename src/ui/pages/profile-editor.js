@@ -101,7 +101,7 @@ export async function renderProfileEditor(reqCtx) {
     data.success = t.prof_layout_reset;
   }
 
-  return renderPage('Edit Profile', template, data, { user: username, config, nav: 'profile', storage, baseUrl: config.baseUrl, lang: reqCtx.lang });
+  return renderPage('Edit Profile', template, data, { user: username, config, nav: 'profile', storage, baseUrl: config.baseUrl, lang: reqCtx.lang, request: reqCtx.request });
 }
 
 /**

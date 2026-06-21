@@ -2,6 +2,7 @@
  * Activity processors: Follow, Accept, Undo, Create.
  */
 import { simpleHash } from '../utils.js';
+import { publish } from '../events.js';
 
 const AS_PUBLIC = 'https://www.w3.org/ns/activitystreams#Public';
 
@@ -266,6 +267,7 @@ export async function storeInboxActivity(activity, username, env) {
   // Keep last 500 items
   if (index.length > 500) index.length = 500;
   await env.APPDATA.put(`ap_inbox_index:${username}`, JSON.stringify(index));
+  publish(username, { type: 'activity', activity });
 }
 
 export async function storeOutboxActivity(activity, username, env) {

@@ -70,8 +70,17 @@ export async function renderPage(title, bodyTemplate, data, opts = {}) {
   const t = getTranslations(lang);
   const dir = RTL_LANGUAGES.has(lang) ? 'rtl' : 'ltr';
 
-  const nav = opts.user ? renderNav(opts.user, opts.nav, { ...opts, t }) : '';
   const body = Mustache.render(bodyTemplate, { ...data, t });
+
+  // Fragment mode for SPA navigation — return just the body content
+  if (opts.request && opts.request.headers.get('X-Paa-Nav') === 'fragment') {
+    return new Response(JSON.stringify({ title, body }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json', 'X-Paa-Nav': 'fragment' },
+    });
+  }
+
+  const nav = opts.user ? renderNav(opts.user, opts.nav, { ...opts, t }) : '';
   const customThemeHref = await resolveCustomTheme(opts);
   const html = Mustache.render(layoutTemplate, { title, nav, body, customThemeHref, lang, dir });
   return htmlResponse(html);

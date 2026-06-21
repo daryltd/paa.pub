@@ -10,6 +10,7 @@ import { loadHtml } from '../../html-loader.js';
 const template = loadHtml(import.meta.url, '../templates/activity.html');
 import { requireAuth } from '../../auth/middleware.js';
 import { simpleHash, wantsJson } from '../../utils.js';
+import { publish } from '../../events.js';
 import { fetchRemoteActor } from '../../activitypub/remote.js';
 import { userExists } from '../../users.js';
 import { getTranslations } from '../../i18n/index.js';
@@ -256,7 +257,7 @@ export async function renderActivityPage(reqCtx) {
     feedReceived,
     feedSent,
     feedAll,
-  }, { user: username, config, nav: 'activity', storage: reqCtx.storage, baseUrl: config.baseUrl, lang });
+  }, { user: username, config, nav: 'activity', storage: reqCtx.storage, baseUrl: config.baseUrl, lang, request: reqCtx.request });
 }
 
 /**
@@ -294,7 +295,7 @@ export async function renderRemoteFeed(reqCtx) {
     // Remote actor: fetch via HTTP
     actor = await fetchRemoteActor(actorUri, env.APPDATA);
     if (!actor || !actor.outbox) {
-      return renderPage(t.act_remote_feed, `<h1>${escapeHtml(t.act_remote_feed)}</h1><div class="card"><div class="text-muted">${escapeHtml(t.act_could_not_load)}</div><a href="/activity" class="btn mt-05">${escapeHtml(t.act_back)}</a></div>`, {}, { user: username, config, nav: 'activity', storage: reqCtx.storage, baseUrl: config.baseUrl, lang });
+      return renderPage(t.act_remote_feed, `<h1>${escapeHtml(t.act_remote_feed)}</h1><div class="card"><div class="text-muted">${escapeHtml(t.act_could_not_load)}</div><a href="/activity" class="btn mt-05">${escapeHtml(t.act_back)}</a></div>`, {}, { user: username, config, nav: 'activity', storage: reqCtx.storage, baseUrl: config.baseUrl, lang, request: reqCtx.request });
     }
 
     // Fetch the outbox collection
@@ -365,7 +366,7 @@ ${activities.map(a => `<div class="card">
   <div>${a.content}</div>` : `${a.hasObjectUrl ? `<div>${a.hasObjectType ? `<span class="badge badge-type">${escapeHtml(a.objectType)}</span> ` : ''}<a href="${escapeHtml(a.objectUrl)}" target="_blank" rel="noopener" class="mono break-all text-sm">${escapeHtml(a.objectName)}</a></div>` : `<div class="text-muted">${escapeHtml(a.type)} ${escapeHtml(t.act_type_activity)}</div>`}`}
 </div>`).join('\n')}`;
 
-  return renderPage(t.act_remote_feed, body, {}, { user: username, config, nav: 'activity', storage: reqCtx.storage, baseUrl: config.baseUrl, lang });
+  return renderPage(t.act_remote_feed, body, {}, { user: username, config, nav: 'activity', storage: reqCtx.storage, baseUrl: config.baseUrl, lang, request: reqCtx.request });
 }
 
 function resolveLocalUsername(actorUri, config) {
@@ -482,6 +483,7 @@ export async function handleMarkRead(reqCtx) {
     }
   }
 
+  publish(username, { type: 'read', data: { id } });
   if (wantsJson(request)) return new Response(JSON.stringify({ ok: true, action: 'mark-read' }), { headers: { 'Content-Type': 'application/json' } });
   return new Response(null, { status: 302, headers: { 'Location': '/activity' } });
 }
@@ -498,6 +500,7 @@ export async function handleMarkAllRead(reqCtx) {
     env.APPDATA.put(`ap_read_items:${username}`, JSON.stringify([])),
   ]);
 
+  publish(username, { type: 'read-all' });
   if (wantsJson(request)) return new Response(JSON.stringify({ ok: true, action: 'mark-all-read' }), { headers: { 'Content-Type': 'application/json' } });
   return new Response(null, { status: 302, headers: { 'Location': '/activity' } });
 }

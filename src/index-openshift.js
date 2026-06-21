@@ -33,6 +33,7 @@ import { renderProfileEditor, handleProfileUpdate, handleProfileIndexReset, hand
 import { handleAppPermissionsUpdate } from './ui/pages/app-permissions.js';
 import { renderSettings, handleSettingsUpdate } from './ui/pages/settings.js';
 import { handleExport, handleCleanup } from './ui/pages/export.js';
+import { handleActivityStream } from './ui/pages/activity-stream.js';
 import { handleDiscovery, handleJwks, handleRegister, handleAuthorize, handleToken, handleUserInfo, verifyAccessToken } from './oidc.js';
 import { renderSignupPage, handleSignup, renderFedCMSignupPage, handleFedCMSignup } from './auth/registration.js';
 import { handleWebIdentity, handleFedCMConfig, handleFedCMAccounts, handleFedCMAssertion, handleFedCMClientMetadata, handleFedCMDisconnect, handleFedCMVerify, handleFedCMExternalVerify } from './fedcm.js';
@@ -97,6 +98,7 @@ function buildRouter() {
   router.get('/activity/remote', renderRemoteFeed);
   router.post('/activity/mark-read', handleMarkRead);
   router.post('/activity/mark-all-read', handleMarkAllRead);
+  router.get('/activity/stream', handleActivityStream);
   router.post('/compose', handleCompose);
   router.post('/follow', handleFollow);
   router.post('/unfollow', handleUnfollow);

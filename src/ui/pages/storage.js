@@ -103,7 +103,7 @@ async function renderContainerPage(reqCtx, path, resourceIri, username) {
     hasItems: items.length > 0,
     isRoot,
     hasCustomAcl,
-  }, { user: username, config, nav: 'storage', storage, baseUrl: config.baseUrl, lang });
+  }, { user: username, config, nav: 'storage', storage, baseUrl: config.baseUrl, lang, request: reqCtx.request });
 }
 
 // ── Resource page ────────────────────────────────────
