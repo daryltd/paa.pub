@@ -4,23 +4,26 @@ const RESERVED_NAMES = new Set([
   'profile', 'compose', 'follow', 'unfollow',
   'authorize', 'token', 'register', 'userinfo', 'jwks',
   'webauthn', 'app-permissions', 'follow-requests',
-  'settings',
   '.well-known',
+  'signup', 'admin', 'fedcm', 'settings',
 ]);
+
+export { RESERVED_NAMES };
 
 /**
  * Read configuration from Cloudflare Worker environment bindings.
+ * Returns global server config (not user-specific).
  * @param {object} env - Cloudflare Worker env object
  * @param {Request} [request] - incoming request (used to auto-detect domain)
  * @returns {object} config
  */
 export function getConfig(env, request) {
-  const username = env.PAA_USERNAME || 'admin';
+  const adminUsername = env.PAA_USERNAME || 'admin';
 
-  if (RESERVED_NAMES.has(username)) {
-    throw new Error(`Username "${username}" is reserved (conflicts with system route). Choose a different PAA_USERNAME.`);
+  if (RESERVED_NAMES.has(adminUsername)) {
+    throw new Error(`Username "${adminUsername}" is reserved (conflicts with system route). Choose a different PAA_USERNAME.`);
   }
-  const password = env.PAA_PASSWORD || '';
+  const adminPassword = env.PAA_PASSWORD || '';
 
   let domain = env.PAA_DOMAIN || '';
   let protocol;
@@ -40,21 +43,37 @@ export function getConfig(env, request) {
   // Feed limit: max activities shown in the feed (default 50)
   const feedLimit = parseInt(env.PAA_FEED_LIMIT, 10) || 50;
 
-  // Language: default UI language (overridable per-user via preferences)
-  const language = env.PAA_LANGUAGE || 'en-US';
+  // Registration mode: "open" (default) or "closed"
+  const registrationMode = env.PAA_REGISTRATION || 'open';
 
   return {
-    username,
-    password,
+    adminUsername,
+    username: adminUsername,
+    adminPassword,
     domain,
     baseUrl,
     protocol,
     storageLimit,
     feedLimit,
-    language,
-    actorId: `${baseUrl}/${username}/profile/card#me`,
-    keyId: `${baseUrl}/${username}/profile/card#main-key`,
-    webId: `${baseUrl}/${username}/profile/card#me`,
+    registrationMode,
+  };
+}
+
+/**
+ * Build user-specific config fields from global config + username.
+ * @param {object} config - global config from getConfig()
+ * @param {string} username
+ * @returns {object} user-specific config
+ */
+export function getUserConfig(config, username) {
+  // did:web spec: port colons in domain become %3A
+  const encodedDomain = config.domain.replace(/:/g, '%3A');
+  return {
+    username,
+    webId: `${config.baseUrl}/${username}/profile/card#me`,
+    actorId: `${config.baseUrl}/${username}/profile/card#me`,
+    keyId: `${config.baseUrl}/${username}/profile/card#main-key`,
+    did: `did:web:${encodedDomain}:${username}`,
   };
 }
 

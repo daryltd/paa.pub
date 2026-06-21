@@ -1,52 +1,11 @@
 /**
- * App permissions management page.
+ * App permissions POST handler.
  *
- * Routes:
- *   GET  /app-permissions — list authorized apps with their granted containers
- *   POST /app-permissions — update container access or revoke apps
+ * The GET page has been merged into /settings. This module only handles
+ * POST /app-permissions for update/revoke form submissions.
  */
-import { renderPage } from '../shell.js';
-import template from '../templates/app-permissions.html';
 import { requireAuth } from '../../auth/middleware.js';
-import { listAppPermissions, revokeAppPermission, grantAppPermission, getAppPermission } from '../../solid/app-permissions.js';
-import { parseNTriples, unwrapIri } from '../../rdf/ntriples.js';
-import { PREFIXES } from '../../rdf/prefixes.js';
-import { formatDate } from '../../i18n/format.js';
-
-/**
- * GET /app-permissions — render the management page.
- */
-export async function renderAppPermissions(reqCtx) {
-  const authCheck = requireAuth(reqCtx);
-  if (authCheck) return authCheck;
-
-  const { config, env, storage } = reqCtx;
-  const username = config.username;
-
-  const apps = await listAppPermissions(env.APPDATA, username);
-
-  // Load available containers for the update form
-  const containers = await loadTopLevelContainers(storage, config);
-
-  const allContainers = containers.map(c => ({ iri: c.iri, path: c.path }));
-
-  const appsData = apps.map(app => ({
-    clientId: app.clientId,
-    clientName: app.clientName || app.clientId,
-    grantedAt: app.grantedAt ? formatDate(app.grantedAt, reqCtx.lang || 'en-US') : 'Unknown',
-    containers: (app.allowedContainers || []).map(c => {
-      const path = c.replace(config.baseUrl, '');
-      return { iri: c, path };
-    }),
-    hasContainers: (app.allowedContainers || []).length > 0,
-    allContainers,
-  }));
-
-  return renderPage('App Permissions', template, {
-    apps: appsData,
-    hasApps: appsData.length > 0,
-  }, { user: username, nav: 'storage', lang: reqCtx.lang, dir: reqCtx.dir, t: reqCtx.t, storage, baseUrl: config.baseUrl });
-}
+import { revokeAppPermission, grantAppPermission, getAppPermission, ACCESS_MODES } from '../../solid/app-permissions.js';
 
 /**
  * POST /app-permissions — handle update/revoke actions.
@@ -56,7 +15,7 @@ export async function handleAppPermissionsUpdate(reqCtx) {
   if (authCheck) return authCheck;
 
   const { request, config, env } = reqCtx;
-  const username = config.username;
+  const username = reqCtx.user;
   const form = await request.formData();
   const action = form.get('action');
 
@@ -72,39 +31,40 @@ export async function handleAppPermissionsUpdate(reqCtx) {
     if (clientId) {
       const existing = await getAppPermission(env.APPDATA, username, clientId);
       const clientName = existing?.clientName || '';
-      // Collect selected containers
-      const containers = form.getAll('containers');
-      await grantAppPermission(env.APPDATA, username, clientId, clientName, containers);
+      const clientUri = existing?.clientUri || '';
+
+      // Build a map of existing container modes for preservation
+      const existingModes = new Map();
+      for (const entry of (existing?.allowedContainers || [])) {
+        existingModes.set(entry.iri, entry.modes || [...ACCESS_MODES]);
+      }
+
+      // Collect selected containers (settings page uses simple IRI checkboxes)
+      const containerIris = form.getAll('containers');
+
+      // Process manual container path
+      const customContainer = (form.get('custom_container') || '').trim();
+      if (customContainer) {
+        let path = customContainer;
+        if (!path.startsWith('/')) path = '/' + path;
+        if (!path.endsWith('/')) path += '/';
+        if (path.startsWith(`/${username}/`)) {
+          const fullIri = config.baseUrl + path;
+          if (!containerIris.includes(fullIri)) {
+            containerIris.push(fullIri);
+          }
+        }
+      }
+
+      // Preserve existing modes for kept containers, grant all modes for new ones
+      const allowedContainers = containerIris.map(iri => ({
+        iri,
+        modes: existingModes.get(iri) || [...ACCESS_MODES],
+      }));
+
+      await grantAppPermission(env.APPDATA, username, clientId, clientName, clientUri, allowedContainers);
     }
   }
 
   return new Response(null, { status: 302, headers: { 'Location': '/settings' } });
-}
-
-/**
- * Load top-level containers from the user's root container.
- */
-async function loadTopLevelContainers(storage, config) {
-  const rootIri = `${config.baseUrl}/${config.username}/`;
-  const ntData = await storage.get(`doc:${rootIri}:${rootIri}`);
-  if (!ntData) return [];
-
-  const triples = parseNTriples(ntData);
-  const ldpContains = PREFIXES.ldp + 'contains';
-  const containers = [];
-
-  for (const t of triples) {
-    if (unwrapIri(t.predicate) === ldpContains) {
-      const childIri = unwrapIri(t.object);
-      if (childIri.endsWith('/')) {
-        containers.push({
-          iri: childIri,
-          path: childIri.replace(config.baseUrl, ''),
-        });
-      }
-    }
-  }
-
-  containers.sort((a, b) => a.path.localeCompare(b.path));
-  return containers;
 }

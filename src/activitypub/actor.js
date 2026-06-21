@@ -17,6 +17,8 @@
 import { wantsActivityPub, negotiateType, serializeRdf } from '../solid/conneg.js';
 import { solidHeaders, buildWacAllow } from '../solid/headers.js';
 import { parseNTriples } from '../rdf/ntriples.js';
+import { userExists } from '../users.js';
+import { getUserConfig } from '../config.js';
 
 /**
  * Handle GET /{user}/profile/card
@@ -24,9 +26,9 @@ import { parseNTriples } from '../rdf/ntriples.js';
  */
 export async function handleActor(reqCtx) {
   const { request, params, config, env } = reqCtx;
-  const username = params.user || config.username;
+  const username = params.user || config.adminUsername;
 
-  if (username !== config.username) {
+  if (!await userExists(env.APPDATA, username)) {
     return new Response('Not Found', { status: 404 });
   }
 
@@ -35,20 +37,20 @@ export async function handleActor(reqCtx) {
   // Prefer Solid profile if the client accepts Turtle or N-Triples
   const lower = accept.toLowerCase();
   if (lower.includes('text/turtle') || lower.includes('application/n-triples')) {
-    return profileRdf(reqCtx);
+    return profileRdf(reqCtx, username);
   }
 
   if (wantsActivityPub(accept)) {
-    return actorJson(reqCtx);
+    return actorJson(reqCtx, username);
   }
 
   // Default to Solid WebID profile
-  return profileRdf(reqCtx);
+  return profileRdf(reqCtx, username);
 }
 
-async function actorJson(reqCtx) {
+async function actorJson(reqCtx, username) {
   const { config, env } = reqCtx;
-  const username = config.username;
+  const uc = getUserConfig(config, username);
   const publicPem = await env.APPDATA.get(`ap_public_key:${username}`);
 
   const actor = {
@@ -57,7 +59,7 @@ async function actorJson(reqCtx) {
       'https://w3id.org/security/v1',
     ],
     type: 'Person',
-    id: config.actorId,
+    id: uc.actorId,
     inbox: `${config.baseUrl}/${username}/inbox`,
     outbox: `${config.baseUrl}/${username}/outbox`,
     followers: `${config.baseUrl}/${username}/followers`,
@@ -65,9 +67,10 @@ async function actorJson(reqCtx) {
     preferredUsername: username,
     name: username,
     url: `${config.baseUrl}/${username}/profile/card`,
+    alsoKnownAs: [uc.did],
     publicKey: {
-      id: config.keyId,
-      owner: config.actorId,
+      id: uc.keyId,
+      owner: uc.actorId,
       publicKeyPem: publicPem,
     },
     endpoints: {
@@ -83,10 +86,10 @@ async function actorJson(reqCtx) {
   });
 }
 
-async function profileRdf(reqCtx) {
+async function profileRdf(reqCtx, username) {
   const { request, config, storage, user } = reqCtx;
-  const profileIri = `${config.baseUrl}/${config.username}/profile/card`;
-  const webId = config.webId;
+  const uc = getUserConfig(config, username);
+  const profileIri = `${config.baseUrl}/${username}/profile/card`;
 
   // Read all subjects from the profile document index
   const idx = await storage.get(`idx:${profileIri}`);
@@ -101,13 +104,13 @@ async function profileRdf(reqCtx) {
   }
   const accept = request.headers.get('Accept') || 'text/turtle';
   const contentType = negotiateType(accept);
-  const body = serializeRdf(triples, contentType, ['foaf', 'solid', 'ldp', 'space', 'rdf']);
+  const body = serializeRdf(triples, contentType, ['foaf', 'solid', 'ldp', 'space', 'rdf', 'owl']);
 
   const headers = solidHeaders(profileIri, false);
   headers.set('Content-Type', contentType);
   headers.set('Vary', 'Accept, Authorization, Origin');
   // Tell Solid apps whether the profile is writable
-  if (user === config.username) {
+  if (user === username) {
     headers.set('WAC-Allow', buildWacAllow({
       user: ['read', 'write', 'append', 'control'],
       public: ['read'],

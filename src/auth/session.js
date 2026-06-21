@@ -3,6 +3,7 @@
  */
 import { verifyPassword } from './password.js';
 import { renderLoginPage } from '../ui/pages/login.js';
+import { getUser } from '../users.js';
 
 const SESSION_TTL = 86400; // 24 hours
 
@@ -47,27 +48,56 @@ export async function destroySession(kv, token) {
 export async function handleLogin(reqCtx) {
   const { request, env, config } = reqCtx;
   const form = await request.formData();
+  const username = (form.get('username') || '').trim();
   const password = form.get('password') || '';
   const returnTo = form.get('return_to') || '';
 
-  const userRecord = await env.APPDATA.get(`user:${config.username}`);
+  if (!username) {
+    return renderLoginPage({ ...reqCtx, returnTo, error: 'Invalid credentials' });
+  }
+
+  const userRecord = await env.APPDATA.get(`user:${username}`);
   if (!userRecord) {
-    return renderLoginPage({ ...reqCtx, returnTo, error: 'User not configured' });
+    return renderLoginPage({ ...reqCtx, returnTo, error: 'Invalid credentials' });
+  }
+
+  // Check if user is disabled
+  const meta = await getUser(env.APPDATA, username);
+  if (meta && meta.disabled) {
+    return renderLoginPage({ ...reqCtx, returnTo, error: 'Invalid credentials' });
   }
 
   const valid = await verifyPassword(password, userRecord);
   if (!valid) {
-    return renderLoginPage({ ...reqCtx, returnTo, error: 'Invalid password' });
+    return renderLoginPage({ ...reqCtx, returnTo, error: 'Invalid credentials' });
+  }
+
+  const token = await createSession(env.APPDATA, username);
+  const cookieHeader = `session=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${SESSION_TTL}${config.protocol === 'https' ? '; Secure' : ''}`;
+
+  // FedCM popup: close the popup so the browser retries the accounts fetch
+  if (form.get('fedcm') === '1') {
+    return new Response(
+      `<!DOCTYPE html><html><head><title>Logged in</title></head><body><script>IdentityProvider.close();</script></body></html>`,
+      {
+        status: 200,
+        headers: {
+          'Content-Type': 'text/html; charset=utf-8',
+          'Set-Cookie': cookieHeader,
+          'Set-Login': 'logged-in',
+        },
+      },
+    );
   }
 
   // Redirect to return_to if it's a safe same-origin path, otherwise /dashboard
   const location = returnTo && returnTo.startsWith('/') && !returnTo.startsWith('//') ? returnTo : '/dashboard';
-  const token = await createSession(env.APPDATA, config.username);
   return new Response(null, {
     status: 302,
     headers: {
       'Location': location,
-      'Set-Cookie': `session=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${SESSION_TTL}${config.protocol === 'https' ? '; Secure' : ''}`,
+      'Set-Cookie': cookieHeader,
+      'Set-Login': 'logged-in',
     },
   });
 }
@@ -86,6 +116,7 @@ export async function handleLogout(reqCtx) {
     headers: {
       'Location': '/login',
       'Set-Cookie': 'session=; Path=/; HttpOnly; Max-Age=0',
+      'Set-Login': 'logged-out',
     },
   });
 }

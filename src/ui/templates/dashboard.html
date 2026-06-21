@@ -10,14 +10,15 @@
   </table>
 </div>
 
-<!-- <div class="card">
-  <h2>Quick Links</h2>
+<div class="card">
+  <h2>{{t.dash_quick_links}}</h2>
   <div class="flex gap-05 flex-wrap">
-    <a href="/activity" class="btn">Activity Feed</a>
-    <a href="/storage/" class="btn btn-secondary">File Storage</a>
-    <a href="/.well-known/webfinger?resource=acct:{{{webfingerParam}}}" class="btn btn-secondary">WebFinger</a>
+    <a href="/settings" class="btn btn-secondary">{{t.dash_settings}}</a>
+    <a href="/profile" class="btn btn-secondary">{{t.dash_edit_profile}}</a>
+    <a href="/{{username}}/" class="btn btn-secondary">{{t.dash_public_profile}}</a>
+    <a href="/.well-known/webfinger?resource=acct:{{{webfingerParam}}}" class="btn btn-secondary">{{t.dash_webfinger}}</a>
   </div>
-</div> -->
+</div>
 
 <div class="stats-grid">
   <div class="card">
@@ -47,8 +48,8 @@
 
 
 <div class="card">
-  <h2>{{{storageLabel}}}</h2>
-  <p class="text-muted mb-075">{{{resourcesLabel}}}</p>
+  <h2>{{t.dash_storage}} - {{{storageUsed}}} {{t.dash_used}}</h2>
+  <p class="text-muted mb-075">{{{totalResourcesLabel}}}</p>
   {{#hasBreakdown}}
   <table>
     <thead><tr><th>{{t.dash_category}}</th><th class="text-right">{{t.dash_size}}</th><th class="text-right">{{t.dash_files}}</th></tr></thead>
@@ -104,3 +105,8 @@
   <script src="/scripts/webauthn-utils.js"></script>
   <script src="/scripts/passkey-register.js"></script>
 </div>
+<script>
+  if (window.IdentityProvider && IdentityProvider.register) {
+    IdentityProvider.register('{{fedcmConfigURL}}').catch(function() {});
+  }
+</script>

@@ -4,7 +4,7 @@
  * This is the single fetch handler that processes every incoming HTTP request.
  * On each request it:
  *
- *   1. Initializes the s20e WASM kernel (once, on cold start)
+ *   1. Initializes the sparq WASM engine (once, on cold start)
  *   2. Creates a CloudflareAdapter wrapping KV (TRIPLESTORE) and R2 (BLOBS)
  *   3. Bootstraps the server on first-ever request (creates user, containers, keys)
  *   4. Extracts the authenticated user from session cookie or OIDC bearer token
@@ -16,28 +16,27 @@
  *   - env        — Cloudflare Worker env bindings (KV, R2, secrets)
  *   - ctx        — Cloudflare execution context (for waitUntil)
  *   - url        — parsed URL object
- *   - config     — server config (username, domain, baseUrl, webId)
+ *   - config     — server config (adminUsername, domain, baseUrl, etc.)
  *   - user       — authenticated username or null
+ *   - userConfig — user-specific config (webId, actorId, keyId) or null
  *   - authMethod — 'session' | 'oidc' | null
  *   - clientId   — OIDC client_id (from JWT) or null
  *   - params     — URL pattern parameters (e.g. { user: 'alice' })
- *   - orchestrator — s20e Orchestrator for SPARQL/WAC operations
  *   - storage    — CloudflareAdapter for direct KV/R2 access
  */
-import { Orchestrator } from '@s20e/host-core';
-import { CloudflareAdapter } from '@s20e/adapters/cloudflare';
-import { initSync, Kernel } from '@s20e/kernel';
-import wasmModule from '@s20e/kernel/_wasm/s20e-kernel_bg.wasm';
+import { CloudflareAdapter } from './storage/cloudflare-adapter.js';
 import { Router } from './router.js';
-import { getConfig } from './config.js';
+import { getConfig, getUserConfig } from './config.js';
 import { ensureBootstrapped } from './bootstrap.js';
 import { extractUser } from './auth/middleware.js';
+import { userExists } from './users.js';
 import { handleLogin, handleLogout } from './auth/session.js';
 import { handleWebAuthnRegisterBegin, handleWebAuthnRegisterComplete, handleWebAuthnLoginBegin, handleWebAuthnLoginComplete, handleWebAuthnRename, handleWebAuthnDelete } from './auth/webauthn.js';
 import { handleWebFinger } from './activitypub/webfinger.js';
+import { handleUserDidDocument, handleServerDidDocument } from './did/document.js';
 import { handleActor } from './activitypub/actor.js';
 import { handleInbox } from './activitypub/inbox.js';
-import { handleOutbox, handleCompose, handleFollow, handleUnfollow, handleAcceptFollowRequest, handleRejectFollowRequest } from './activitypub/outbox.js';
+import { handleOutbox, handleOutboxPost, handleCompose, handleFollow, handleUnfollow, handleAcceptFollowRequest, handleRejectFollowRequest } from './activitypub/outbox.js';
 import { handleCollections } from './activitypub/collections.js';
 import { handleLDP } from './solid/ldp.js';
 import { applyCors } from './solid/cors.js';
@@ -47,15 +46,21 @@ import { renderActivityPage, renderRemoteFeed, handleMarkRead, handleMarkAllRead
 import { renderStoragePage, handleStorageAction } from './ui/pages/storage.js';
 import { renderAclEditor, handleAclUpdate } from './ui/pages/acl-editor.js';  // ACP editor (file retains old name for git history)
 import { renderProfileEditor, handleProfileUpdate, handleProfileIndexReset, handleDiscoverNs, handlePreviewLayout, handleListComponents, handleSaveComponent, handleImportComponent } from './ui/pages/profile-editor.js';
-import { renderAppPermissions, handleAppPermissionsUpdate } from './ui/pages/app-permissions.js';
+import { handleAppPermissionsUpdate } from './ui/pages/app-permissions.js';
 import { renderSettings, handleSettingsUpdate } from './ui/pages/settings.js';
+import { handleExport, handleCleanup } from './ui/pages/export.js';
 import { handleDiscovery, handleJwks, handleRegister, handleAuthorize, handleToken, handleUserInfo, verifyAccessToken } from './oidc.js';
+import { renderSignupPage, handleSignup, renderFedCMSignupPage, handleFedCMSignup } from './auth/registration.js';
+import { handleWebIdentity, handleFedCMConfig, handleFedCMAccounts, handleFedCMAssertion, handleFedCMClientMetadata, handleFedCMDisconnect, handleFedCMVerify, handleFedCMExternalVerify } from './fedcm.js';
+import { renderPage } from './ui/shell.js';
+import { resolveLanguage } from './i18n/index.js';
+import landingTemplate from './ui/templates/landing.html';
+import { renderAdminDashboard } from './admin/dashboard.js';
+import { renderAdminUsers, handleAdminUserAction } from './admin/users.js';
+import { renderAdminFedCMIdps, handleAdminFedCMIdpAction } from './admin/fedcm-idps.js';
 import { checkRateLimit, rateLimitResponse } from './security/rate-limit.js';
 import { checkContentLength, getSizeLimit } from './security/size-limit.js';
-import { resolveLanguage, getTranslations, RTL_LANGUAGES } from './i18n/index.js';
 
-/** Singleton WASM kernel instance — initialized on first request. */
-let kernel = null;
 
 /**
  * Build the application route table.
@@ -70,17 +75,35 @@ function buildRouter() {
 
   // OIDC endpoints
   router.get('/.well-known/openid-configuration', handleDiscovery);
+  router.get('/.well-known/oauth-authorization-server', handleDiscovery);
   router.get('/jwks', handleJwks);
   router.add('*', '/authorize', handleAuthorize);
   router.post('/token', handleToken);
   router.get('/userinfo', handleUserInfo);
   router.post('/register', handleRegister);
 
+  // FedCM endpoints
+  router.get('/.well-known/web-identity', handleWebIdentity);
+  router.get('/fedcm/config.json', handleFedCMConfig);
+  router.get('/fedcm/accounts', handleFedCMAccounts);
+  router.post('/fedcm/assertion', handleFedCMAssertion);
+  router.get('/fedcm/client-metadata', handleFedCMClientMetadata);
+  router.post('/fedcm/disconnect', handleFedCMDisconnect);
+  router.post('/fedcm/verify', handleFedCMVerify);
+  router.post('/fedcm/external-verify', handleFedCMExternalVerify);
+
   // Public routes
   router.get('/.well-known/webfinger', handleWebFinger);
+  router.get('/.well-known/did.json', handleServerDidDocument);
   router.get('/login', renderLoginPage);
   router.post('/login', handleLogin);
   router.post('/logout', handleLogout);
+
+  // Registration
+  router.get('/signup', renderSignupPage);
+  router.post('/signup', handleSignup);
+  router.get('/signup/fedcm', renderFedCMSignupPage);
+  router.post('/signup/fedcm', handleFedCMSignup);
 
   // WebAuthn
   router.post('/webauthn/register/begin', handleWebAuthnRegisterBegin);
@@ -89,6 +112,13 @@ function buildRouter() {
   router.post('/webauthn/login/complete', handleWebAuthnLoginComplete);
   router.post('/webauthn/rename', handleWebAuthnRename);
   router.post('/webauthn/delete', handleWebAuthnDelete);
+
+  // Admin panel
+  router.get('/admin', renderAdminDashboard);
+  router.get('/admin/users', renderAdminUsers);
+  router.post('/admin/users', handleAdminUserAction);
+  router.get('/admin/fedcm-idps', renderAdminFedCMIdps);
+  router.post('/admin/fedcm-idps', handleAdminFedCMIdpAction);
 
   // Authenticated UI routes
   router.get('/dashboard', renderDashboard);
@@ -115,14 +145,14 @@ function buildRouter() {
   router.post('/profile/components', handleSaveComponent);
   router.post('/profile/import-component', handleImportComponent);
 
-  // Settings (absorbs app permissions)
+  // Settings page
   router.get('/settings', renderSettings);
   router.post('/settings', handleSettingsUpdate);
+  router.get('/settings/export', handleExport);
+  router.post('/settings/cleanup', handleCleanup);
 
-  // App permissions — redirect GET to /settings, keep POST for existing forms
-  router.get('/app-permissions', (ctx) => {
-    return new Response(null, { status: 302, headers: { 'Location': '/settings' } });
-  });
+  // App permissions management (POST still handled here, GET redirects to /settings)
+  router.get('/app-permissions', () => new Response(null, { status: 302, headers: { 'Location': '/settings' } }));
   router.post('/app-permissions', handleAppPermissionsUpdate);
 
   // Legacy /acl/ redirect
@@ -139,8 +169,10 @@ function buildRouter() {
   router.post('/inbox', handleInbox);
   router.post('/:user/inbox', handleInbox);
   router.get('/:user/outbox', handleOutbox);
+  router.post('/:user/outbox', handleOutboxPost);
   router.get('/:user/followers', handleCollections);
   router.get('/:user/following', handleCollections);
+  router.get('/:user/did.json', handleUserDidDocument);
 
   // LDP catch-all
   router.add('*', '/:user/**', handleLDP);
@@ -159,24 +191,34 @@ function getRateLimitCategory(method, pathname, handler) {
   if (method === 'POST' && (pathname === '/login' || pathname === '/authorize')) return 'login';
   if (method === 'POST' && pathname.startsWith('/webauthn/login/')) return 'webauthn';
   if (method === 'POST' && pathname === '/token') return 'token';
+  if (method === 'POST' && pathname === '/fedcm/assertion') return 'token';
+  if (method === 'POST' && pathname === '/fedcm/verify') return 'login';
+  if (method === 'POST' && pathname === '/fedcm/external-verify') return 'login';
   if (method === 'POST' && pathname === '/register') return 'register';
+  if (method === 'POST' && pathname === '/signup') return 'register';
+  if (method === 'POST' && pathname === '/signup/fedcm') return 'register';
   if (method === 'POST' && (pathname === '/inbox' || pathname.match(/^\/[^/]+\/inbox$/))) return 'inbox';
   // LDP write operations
   if (handler === handleLDP && ['PUT', 'POST', 'PATCH', 'DELETE'].includes(method)) return 'write';
   return null;
 }
 
+/**
+ * Extract username from a webId URL that matches our server's pattern.
+ * Returns the username or null if the webId doesn't match.
+ */
+function extractUsernameFromWebId(webId, baseUrl) {
+  if (!webId || !webId.startsWith(baseUrl + '/')) return null;
+  const rest = webId.slice(baseUrl.length + 1); // "username/profile/card#me"
+  const slash = rest.indexOf('/');
+  if (slash <= 0) return null;
+  return rest.slice(0, slash);
+}
+
 export default {
   async fetch(request, env, ctx) {
    try {
-    // Init WASM kernel once
-    if (!kernel) {
-      initSync(wasmModule);
-      kernel = new Kernel();
-    }
-
     const storage = new CloudflareAdapter(env.TRIPLESTORE, env.BLOBS);
-    const orchestrator = new Orchestrator(kernel, storage);
     const config = getConfig(env, request);
     const url = new URL(request.url);
 
@@ -190,22 +232,54 @@ export default {
 
     if (!user) {
       const tokenResult = await verifyAccessToken(request, env, config);
-      if (tokenResult && tokenResult.webId === config.webId) {
-        user = config.username;
-        authMethod = 'oidc';
-        clientId = tokenResult.clientId;
+      if (tokenResult) {
+        // Extract username from the token's webId
+        const tokenUsername = extractUsernameFromWebId(tokenResult.webId, config.baseUrl);
+        if (tokenUsername && await userExists(env.APPDATA, tokenUsername)) {
+          user = tokenUsername;
+          authMethod = 'oidc';
+          clientId = tokenResult.clientId;
+        }
       }
     }
+
+    // Build user-specific config if authenticated
+    const userConfig = user ? getUserConfig(config, user) : null;
+
+    // Load user preferences and resolve language
+    let userPrefs = null;
+    if (user) {
+      const prefsRaw = await env.APPDATA.get(`user_prefs:${user}`);
+      userPrefs = prefsRaw ? JSON.parse(prefsRaw) : null;
+    }
+    const lang = resolveLanguage(request, userPrefs);
 
     // Handle CORS preflight
     if (request.method === 'OPTIONS') {
       return applyCors(new Response(null, { status: 204 }), request);
     }
 
-    // Root redirect
+    // Root: landing page (unauthenticated) or redirect to dashboard (authenticated)
     if (url.pathname === '/') {
-      const dest = user ? '/dashboard' : '/login';
-      return applyCors(new Response(null, { status: 302, headers: { 'Location': dest } }), request);
+      if (user) {
+        return applyCors(new Response(null, { status: 302, headers: { 'Location': '/dashboard' } }), request);
+      }
+      const externalIdps = JSON.parse(await env.APPDATA.get('fedcm_external_idps') || '[]');
+      const landing = await renderPage('Welcome', landingTemplate, {
+        siteName: config.domain,
+        registrationOpen: config.registrationMode !== 'closed',
+        externalIdps,
+        hasExternalIdps: externalIdps.length > 0,
+      }, { lang });
+      if (externalIdps.length > 0) {
+        const origins = [...new Set(externalIdps.map(p => new URL(p.configURL).origin))];
+        const csp = landing.headers.get('Content-Security-Policy');
+        landing.headers.set('Content-Security-Policy', csp.replace(
+          /connect-src\s+'self'([^;]*)/,
+          `connect-src 'self'$1 ${origins.join(' ')}`,
+        ));
+      }
+      return applyCors(landing, request);
     }
 
     // Route dispatch
@@ -235,16 +309,6 @@ export default {
 
     console.log(`[route] ${request.method} ${url.pathname} → handler=${match.handler?.name || 'unknown'} params=${JSON.stringify(match.params)} user=${user || 'anon'} auth=${authMethod || 'none'}`);
 
-    // Load user preferences for i18n (language, date format, etc.)
-    let userPrefs = null;
-    if (user) {
-      const prefsRaw = await env.APPDATA.get(`user_prefs:${user}`);
-      userPrefs = prefsRaw ? JSON.parse(prefsRaw) : {};
-    }
-    const lang = resolveLanguage(request, config.language, userPrefs);
-    const dir = RTL_LANGUAGES.has(lang) ? 'rtl' : 'ltr';
-    const t = getTranslations(lang);
-
     // Build the request context object passed to all route handlers.
     // This is the single "dependency injection" point — handlers never
     // access globals, they receive everything they need through reqCtx.
@@ -255,14 +319,12 @@ export default {
       url,
       config,
       user,
+      userConfig,
       authMethod,
       clientId,
       params: match.params,
-      orchestrator,
       storage,
       lang,
-      dir,
-      t,
       userPrefs,
     };
 

@@ -5,7 +5,7 @@
     {{t.acl_resource}} <span class="mono">{{resourceIri}}</span>
   </div>
   {{#isDir}}
-  <div class="text-muted text-sm">{{t.acl_container_applies}}</div>
+  <div class="text-muted text-sm">{{t.acl_container_desc}}</div>
   {{/isDir}}
 </div>
 
@@ -30,7 +30,7 @@
     <div class="info-box">
       {{t.acl_effective}} <strong>{{effectiveLabel}}</strong>
       {{#effectiveSource}}
-      <span class="text-muted"> — {{t.acl_inherited_from}} <span class="mono">{{effectiveSource}}</span></span>
+      <span class="text-muted"> &mdash; {{t.acl_inherited_from}} <span class="mono">{{effectiveSource}}</span></span>
       {{/effectiveSource}}
     </div>
     {{/isInheritMode}}
@@ -45,9 +45,9 @@
     <div id="inherit-option" class="form-group{{^showInheritCheckbox}} hidden{{/showInheritCheckbox}}">
       <label>
         <input type="checkbox" name="inherit" value="1" {{{inheritChecked}}}>
-        {{t.acl_allow_inherit}}
+        {{t.acl_inherit_children}}
       </label>
-      <div class="text-muted text-sm mt-025">{{t.acl_inherit_note}}</div>
+      <div class="text-muted text-sm mt-025">{{t.acl_inherit_desc}}</div>
     </div>
 
     <div class="flex gap-05">
@@ -116,7 +116,7 @@
     <input type="hidden" name="action" value="save_quota">
     <div class="form-group mb-05">
       <label for="quota_limit">{{t.acl_limit_label}}</label>
-      <input type="text" id="quota_limit" name="quota_limit" value="{{quotaLimitValue}}" placeholder="No limit" class="input-short">
+      <input type="text" id="quota_limit" name="quota_limit" value="{{quotaLimitValue}}" placeholder="{{t.acl_no_limit}}" class="input-short">
     </div>
     <button type="submit" class="btn">{{t.acl_save_quota}}</button>
   </form>
@@ -124,7 +124,7 @@
 {{/isDir}}
 
 <div class="card">
-  <h2>{{t.acl_acp_details}}</h2>
+  <h2>{{t.acl_details}}</h2>
   <details>
     <summary class="text-muted cursor-pointer text-sm">{{t.acl_view_raw}}</summary>
     <pre class="mono code-block mt-05">{{turtlePolicy}}</pre>

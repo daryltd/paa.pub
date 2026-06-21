@@ -1,5 +1,5 @@
 /**
- * Solid-OIDC provider for single-user server.
+ * Solid-OIDC provider for multi-user server.
  *
  * Implements the OpenID Connect Authorization Code flow with PKCE,
  * as required by the Solid-OIDC specification. This allows Solid apps
@@ -33,14 +33,18 @@
  */
 import { verifyPassword } from './auth/password.js';
 import { importPrivateKey, rsaSign } from './crypto/rsa.js';
+import { pemToJwk } from './crypto/keys.js';
 import { sha256 } from './crypto/digest.js';
 import { createSession } from './auth/session.js';
-import { htmlPage, htmlResponse, escapeHtml } from './ui/shell.js';
-import { getTranslations, resolveLanguage, RTL_LANGUAGES } from './i18n/index.js';
+import { renderPage, htmlPage, htmlResponse, escapeHtml } from './ui/shell.js';
+import { getTranslations } from './i18n/index.js';
+import authorizeTemplate from './ui/templates/authorize.html';
 import { bufferToBase64url } from './utils.js';
 import { grantAppPermission, hasAppPermissions } from './solid/app-permissions.js';
 import { parseNTriples, unwrapIri } from './rdf/ntriples.js';
 import { PREFIXES } from './rdf/prefixes.js';
+import { getUserConfig } from './config.js';
+import { getUser } from './users.js';
 
 const CODE_TTL = 120; // 2 minutes
 const ACCESS_TTL = 3600; // 1 hour
@@ -76,7 +80,7 @@ export async function handleDiscovery(reqCtx) {
 
 export async function handleJwks(reqCtx) {
   const { config, env } = reqCtx;
-  const publicPem = await env.APPDATA.get(`ap_public_key:${config.username}`);
+  const publicPem = await env.APPDATA.get('oidc_public_key');
   const jwk = await pemToJwk(publicPem);
   jwk.use = 'sig';
   jwk.alg = 'RS256';
@@ -112,9 +116,6 @@ export async function handleRegister(reqCtx) {
 
 export async function handleAuthorize(reqCtx) {
   const { request, url, config, user } = reqCtx;
-  const t = reqCtx.t || {};
-  const lang = reqCtx.lang || 'en-US';
-  const dir = reqCtx.dir || 'ltr';
 
   if (request.method === 'GET') {
     // Show consent page
@@ -128,75 +129,54 @@ export async function handleAuthorize(reqCtx) {
     const nonce = url.searchParams.get('nonce') || '';
     const prompt = url.searchParams.get('prompt') || '';
 
-    // Check if this client has been previously approved (remembered)
-    const isRemembered = user && await isClientRemembered(reqCtx.env.APPDATA, config.username, clientId);
-
-    // Auto-approve only if the app has stored permissions (went through new consent flow).
-    // If remembered but no permissions, fall through to show consent with container selection.
-    const hasPerms = isRemembered && await hasAppPermissions(reqCtx.env.APPDATA, config.username, clientId);
-    if (user && prompt !== 'login' && prompt !== 'consent' && hasPerms) {
-      return issueCode(reqCtx, {
-        clientId, redirectUri, scope, state, codeChallenge, codeChallengeMethod, nonce,
+    // If not logged in, redirect to login with a return URL back to authorize
+    if (!user) {
+      const returnUrl = url.pathname + url.search;
+      return new Response(null, {
+        status: 302,
+        headers: { 'Location': `/login?return_to=${encodeURIComponent(returnUrl)}` },
       });
     }
 
-    // Fetch client metadata to display app name
-    const clientName = await fetchClientName(clientId);
+    // Check if this client has been previously approved (remembered)
+    const isRemembered = await isClientRemembered(reqCtx.env.APPDATA, user, clientId);
 
-    // Load top-level containers for permission checkboxes
-    const containers = await loadTopLevelContainers(reqCtx.storage, config);
-    const containerCheckboxes = containers.map(c =>
-      `<label class="container-label">
-        <input type="checkbox" name="allowed_containers" value="${escapeHtml(c.iri)}">
-        <span class="mono">${escapeHtml(c.path)}</span>
-      </label>`
-    ).join('\n');
+    // Auto-approve only if the app has stored permissions (went through new consent flow).
+    const hasPerms = isRemembered && await hasAppPermissions(reqCtx.env.APPDATA, user, clientId);
+    if (prompt !== 'login' && prompt !== 'consent' && hasPerms) {
+      return issueCode(reqCtx, {
+        clientId, redirectUri, scope, state, codeChallenge, codeChallengeMethod, nonce,
+      }, user);
+    }
 
-    const body = `
-      <div class="card login-card-wide">
-        <h1>${escapeHtml(t.auth_title || 'Authorize')}</h1>
-        ${clientName ? `<p class="client-name">${escapeHtml(clientName)}</p>` : ''}
-        <p class="mono text-muted mb-1 text-sm break-all">${escapeHtml(clientId)}</p>
-        <p class="text-muted mb-1">
-          ${escapeHtml(t.auth_app_wants_access || 'This application wants to access your Solid pod.')}
-        </p>
-        <form method="POST" action="/authorize">
-          <input type="hidden" name="client_id" value="${escapeHtml(clientId)}">
-          <input type="hidden" name="redirect_uri" value="${escapeHtml(redirectUri)}">
-          <input type="hidden" name="scope" value="${escapeHtml(scope)}">
-          <input type="hidden" name="state" value="${escapeHtml(state)}">
-          <input type="hidden" name="code_challenge" value="${escapeHtml(codeChallenge)}">
-          <input type="hidden" name="code_challenge_method" value="${escapeHtml(codeChallengeMethod)}">
-          <input type="hidden" name="response_type" value="${escapeHtml(responseType)}">
-          <input type="hidden" name="nonce" value="${escapeHtml(nonce)}">
-          ${!user ? `
-            <div class="form-group">
-              <label for="password">${escapeHtml(t.auth_password || 'Password')}</label>
-              <input type="password" id="password" name="password" required autofocus>
-            </div>
-          ` : ''}
-          ${containers.length > 0 ? `
-            <div class="form-group mt-075">
-              <label class="font-medium text-md mb-05">${escapeHtml(t.auth_write_access || 'Allow write access to:')}</label>
-              <div class="checkbox-panel">
-                ${containerCheckboxes}
-              </div>
-            </div>
-          ` : ''}
-          <div class="form-group mt-075">
-            <label class="container-label">
-              <input type="checkbox" name="remember" value="1">
-              ${escapeHtml(t.auth_remember || 'Remember this app (skip consent next time)')}
-            </label>
-          </div>
-          <div class="flex gap-05">
-            <button type="submit" name="approve" value="yes" class="btn">${escapeHtml(t.auth_approve || 'Approve')}</button>
-            <button type="submit" name="approve" value="no" class="btn btn-secondary">${escapeHtml(t.auth_deny || 'Deny')}</button>
-          </div>
-        </form>
-      </div>`;
+    // Fetch client metadata and containers in parallel
+    const isInternalClient = clientId.startsWith(config.baseUrl + '/clients/');
+    const [meta, containers] = await Promise.all([
+      isInternalClient
+        ? { displayName: clientId, clientUri: null, displayOrigin: null }
+        : fetchClientMetadata(clientId),
+      loadTopLevelContainers(reqCtx.storage, config, user),
+    ]);
+    containers.forEach((c, i) => { c.idx = i; });
 
-    return htmlResponse(await htmlPage('Authorize', body, { lang, dir }));
+    return renderPage('Authorize', authorizeTemplate, {
+      displayName: meta.displayName,
+      clientUri: meta.clientUri,
+      displayOrigin: meta.displayOrigin || meta.clientUri,
+      isInternalClient,
+      clientId,
+      redirectUri,
+      scope,
+      state,
+      codeChallenge,
+      codeChallengeMethod,
+      responseType,
+      nonce,
+      isLoggedIn: true,
+      hasContainers: containers.length > 0,
+      containers,
+      userPlaceholder: user,
+    }, { lang: reqCtx.lang });
   }
 
   // POST — process login + approval
@@ -215,17 +195,85 @@ export async function handleAuthorize(reqCtx) {
     return Response.redirect(`${redirectUri}${sep}error=access_denied&state=${encodeURIComponent(state)}`, 302);
   }
 
+  // Determine authenticated user
+  let authUser = user;
+  let sessionToken = null;
+  if (!authUser) {
+    const submittedUsername = form.get('username') || '';
+    const password = form.get('password') || '';
+    const userRecord = await reqCtx.env.APPDATA.get(`user:${submittedUsername}`);
+    if (!userRecord || !await verifyPassword(password, userRecord)) {
+      const t = getTranslations(reqCtx.lang);
+      const body = `<div class="card login-card-wide">
+          <div class="error">${escapeHtml(t.auth_invalid_credentials)}</div>
+          <a href="${escapeHtml(reqCtx.url.href)}" class="btn">${escapeHtml(t.auth_try_again)}</a>
+        </div>`;
+      return htmlResponse(await htmlPage('Authorize', body, { lang: reqCtx.lang }));
+    }
+    const userMeta = await getUser(reqCtx.env.APPDATA, submittedUsername);
+    if (userMeta?.disabled) {
+      const t = getTranslations(reqCtx.lang);
+      const body = `<div class="card login-card-wide">
+          <div class="error">${escapeHtml(t.auth_account_disabled)}</div>
+        </div>`;
+      return htmlResponse(await htmlPage('Authorize', body, { lang: reqCtx.lang }));
+    }
+    authUser = submittedUsername;
+    sessionToken = await createSession(reqCtx.env.APPDATA, submittedUsername);
+  }
+
   const clientId = form.get('client_id') || '';
   const remember = form.get('remember') === '1';
 
-  // Save container permissions
-  const allowedContainers = form.getAll('allowed_containers');
-  const clientName = await fetchClientName(clientId);
-  await grantAppPermission(reqCtx.env.APPDATA, config.username, clientId, clientName || '', allowedContainers);
+  // Parse container permissions from allowed_access values (format: "iri|Mode")
+  const accessEntries = form.getAll('allowed_access');
+  const permMode = form.get('perm_mode') || 'simple';
+  const containerMap = new Map();
+  for (const entry of accessEntries) {
+    const sep = entry.lastIndexOf('|');
+    if (sep < 0) continue;
+    const iri = entry.slice(0, sep);
+    const mode = entry.slice(sep + 1);
+    if (!containerMap.has(iri)) containerMap.set(iri, new Set());
+    containerMap.get(iri).add(mode);
+  }
+  // In simple mode, "Write" expands to all write sub-modes
+  if (permMode === 'simple') {
+    for (const [iri, modes] of containerMap) {
+      if (modes.has('Write')) {
+        modes.add('Append');
+        modes.add('Create');
+        modes.add('Update');
+        modes.add('Delete');
+      }
+    }
+  }
+
+  // Process manual container path (grants Read + Write in simple mode)
+  const customContainer = (form.get('custom_container') || '').trim();
+  if (customContainer) {
+    let path = customContainer;
+    if (!path.startsWith('/')) path = '/' + path;
+    if (!path.endsWith('/')) path += '/';
+    if (path.startsWith(`/${authUser}/`)) {
+      const fullIri = config.baseUrl + path;
+      if (!containerMap.has(fullIri)) {
+        containerMap.set(fullIri, new Set(['Read', 'Write', 'Append', 'Create', 'Update', 'Delete']));
+      }
+    }
+  }
+
+  const allowedContainers = [...containerMap.entries()].map(([iri, modes]) => ({
+    iri,
+    modes: [...modes],
+  }));
+
+  const meta = await fetchClientMetadata(clientId);
+  await grantAppPermission(reqCtx.env.APPDATA, authUser, clientId, meta.clientName || '', meta.clientUri || '', allowedContainers);
 
   // Save remembered client if requested
   if (remember && clientId) {
-    await rememberClient(reqCtx.env.APPDATA, config.username, clientId);
+    await rememberClient(reqCtx.env.APPDATA, authUser, clientId);
   }
 
   const codeParams = {
@@ -238,27 +286,14 @@ export async function handleAuthorize(reqCtx) {
     nonce: form.get('nonce') || '',
   };
 
-  // Verify password if not already logged in
-  if (!user) {
-    const password = form.get('password') || '';
-    const userRecord = await reqCtx.env.APPDATA.get(`user:${config.username}`);
-    if (!userRecord || !await verifyPassword(password, userRecord)) {
-      return htmlResponse(await htmlPage('Authorize', `
-        <div class="card login-card-wide">
-          <div class="error">${escapeHtml(t.auth_invalid_password || 'Invalid password')}</div>
-          <a href="${escapeHtml(reqCtx.url.href)}" class="btn">${escapeHtml(t.auth_try_again || 'Try Again')}</a>
-        </div>`, { lang, dir }));
-    }
-    // Set session cookie so future authorizations auto-approve
-    const token = await createSession(reqCtx.env.APPDATA, config.username);
-    const codeResponse = await issueCode(reqCtx, codeParams);
+  const codeResponse = await issueCode(reqCtx, codeParams, authUser);
+  if (sessionToken) {
     // Add session cookie to the redirect response
     const headers = new Headers(codeResponse.headers);
-    headers.append('Set-Cookie', `session=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=86400${config.protocol === 'https' ? '; Secure' : ''}`);
+    headers.append('Set-Cookie', `session=${sessionToken}; Path=/; HttpOnly; SameSite=Lax; Max-Age=86400${config.protocol === 'https' ? '; Secure' : ''}`);
     return new Response(codeResponse.body, { status: codeResponse.status, headers });
   }
-
-  return issueCode(reqCtx, codeParams);
+  return codeResponse;
 }
 
 /**
@@ -267,12 +302,12 @@ export async function handleAuthorize(reqCtx) {
  * (client_id, redirect_uri, PKCE challenge, scope, nonce).
  * The client exchanges this code at /token within CODE_TTL seconds.
  */
-async function issueCode(reqCtx, params) {
+async function issueCode(reqCtx, params, username) {
   const { env, config } = reqCtx;
   const code = crypto.randomUUID();
 
   await env.APPDATA.put(`oidc_code:${code}`, JSON.stringify({
-    username: config.username,
+    username,
     clientId: params.clientId,
     redirectUri: params.redirectUri,
     scope: params.scope,
@@ -333,7 +368,7 @@ export async function handleToken(reqCtx) {
   }
 
   const resolvedClientId = grant.clientId || params.client_id;
-  return issueTokens(reqCtx, resolvedClientId, grant.scope, grant.nonce);
+  return issueTokens(reqCtx, resolvedClientId, grant.scope, grant.nonce, grant.username);
 }
 
 async function handleRefreshToken(reqCtx, params) {
@@ -350,7 +385,7 @@ async function handleRefreshToken(reqCtx, params) {
     return jsonResponse({ error: 'invalid_grant', error_description: 'client_id mismatch' }, 400);
   }
 
-  return issueTokens(reqCtx, stored.clientId, stored.scope, undefined);
+  return issueTokens(reqCtx, stored.clientId, stored.scope, undefined, stored.username);
 }
 
 const REFRESH_TTL = 30 * 24 * 3600; // 30 days
@@ -365,8 +400,9 @@ const REFRESH_TTL = 30 * 24 * 3600; // 30 days
  *
  * @returns {{ access_token: string, id_token: string, token_type: string, expires_in: number }}
  */
-async function issueTokens(reqCtx, clientId, scope, nonce) {
+async function issueTokens(reqCtx, clientId, scope, nonce, username) {
   const { request, env, config } = reqCtx;
+  const uc = getUserConfig(config, username);
 
   // Extract DPoP key thumbprint if DPoP header present
   let dpopJkt = null;
@@ -375,29 +411,29 @@ async function issueTokens(reqCtx, clientId, scope, nonce) {
     dpopJkt = await extractDpopJkt(dpopHeader);
   }
 
-  // Build tokens
-  const privatePem = await env.APPDATA.get(`ap_private_key:${config.username}`);
+  // Build tokens — sign with server-wide OIDC key
+  const privatePem = await env.APPDATA.get('oidc_private_key');
   const now = Math.floor(Date.now() / 1000);
 
   const idToken = await signJwt(privatePem, {
     iss: config.baseUrl,
-    sub: config.webId,
+    sub: uc.webId,
     aud: clientId,
     exp: now + ACCESS_TTL,
     iat: now,
     nonce: nonce || undefined,
-    webid: config.webId,
+    webid: uc.webId,
     azp: clientId,
   });
 
   const accessPayload = {
     iss: config.baseUrl,
-    sub: config.webId,
+    sub: uc.webId,
     aud: 'solid',
     exp: now + ACCESS_TTL,
     iat: now,
     client_id: clientId,
-    webid: config.webId,
+    webid: uc.webId,
     scope,
   };
   if (dpopJkt) {
@@ -411,6 +447,7 @@ async function issueTokens(reqCtx, clientId, scope, nonce) {
   if (scope && scope.includes('offline_access')) {
     refreshToken = crypto.randomUUID();
     await env.APPDATA.put(`oidc_refresh:${refreshToken}`, JSON.stringify({
+      username,
       clientId,
       scope,
       dpopJkt,
@@ -430,13 +467,14 @@ async function issueTokens(reqCtx, clientId, scope, nonce) {
 // ── UserInfo ─────────────────────────────────────────
 
 export async function handleUserInfo(reqCtx) {
-  const { config } = reqCtx;
-  // For a single-user server, always return the owner's info.
-  // In production, this should verify the access token first.
+  const { request, env, config } = reqCtx;
+  const tokenResult = await verifyAccessToken(request, env, config);
+  if (!tokenResult) {
+    return new Response('Unauthorized', { status: 401 });
+  }
   return jsonResponse({
-    sub: config.webId,
-    webid: config.webId,
-    name: config.username,
+    sub: tokenResult.webId,
+    webid: tokenResult.webId,
   });
 }
 
@@ -447,7 +485,7 @@ export async function handleUserInfo(reqCtx) {
  * Constructs header.payload, signs with RSASSA-PKCS1-v1_5, and returns
  * the compact serialization (header.payload.signature).
  */
-async function signJwt(privatePem, payload) {
+export async function signJwt(privatePem, payload) {
   const header = { alg: 'RS256', typ: 'JWT', kid: 'main-key' };
   const headerB64 = bufferToBase64url(new TextEncoder().encode(JSON.stringify(header)));
   const payloadB64 = bufferToBase64url(new TextEncoder().encode(JSON.stringify(payload)));
@@ -504,17 +542,17 @@ export async function verifyAccessToken(request, env, config) {
       return null;
     }
 
-    // For DPoP scheme, verify the DPoP proof's key matches the token binding.
-    // If verification fails, still accept the token since we issued it —
-    // the DPoP binding is a defense against token theft, and on a single-user
-    // server the owner is the only valid token holder.
+    // DPoP proof-of-possession validation (required for DPoP scheme)
     if (scheme === 'DPoP' && payload.cnf?.jkt) {
       const dpopHeader = request.headers.get('DPoP');
-      if (dpopHeader) {
-        const jkt = await extractDpopJkt(dpopHeader);
-        if (jkt && jkt !== payload.cnf.jkt) {
-          console.log(`[auth] DPoP thumbprint mismatch (proof=${jkt} token=${payload.cnf.jkt}) — accepting anyway (single-user)`);
-        }
+      if (!dpopHeader) {
+        console.log(`[auth] rejected: DPoP scheme but no DPoP header`);
+        return null;
+      }
+      const dpopResult = await verifyDpopProof(dpopHeader, request, payload.cnf.jkt);
+      if (!dpopResult.valid) {
+        console.log(`[auth] rejected: DPoP validation failed — ${dpopResult.reason}`);
+        return null;
       }
     }
 
@@ -528,32 +566,78 @@ export async function verifyAccessToken(request, env, config) {
   }
 }
 
-async function extractDpopJkt(dpopJwt) {
+/**
+ * Verify a DPoP proof JWT per RFC 9449:
+ * - Verify the signature using the embedded JWK
+ * - Check htm (HTTP method) and htu (HTTP URI) match the request
+ * - Check iat (issued-at) is recent
+ * - Check jkt (JWK thumbprint) matches the token binding
+ */
+async function verifyDpopProof(dpopJwt, request, expectedJkt) {
   try {
-    const [headerB64] = dpopJwt.split('.');
+    const [headerB64, payloadB64, sigB64] = dpopJwt.split('.');
     const header = JSON.parse(atob(headerB64.replace(/-/g, '+').replace(/_/g, '/')));
+    const dpopPayload = JSON.parse(atob(payloadB64.replace(/-/g, '+').replace(/_/g, '/')));
     const jwk = header.jwk;
-    if (!jwk) return null;
-    // JWK thumbprint (RFC 7638) — SHA-256 of canonical JWK
+    if (!jwk) return { valid: false, reason: 'missing JWK in DPoP header' };
+    if (header.typ !== 'dpop+jwt') return { valid: false, reason: 'typ must be dpop+jwt' };
+
+    // Verify JWK thumbprint matches token binding
     const members = jwk.kty === 'EC'
       ? { crv: jwk.crv, kty: jwk.kty, x: jwk.x, y: jwk.y }
       : { e: jwk.e, kty: jwk.kty, n: jwk.n };
     const thumbprintInput = JSON.stringify(members);
     const hash = await sha256(thumbprintInput);
-    return bufferToBase64url(new Uint8Array(hash));
-  } catch {
-    return null;
-  }
-}
+    const jkt = bufferToBase64url(new Uint8Array(hash));
+    if (jkt !== expectedJkt) {
+      return { valid: false, reason: `thumbprint mismatch (proof=${jkt} token=${expectedJkt})` };
+    }
 
-async function pemToJwk(pem) {
-  const der = pemToDer(pem);
-  const key = await crypto.subtle.importKey(
-    'spki', der,
-    { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' },
-    true, ['verify'],
-  );
-  return crypto.subtle.exportKey('jwk', key);
+    // Verify htm (HTTP method)
+    if (dpopPayload.htm && dpopPayload.htm !== request.method) {
+      return { valid: false, reason: `htm mismatch (proof=${dpopPayload.htm} request=${request.method})` };
+    }
+
+    // Verify htu (HTTP URI) — compare without query/fragment
+    if (dpopPayload.htu) {
+      const proofUrl = new URL(dpopPayload.htu);
+      const requestUrl = new URL(request.url);
+      if (proofUrl.origin + proofUrl.pathname !== requestUrl.origin + requestUrl.pathname) {
+        return { valid: false, reason: `htu mismatch` };
+      }
+    }
+
+    // Verify iat (issued-at) is within 5 minutes
+    if (dpopPayload.iat) {
+      const now = Math.floor(Date.now() / 1000);
+      const skew = 300; // 5 minute tolerance
+      if (dpopPayload.iat > now + skew || dpopPayload.iat < now - skew) {
+        return { valid: false, reason: 'iat outside acceptable window' };
+      }
+    }
+
+    // Verify the DPoP proof signature
+    const algMap = { ES256: { name: 'ECDSA', namedCurve: 'P-256', hash: 'SHA-256' }, RS256: { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' } };
+    const algInfo = algMap[header.alg];
+    if (!algInfo) return { valid: false, reason: `unsupported algorithm: ${header.alg}` };
+
+    const importAlg = header.alg === 'ES256'
+      ? { name: algInfo.name, namedCurve: algInfo.namedCurve }
+      : { name: algInfo.name, hash: algInfo.hash };
+    const verifyAlg = header.alg === 'ES256'
+      ? { name: algInfo.name, hash: algInfo.hash }
+      : { name: algInfo.name };
+
+    const key = await crypto.subtle.importKey('jwk', jwk, importAlg, false, ['verify']);
+    const sigBytes = Uint8Array.from(atob(sigB64.replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0));
+    const data = new TextEncoder().encode(`${headerB64}.${payloadB64}`);
+    const valid = await crypto.subtle.verify(verifyAlg, key, sigBytes, data);
+    if (!valid) return { valid: false, reason: 'signature verification failed' };
+
+    return { valid: true };
+  } catch (e) {
+    return { valid: false, reason: `DPoP parse error: ${e.message}` };
+  }
 }
 
 function isValidRedirectUri(uri) {
@@ -563,14 +647,6 @@ function isValidRedirectUri(uri) {
   } catch {
     return false;
   }
-}
-
-function pemToDer(pem) {
-  const b64 = pem.replace(/-----[A-Z ]+-----/g, '').replace(/\s/g, '');
-  const binary = atob(b64);
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-  return bytes.buffer;
 }
 
 function jsonResponse(data, status = 200) {
@@ -583,24 +659,66 @@ function jsonResponse(data, status = 200) {
 // ── Client consent helpers ──────────────────────────
 
 /**
- * Fetch the client name from the client_id URL (Solid client identifier document).
- * Returns null if the fetch fails or no name is found.
+ * Fetch rich metadata from the client_id URL (Solid client identifier document).
+ * Returns { clientName, clientUri, logoUri, displayName, displayOrigin }.
  */
-async function fetchClientName(clientId) {
-  if (!clientId || !clientId.startsWith('http')) return null;
+async function fetchClientMetadata(clientId) {
+  const empty = { clientName: null, clientUri: null, logoUri: null, displayName: clientId, displayOrigin: null };
+  if (!clientId || !clientId.startsWith('http')) return empty;
+
+  // Derive fallback display values from the clientId URL itself
+  let clientIdHost = null;
+  let clientIdOrigin = null;
+  try {
+    const u = new URL(clientId);
+    clientIdHost = u.hostname;
+    clientIdOrigin = u.origin;
+  } catch {}
+
   // SSRF protection: skip fetching private/reserved URLs
   const { validateExternalUrl } = await import('./security/ssrf.js');
-  if (!validateExternalUrl(clientId)) return null;
+  if (!validateExternalUrl(clientId)) {
+    return { ...empty, displayName: clientIdHost || clientId, displayOrigin: clientIdOrigin };
+  }
+
   try {
     const res = await fetch(clientId, {
       headers: { 'Accept': 'application/ld+json, application/json' },
-      signal: AbortSignal.timeout(5000),
+      signal: AbortSignal.timeout(2000),
     });
-    if (!res.ok) return null;
+    if (!res.ok) {
+      return { ...empty, displayName: clientIdHost || clientId, displayOrigin: clientIdOrigin };
+    }
     const doc = await res.json();
-    return doc.client_name || doc.name || null;
+
+    const clientName = doc.client_name || doc.name || null;
+    const clientUri = doc.client_uri || doc.homepage || null;
+    const logoUri = doc.logo_uri || null;
+    const redirectUris = doc.redirect_uris || [];
+
+    // Derive displayName: clientName → hostname from clientUri → hostname from redirect_uris[0] → hostname from clientId → raw clientId
+    let displayName = clientName;
+    if (!displayName && clientUri) {
+      try { displayName = new URL(clientUri).hostname; } catch {}
+    }
+    if (!displayName && redirectUris.length > 0) {
+      try { displayName = new URL(redirectUris[0]).hostname; } catch {}
+    }
+    if (!displayName) displayName = clientIdHost || clientId;
+
+    // Derive displayOrigin: origin from clientUri → redirect_uris[0] → clientId
+    let displayOrigin = null;
+    if (clientUri) {
+      try { displayOrigin = new URL(clientUri).origin; } catch {}
+    }
+    if (!displayOrigin && redirectUris.length > 0) {
+      try { displayOrigin = new URL(redirectUris[0]).origin; } catch {}
+    }
+    if (!displayOrigin) displayOrigin = clientIdOrigin;
+
+    return { clientName, clientUri, logoUri, displayName, displayOrigin };
   } catch {
-    return null;
+    return { ...empty, displayName: clientIdHost || clientId, displayOrigin: clientIdOrigin };
   }
 }
 
@@ -629,8 +747,8 @@ async function rememberClient(kv, username, clientId) {
 /**
  * Load all containers (recursively) from the user's root container.
  */
-async function loadTopLevelContainers(storage, config) {
-  const rootIri = `${config.baseUrl}/${config.username}/`;
+async function loadTopLevelContainers(storage, config, username) {
+  const rootIri = `${config.baseUrl}/${username}/`;
   const ldpContains = PREFIXES.ldp + 'contains';
   const containers = [];
 
@@ -657,6 +775,6 @@ async function loadTopLevelContainers(storage, config) {
   await collectContainers(rootIri);
   containers.sort((a, b) => a.path.localeCompare(b.path));
   // Include the root container itself as the first option
-  containers.unshift({ iri: rootIri, path: `/${config.username}/` });
+  containers.unshift({ iri: rootIri, path: `/${username}/` });
   return containers;
 }

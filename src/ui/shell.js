@@ -27,20 +27,28 @@
 import Mustache from 'mustache';
 import layoutTemplate from './templates/layout.html';
 import navPartial from './templates/partials/nav.html';
+import { getTranslations, RTL_LANGUAGES } from '../i18n/index.js';
 
 function renderNav(user, active, opts = {}) {
-  const t = opts.t || {};
+  const t = opts.t || getTranslations('en-US');
+  const items = [
+    { href: '/dashboard', label: t.nav_dashboard || 'Dashboard', id: 'dashboard' },
+    { href: '/profile', label: t.nav_profile || 'Profile', id: 'profile' },
+    { href: '/activity', label: t.nav_activity || 'Activity', id: 'activity' },
+    { href: '/storage/', label: t.nav_storage || 'Storage', id: 'storage' },
+    { href: '/settings', label: t.nav_settings || 'Settings', id: 'settings' },
+  ];
+
+  // Add admin nav item if the user is the admin
+  if (opts.config && user === opts.config.adminUsername) {
+    items.push({ href: '/admin', label: t.nav_admin || 'Admin', id: 'admin' });
+  }
+
   return Mustache.render(navPartial, {
     user,
     username: user,
     t,
-    items: [
-      { href: '/dashboard', label: t.nav_dashboard || 'Dashboard', id: 'dashboard' },
-      { href: '/profile', label: t.nav_profile || 'Profile', id: 'profile' },
-      { href: '/activity', label: t.nav_activity || 'Activity', id: 'activity' },
-      { href: '/storage/', label: t.nav_storage || 'Storage', id: 'storage' },
-      { href: '/settings', label: t.nav_settings || 'Settings', id: 'settings' },
-    ].map(i => ({ ...i, activeClass: active === i.id ? 'active' : '' })),
+    items: items.map(i => ({ ...i, activeClass: active === i.id ? 'active' : '' })),
   });
 }
 
@@ -58,10 +66,20 @@ function renderNav(user, active, opts = {}) {
  */
 export async function renderPage(title, bodyTemplate, data, opts = {}) {
   const lang = opts.lang || 'en-US';
-  const dir = opts.dir || 'ltr';
-  const t = opts.t || {};
-  const nav = opts.user ? renderNav(opts.user, opts.nav, opts) : '';
+  const t = getTranslations(lang);
+  const dir = RTL_LANGUAGES.has(lang) ? 'rtl' : 'ltr';
+
   const body = Mustache.render(bodyTemplate, { ...data, t });
+
+  // Fragment mode for SPA navigation
+  if (opts.request && opts.request.headers.get('X-Paa-Nav') === 'fragment') {
+    return new Response(JSON.stringify({ title, body }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json', 'X-Paa-Nav': 'fragment' },
+    });
+  }
+
+  const nav = opts.user ? renderNav(opts.user, opts.nav, { ...opts, t }) : '';
   const customThemeHref = await resolveCustomTheme(opts);
   const html = Mustache.render(layoutTemplate, { title, nav, body, customThemeHref, lang, dir });
   return htmlResponse(html);
@@ -87,8 +105,9 @@ export function renderPartial(template, data) {
  */
 export async function htmlPage(title, body, opts = {}) {
   const lang = opts.lang || 'en-US';
-  const dir = opts.dir || 'ltr';
-  const nav = opts.user ? renderNav(opts.user, opts.nav, opts) : '';
+  const dir = RTL_LANGUAGES.has(lang) ? 'rtl' : 'ltr';
+  const t = getTranslations(lang);
+  const nav = opts.user ? renderNav(opts.user, opts.nav, { ...opts, t }) : '';
   const customThemeHref = await resolveCustomTheme(opts);
   return Mustache.render(layoutTemplate, { title, nav, body, customThemeHref, lang, dir });
 }

@@ -1,12 +1,16 @@
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; line-height: 1.6; color: #1a1a2e; background: #f5f5f7; }
 main { max-width: 800px; margin: 2rem auto; padding: 0 1rem; }
-.paa-nav { display: grid; grid-template-areas: "brand links links links links user user"; align-items: center; gap: 1rem; padding: 0.75rem 1.5rem; background: #1a1a2e; color: #fff; }
+.paa-nav { display: grid; 
+    grid-template-areas: 
+    "brand brand . . links links links links links admin user logout"; 
+    align-items: center; gap: 1rem; padding: 0.75rem 1.5rem; background: #1a1a2e; color: #fff; }
 .paa-nav a { grid-area: links; grid-column: span 1; color: #ccc; text-decoration: none; font-size: 0.9rem; }
 .paa-nav a.active, .paa-nav a:hover { color: #fff; }
+.paa-nav a.nav-admin { grid-area: admin; }
 .paa-nav .brand { grid-area: brand; font-weight: 700; font-size: 1.1rem; color: #fff; margin-inline-end: 1rem; }
-.paa-nav .user { grid-area: user; font-size: 0.85rem; color: #aaa; }
-.paa-nav form { grid-area: user; grid-column: span 1; }
+.paa-nav .user { grid-area: user; grid-column: -2; justify-self: end; font-size: 0.85rem; color: #aaa; }
+.paa-nav form { grid-area: logout; grid-column: -1; justify-self: end; }
 .paa-nav .inline { display: inline; }
 .paa-nav button { background: none; border: 1px solid #555; color: #ccc; padding: 0.25rem 0.75rem; border-radius: 4px; cursor: pointer; font-size: 0.85rem; }
 .paa-nav button:hover { border-color: #fff; color: #fff; }
@@ -34,7 +38,7 @@ a { color: #1a1a2e; }
 dialog { border: none; border-radius: 8px; padding: 1.5rem; max-width: 420px; width: calc(100% - 2rem); box-shadow: 0 8px 30px rgba(0,0,0,0.2); font-family: inherit; color: #1a1a2e; margin: auto; }
 dialog::backdrop { background: rgba(0,0,0,0.4); }
 dialog p { margin-bottom: 1rem; line-height: 1.5; }
-dialog .dialog-actions { display: flex; gap: 0.5rem; justify-content: end; }
+dialog .dialog-actions { display: flex; gap: 0.5rem; justify-content: flex-end; }
 details > summary > h2 { display: inline; }
 
 /* ── Display & Flex ──────────────────────────────────── */
@@ -88,6 +92,14 @@ details > summary > h2 { display: inline; }
 /* ── Login / Authorize card ──────────────────────────── */
 .login-card { max-width: 400px; margin: 4rem auto; }
 .login-card-wide { max-width: 450px; margin: 4rem auto; }
+
+/* ── Landing page ────────────────────────────────────── */
+.landing-header { text-align: center; margin: 3rem 0 2rem; }
+.landing-header h1 { font-size: 1.8rem; margin-bottom: 0.25rem; }
+.landing-cards { display: grid; grid-template-columns: 1fr; gap: 1.5rem; max-width: 800px; margin: 0 auto; }
+.landing-cards .card { margin: 0; }
+.landing-cards .card h2 { font-size: 1.2rem; margin-bottom: 1rem; }
+@media (min-width: 640px) { .landing-cards { grid-template-columns: repeat(2, 1fr); } }
 
 /* ── Stats grid ──────────────────────────────────────── */
 .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; }
@@ -154,6 +166,18 @@ details > summary > h2 { display: inline; }
 /* ── Container label ─────────────────────────────────── */
 .container-label { font-weight: normal; font-size: 0.85rem; display: flex; align-items: center; gap: 0.5rem; }
 
+/* ── Permission rows (authorize screen) ─────────────── */
+.perm-row { padding: 0.5rem 0; border-bottom: 1px solid #eee; }
+.perm-row:last-child { border-bottom: none; }
+.perm-header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.25rem; }
+.perm-radios { display: flex; gap: 0.75rem; }
+.perm-options { display: flex; flex-wrap: wrap; gap: 0.25rem 0.75rem; margin-top: 0.375rem; padding-left: 0.25rem; }
+.perm-advanced { display: flex; flex-wrap: wrap; gap: 0.25rem 0.75rem; }
+.btn-link { background: none; border: none; color: var(--accent, #0055aa); cursor: pointer; padding: 0; text-decoration: underline; font-size: inherit; }
+.flex.justify-between { justify-content: space-between; }
+.flex.align-center { align-items: center; }
+.mb-0 { margin-bottom: 0; }
+
 /* Avatar */
 .avatar { width: 100%; max-width: 96px; border-radius: 50%; }
 
@@ -208,18 +232,38 @@ details > summary > h2 { display: inline; }
 .pb-tag-option { padding: 0.3rem 0.5rem; cursor: pointer; font-size: 0.85rem; border-radius: 3px; font-family: "SF Mono", Monaco, "Cascadia Code", monospace; }
 .pb-tag-option:hover { background: #f0f4ff; }
 
-/* ── RTL overrides ───────────────────────────────────── */
-[dir="rtl"] .mono,
-[dir="rtl"] pre,
-[dir="rtl"] code,
-[dir="rtl"] .code-block,
-[dir="rtl"] .code-block-lg,
-[dir="rtl"] .te-pred-display,
-[dir="rtl"] .pb-tree-tag { unicode-bidi: isolate; direction: ltr; text-align: left; }
-[dir="rtl"] input[type="url"] { direction: ltr; text-align: left; }
+/* ── RTL support ─────────────────────────────────────── */
+[dir="rtl"] .mono, [dir="rtl"] pre, [dir="rtl"] code,
+[dir="rtl"] .code-block, [dir="rtl"] .code-block-lg {
+    unicode-bidi: isolate;
+    direction: ltr;
+    text-align: left;
+}
+[dir="rtl"] .paa-nav {
+    grid-template-areas:
+        "logout user admin links links links links links . brand brand";
+}
+[dir="rtl"] dialog .dialog-actions { justify-content: flex-start; }
 
-@media (max-width: 680px) {
+@media (max-width: 720px) {
     .paa-nav {
-        grid-template-areas: "brand brand brand brand user user" "links links links links links links";
+        grid-template-areas:
+            "brand brand brand brand brand brand user logout"
+            "links links links links links links links admin";
     }
+    [dir="rtl"] .paa-nav {
+        grid-template-areas:
+            "logout user brand brand brand brand brand brand"
+            "admin links links links links links links links";
+    }
+}
+
+@media (max-width: 480px) {
+    .paa-nav {
+        grid-template-areas:
+            "brand brand brand"
+            "admin user logout";
+    }
+    .paa-nav a { grid-area: unset; }
+    .paa-nav .user, .paa-nav form { grid-column: unset; }
 }

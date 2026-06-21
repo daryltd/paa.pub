@@ -3,8 +3,15 @@ if (window.PublicKeyCredential) {
 }
 async function passkeyLogin() {
   try {
-    var beginRes = await fetch('/webauthn/login/begin', { method: 'POST' });
-    if (!beginRes.ok) { await paaAlert('No passkeys registered'); return; }
+    var usernameInput = document.getElementById('username');
+    var username = usernameInput ? usernameInput.value.trim() : '';
+    if (!username) { await paaAlert('Please enter your username first'); return; }
+    var beginRes = await fetch('/webauthn/login/begin', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: username }),
+    });
+    if (!beginRes.ok) { await paaAlert('No passkeys registered for this user'); return; }
     var options = await beginRes.json();
     options.challenge = base64ToBuffer(options.challenge);
     if (options.allowCredentials) {

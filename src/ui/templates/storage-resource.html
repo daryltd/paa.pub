@@ -55,10 +55,17 @@
         data-prompt-default="{{{copyDefault}}}">{{t.stor_copy_btn}}</button>
     </form>
     <a href="/acp/{{{path}}}" class="btn btn-secondary btn-small-text">{{t.stor_access_policy}}</a>
+    {{#hasCustomAcl}}
+    <form method="POST" action="/storage/{{{path}}}" class="inline-form">
+      <input type="hidden" name="action" value="reset_acl">
+      <button type="submit" class="btn btn-secondary btn-small-text"
+        data-confirm="{{t.stor_confirm_reset_acl}}">{{t.stor_reset_acl}}</button>
+    </form>
+    {{/hasCustomAcl}}
     <form method="POST" action="/storage/{{{path}}}" class="inline-form">
       <input type="hidden" name="action" value="delete">
       <button type="submit" class="btn btn-danger btn-small-text"
-        data-confirm="{{t.stor_confirm_delete_resource}}">{{t.btn_delete}}</button>
+        data-confirm="{{t.stor_delete_resource}}">{{t.stor_delete}}</button>
     </form>
   </div>
 </div>
@@ -78,13 +85,13 @@
         <div class="te-pred-cell">
           <span class="te-pred-display mono cursor-pointer">{{predicateShort}}</span>
           <input type="text" class="te-pred-input hidden"
-                 value="{{predicate}}" placeholder="Predicate IRI">
-          <button type="button" class="te-search-btn btn btn-secondary btn-xs hidden">Browse</button>
+                 value="{{predicate}}" placeholder="{{t.prof_predicate}}">
+          <button type="button" class="te-search-btn btn btn-secondary btn-xs hidden">{{t.stor_browse}}</button>
         </div>
         <div class="te-obj-cell">
-          <input type="text" class="te-obj-input" value="{{object}}" placeholder="Object value">
+          <input type="text" class="te-obj-input" value="{{object}}" placeholder="{{t.prof_object}}">
         </div>
-        <button type="button" class="btn btn-secondary btn-compact te-remove">{{t.stor_remove}}</button>
+        <button type="button" class="btn btn-secondary btn-compact te-remove">{{t.prof_remove}}</button>
       </div>
       {{/metaTriplesEditable}}
       <div class="te-add-area"></div>

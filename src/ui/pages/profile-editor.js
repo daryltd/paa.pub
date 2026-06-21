@@ -26,6 +26,7 @@ import { requireAuth } from '../../auth/middleware.js';
 import { readProfileTriples, writeTriplesToKV } from '../../solid/ldp.js';
 import { iri, unwrapIri, unwrapLiteral, literal } from '../../rdf/ntriples.js';
 import { PREFIXES, shortenPredicate, loadCustomPrefixes, saveCustomPrefixes, loadPredicateCatalog, discoverNsPredicates, saveNsPredicates, BUILTIN_NS_PREDICATES } from '../../rdf/prefixes.js';
+import { getUserConfig } from '../../config.js';
 
 /**
  * Editable predicate IRIs mapped to form field names.
@@ -86,18 +87,20 @@ export async function renderProfileEditor(reqCtx) {
 
   const { config, storage, env } = reqCtx;
   const url = reqCtx.url;
+  const username = reqCtx.user;
 
-  const data = await buildEditorData(storage, config, env);
+  const data = await buildEditorData(storage, config, env, username);
 
   // Pass through flash messages from redirect
-  const t = reqCtx.t || {};
+  const { getTranslations } = await import('../../i18n/index.js');
+  const t = getTranslations(reqCtx.lang);
   if (url.searchParams.has('saved')) {
-    data.success = t.prof_saved || 'Profile updated successfully.';
+    data.success = t.prof_updated;
   } else if (url.searchParams.has('reset')) {
-    data.success = t.prof_reset_success || 'Profile page reset to default template.';
+    data.success = t.prof_layout_reset;
   }
 
-  return renderPage('Edit Profile', template, data, { user: config.username, nav: 'profile', lang: reqCtx.lang, dir: reqCtx.dir, t, storage, baseUrl: config.baseUrl });
+  return renderPage('Edit Profile', template, data, { user: username, config, nav: 'profile', storage, baseUrl: config.baseUrl, lang: reqCtx.lang, request: reqCtx.request });
 }
 
 /**
@@ -108,8 +111,10 @@ export async function handleProfileUpdate(reqCtx) {
   if (authCheck) return authCheck;
 
   const { config, storage, request, env } = reqCtx;
-  const webId = config.webId;
-  const profileIri = `${config.baseUrl}/${config.username}/profile/card`;
+  const username = reqCtx.user;
+  const uc = getUserConfig(config, username);
+  const webId = uc.webId;
+  const profileIri = `${config.baseUrl}/${username}/profile/card`;
 
   // Parse form data
   const formData = await request.formData();
@@ -120,7 +125,7 @@ export async function handleProfileUpdate(reqCtx) {
     try {
       const layout = JSON.parse(layoutJsonRaw);
       if (layout && layout.version && Array.isArray(layout.head) && Array.isArray(layout.body)) {
-        await env.APPDATA.put(`profile_layout:${config.username}`, JSON.stringify(layout));
+        await env.APPDATA.put(`profile_layout:${username}`, JSON.stringify(layout));
       }
     } catch (e) {
       // Ignore invalid JSON — keep existing layout
@@ -133,7 +138,7 @@ export async function handleProfileUpdate(reqCtx) {
     try {
       const prefixMap = JSON.parse(customPrefixesRaw);
       if (typeof prefixMap === 'object' && prefixMap !== null && !Array.isArray(prefixMap)) {
-        await saveCustomPrefixes(env.APPDATA, config.username, prefixMap);
+        await saveCustomPrefixes(env.APPDATA, username, prefixMap);
 
         // Discover predicates for custom namespaces that haven't been indexed yet
         for (const nsIri of Object.values(prefixMap)) {
@@ -156,7 +161,7 @@ export async function handleProfileUpdate(reqCtx) {
   }
 
   // Read existing triples for the entire profile document
-  const allTriples = await readProfileTriples(storage, config);
+  const allTriples = await readProfileTriples(storage, { ...config, ...uc });
 
   // Separate triples by subject
   const webIdTriples = allTriples.filter(t => unwrapIri(t.subject) === webId);
@@ -277,9 +282,10 @@ export async function handleProfileIndexReset(reqCtx) {
   if (authCheck) return authCheck;
 
   const { config, env } = reqCtx;
+  const username = reqCtx.user;
 
   // Delete custom layout — profile page will render with DEFAULT_LAYOUT
-  await env.APPDATA.delete(`profile_layout:${config.username}`);
+  await env.APPDATA.delete(`profile_layout:${username}`);
 
   return new Response(null, {
     status: 302,
@@ -290,14 +296,15 @@ export async function handleProfileIndexReset(reqCtx) {
 /**
  * Build the template data object for the profile editor.
  */
-async function buildEditorData(storage, config, env) {
-  const allTriples = await readProfileTriples(storage, config);
-  const webId = config.webId;
-  const customPrefixes = await loadCustomPrefixes(env.APPDATA, config.username);
+async function buildEditorData(storage, config, env, username) {
+  const uc = getUserConfig(config, username);
+  const allTriples = await readProfileTriples(storage, { ...config, ...uc });
+  const webId = uc.webId;
+  const customPrefixes = await loadCustomPrefixes(env.APPDATA, username);
   const mergedPrefixes = { ...PREFIXES, ...customPrefixes };
 
   const data = {
-    username: config.username,
+    username: username,
     webId,
     name: '',
     nick: '',
@@ -360,8 +367,8 @@ async function buildEditorData(storage, config, env) {
 
   // Load AP followers/following data
   const [followersRaw, followingRaw] = await Promise.all([
-    env.APPDATA.get(`ap_followers:${config.username}`),
-    env.APPDATA.get(`ap_following:${config.username}`),
+    env.APPDATA.get(`ap_followers:${username}`),
+    env.APPDATA.get(`ap_following:${username}`),
   ]);
   data.apFollowing = JSON.parse(followingRaw || '[]').map(uri => ({ uri }));
   data.hasApFollowing = data.apFollowing.length > 0;
@@ -384,7 +391,7 @@ async function buildEditorData(storage, config, env) {
   data.namespaceCatalogJson = JSON.stringify(catalog);
 
   // Page builder: load layout JSON
-  const layoutRaw = await env.APPDATA.get(`profile_layout:${config.username}`);
+  const layoutRaw = await env.APPDATA.get(`profile_layout:${username}`);
   data.layoutJson = layoutRaw || JSON.stringify(DEFAULT_LAYOUT);
 
   // Available profile fields for binding picker
@@ -428,6 +435,8 @@ export async function handlePreviewLayout(reqCtx) {
   if (authCheck) return authCheck;
 
   const { config, storage, env, request } = reqCtx;
+  const username = reqCtx.user;
+  const uc = getUserConfig(config, username);
   const formData = await request.formData();
   const layoutJsonRaw = formData.get('layout_json');
 
@@ -444,7 +453,7 @@ export async function handlePreviewLayout(reqCtx) {
 
   const { renderLayout } = await import('../layout-renderer.js');
   const { buildProfileTemplateData } = await import('../../solid/ldp.js');
-  const profileData = await buildProfileTemplateData(storage, config, env.APPDATA);
+  const profileData = await buildProfileTemplateData(storage, { ...config, ...uc }, env.APPDATA);
   const html = renderLayout(layout, profileData);
 
   return new Response(html, {
@@ -461,7 +470,8 @@ export async function handleListComponents(reqCtx) {
   if (authCheck) return authCheck;
 
   const { config, env } = reqCtx;
-  const raw = await env.APPDATA.get(`component_registry:${config.username}`);
+  const username = reqCtx.user;
+  const raw = await env.APPDATA.get(`component_registry:${username}`);
   const components = raw ? JSON.parse(raw) : [];
 
   return new Response(JSON.stringify(components), {
@@ -477,6 +487,7 @@ export async function handleSaveComponent(reqCtx) {
   if (authCheck) return authCheck;
 
   const { config, env, request } = reqCtx;
+  const username = reqCtx.user;
   const formData = await request.formData();
   const name = (formData.get('name') || '').trim();
   const description = (formData.get('description') || '').trim();
@@ -490,7 +501,7 @@ export async function handleSaveComponent(reqCtx) {
     });
   }
 
-  const raw = await env.APPDATA.get(`component_registry:${config.username}`);
+  const raw = await env.APPDATA.get(`component_registry:${username}`);
   const components = raw ? JSON.parse(raw) : [];
 
   const existing = components.findIndex(c => c.name === name);
@@ -501,7 +512,7 @@ export async function handleSaveComponent(reqCtx) {
     components.push(entry);
   }
 
-  await env.APPDATA.put(`component_registry:${config.username}`, JSON.stringify(components));
+  await env.APPDATA.put(`component_registry:${username}`, JSON.stringify(components));
 
   // If published, set ACP to public-read on the JS file
   if (published) {
@@ -524,6 +535,7 @@ export async function handleImportComponent(reqCtx) {
   if (authCheck) return authCheck;
 
   const { config, env, storage, request } = reqCtx;
+  const username = reqCtx.user;
   const formData = await request.formData();
   const url = (formData.get('url') || '').trim();
 
@@ -551,7 +563,7 @@ export async function handleImportComponent(reqCtx) {
     const componentName = fileName.replace(/\.js$/, '');
 
     // Save to local paa_custom/components/
-    const localPath = `/${config.username}/paa_custom/components/${fileName}`;
+    const localPath = `/${username}/paa_custom/components/${fileName}`;
     const localIri = `${config.baseUrl}${localPath}`;
 
     // Store as binary blob
@@ -565,7 +577,7 @@ export async function handleImportComponent(reqCtx) {
     await storage.put(`doc:${localIri}.meta:${localIri}`, metaDoc);
 
     // Register locally
-    const raw = await env.APPDATA.get(`component_registry:${config.username}`);
+    const raw = await env.APPDATA.get(`component_registry:${username}`);
     const components = raw ? JSON.parse(raw) : [];
     const existing = components.findIndex(c => c.name === componentName);
     const entry = { name: componentName, description: `Imported from ${url}`, file: localPath, published: false };
@@ -574,7 +586,7 @@ export async function handleImportComponent(reqCtx) {
     } else {
       components.push(entry);
     }
-    await env.APPDATA.put(`component_registry:${config.username}`, JSON.stringify(components));
+    await env.APPDATA.put(`component_registry:${username}`, JSON.stringify(components));
 
     return new Response(JSON.stringify({ name: componentName, file: localPath }), {
       headers: { 'Content-Type': 'application/json' },

@@ -109,7 +109,13 @@ The server bootstraps automatically on the first request. Bootstrap is idempoten
 
 ### Domain changes
 
-If the `PAA_DOMAIN` changes (or was never set), the server detects the mismatch and re-bootstraps, updating all IRIs to use the new domain. This happens automatically on the next request.
+If the `PAA_DOMAIN` changes, the server detects the mismatch on the next request and automatically migrates all storage keys from the old domain to the new one. This includes:
+
+- **TRIPLESTORE KV** — rewrites `idx:`, `doc:`, and `acl:` keys and their values (URI references in N-Triples and JSON)
+- **APPDATA KV** — rewrites `acp:` and `container_quota:` keys
+- **R2 BLOBS** — moves `blob:` objects to new-domain keys, preserving content types
+
+The migration runs once and updates `bootstrap_domain` in KV to the new domain. All user-created resources, containers, profiles, and access policies are preserved.
 
 ### Migration hooks
 
@@ -117,6 +123,7 @@ The bootstrap process includes migration checks for existing installations:
 
 - **ACP policies** — creates default policies if missing (for pre-ACP installs)
 - **TypeIndex** — creates TypeIndex documents and profile references if missing
+- **DID link** — adds an `owl:sameAs` triple linking the WebID to the user's `did:web` DID if not already present
 
 ## Cloudflare free tier limits
 
@@ -153,13 +160,15 @@ Enter your production domain (e.g., `solid.example.com`, without protocol).
 
 ### Domain mismatch after changing domains
 
-The server re-bootstraps when it detects a domain change. If you see inconsistencies, you can clear all KV data to force a clean bootstrap:
+The server automatically migrates all storage keys when it detects a domain change, rewriting URIs from the old domain to the new one across TRIPLESTORE KV, APPDATA KV, and R2 BLOBS. This happens on the first request after the domain change and preserves all user data.
+
+If the migration did not run (e.g., the old re-bootstrap code ran before the migration feature was deployed), you can trigger it manually by resetting `bootstrap_domain` to the old domain:
 
 ```sh
-# WARNING: This deletes all data
-wrangler kv:bulk delete --namespace-id=<TRIPLESTORE_ID> --all
-wrangler kv:bulk delete --namespace-id=<APPDATA_ID> --all
+wrangler kv key put --namespace-id=<APPDATA_ID> --remote bootstrap_domain "old-domain.example.com"
 ```
+
+Then redeploy. The next request will detect the mismatch and run the migration.
 
 ### Federation not working
 

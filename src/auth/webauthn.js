@@ -172,8 +172,19 @@ export async function handleWebAuthnRegisterComplete(reqCtx) {
  * Begin passkey authentication.
  */
 export async function handleWebAuthnLoginBegin(reqCtx) {
-  const { config, env } = reqCtx;
-  const username = config.username;
+  const { config, env, request } = reqCtx;
+
+  // Accept username from POST body for multi-user login
+  let username;
+  try {
+    const body = await request.json();
+    username = body.username;
+  } catch {
+    username = null;
+  }
+  if (!username) {
+    return new Response('Username required', { status: 400 });
+  }
 
   // Get registered credentials
   const existingCreds = await env.APPDATA.get(`webauthn_creds:${username}`);
@@ -215,7 +226,6 @@ export async function handleWebAuthnLoginBegin(reqCtx) {
  */
 export async function handleWebAuthnLoginComplete(reqCtx) {
   const { request, env, config } = reqCtx;
-  const username = config.username;
 
   let body;
   try {
@@ -233,15 +243,16 @@ export async function handleWebAuthnLoginComplete(reqCtx) {
   const clientDataJSON = base64urlToBuffer(credResponse.clientDataJSON);
   const clientData = JSON.parse(new TextDecoder().decode(clientDataJSON));
 
-  // Verify challenge
+  // Verify challenge and extract username from challenge data
   const challengeData = await env.APPDATA.get(`webauthn_challenge:${clientData.challenge}`);
   if (!challengeData) {
     return new Response('Invalid or expired challenge', { status: 400 });
   }
   const challengeInfo = JSON.parse(challengeData);
-  if (challengeInfo.username !== username || challengeInfo.type !== 'authentication') {
+  if (challengeInfo.type !== 'authentication') {
     return new Response('Challenge mismatch', { status: 400 });
   }
+  const username = challengeInfo.username;
   await env.APPDATA.delete(`webauthn_challenge:${clientData.challenge}`);
 
   // Verify origin
@@ -308,6 +319,7 @@ export async function handleWebAuthnLoginComplete(reqCtx) {
     headers: {
       'Content-Type': 'application/json',
       'Set-Cookie': `session=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=86400${config.protocol === 'https' ? '; Secure' : ''}`,
+      'Set-Login': 'logged-in',
     },
   });
 }

@@ -7,9 +7,10 @@ import { PREFIXES } from '../rdf/prefixes.js';
  * Build Link headers for a resource.
  * @param {string} resourceIri
  * @param {boolean} isContainer
+ * @param {boolean} isStorageRoot
  * @returns {string}
  */
-export function buildLinkHeaders(resourceIri, isContainer) {
+export function buildLinkHeaders(resourceIri, isContainer, isStorageRoot) {
   const links = [
     `<${PREFIXES.ldp}Resource>; rel="type"`,
     `<${resourceIri}.acl>; rel="acl"`,
@@ -19,6 +20,10 @@ export function buildLinkHeaders(resourceIri, isContainer) {
   if (isContainer) {
     links.push(`<${PREFIXES.ldp}BasicContainer>; rel="type"`);
     links.push(`<${PREFIXES.ldp}Container>; rel="type"`);
+  }
+  if (isStorageRoot) {
+    links.push(`<http://www.w3.org/ns/pim/space#Storage>; rel="type"`);
+    links.push(`<${resourceIri}>; rel="http://www.w3.org/ns/solid/terms#storageDescription"`);
   }
   return links.join(', ');
 }
@@ -40,17 +45,27 @@ export function buildWacAllow(access) {
  * Standard Solid response headers for a resource.
  * @param {string} resourceIri
  * @param {boolean} isContainer
+ * @param {object} [options]
+ * @param {boolean} [options.isStorageRoot] - Whether this is the storage root container
  * @returns {Headers}
  */
-export function solidHeaders(resourceIri, isContainer) {
+export function solidHeaders(resourceIri, isContainer, options = {}) {
+  const { isStorageRoot } = options;
   const headers = new Headers();
-  headers.set('Link', buildLinkHeaders(resourceIri, isContainer));
-  headers.set('Accept-Patch', 'text/n3, application/sparql-update');
+  headers.set('Link', buildLinkHeaders(resourceIri, isContainer, isStorageRoot));
+  headers.set('Accept-Patch', 'application/sparql-update');
   headers.set('Accept-Put', '*/*');
-  headers.set('Accept-Post', 'text/turtle, application/ld+json, application/n-triples, application/octet-stream');
-  const methods = isContainer
-    ? 'OPTIONS, HEAD, GET, POST, PUT, PATCH, DELETE'
-    : 'OPTIONS, HEAD, GET, PUT, PATCH, DELETE';
+  if (isContainer) {
+    headers.set('Accept-Post', 'text/turtle, application/ld+json, application/n-triples, application/octet-stream');
+  }
+  let methods;
+  if (isStorageRoot) {
+    methods = 'OPTIONS, HEAD, GET, POST, PUT, PATCH';
+  } else if (isContainer) {
+    methods = 'OPTIONS, HEAD, GET, POST, PUT, PATCH, DELETE';
+  } else {
+    methods = 'OPTIONS, HEAD, GET, PUT, PATCH, DELETE';
+  }
   headers.set('Allow', methods);
   headers.set('Vary', 'Accept, Authorization, Origin');
   return headers;

@@ -27,10 +27,13 @@ import resourceTemplate from '../templates/storage-resource.html';
 import breadcrumbsPartial from '../templates/partials/breadcrumbs.html';
 import { requireAuth } from '../../auth/middleware.js';
 import { parseNTriples, unwrapIri, serializeNTriples, iri, literal, typedLiteral } from '../../rdf/ntriples.js';
+import { defaultAclNTriples } from '../../solid/acl.js';
+import { getUserConfig } from '../../config.js';
 import { PREFIXES, shortenPredicate, loadMergedPrefixes, loadPredicateCatalog } from '../../rdf/prefixes.js';
 import { checkQuota, quotaExceededResponse, addQuota } from '../../storage/quota.js';
 import { checkContainerQuota, containerQuotaExceededResponse, addContainerBytes, subtractContainerBytes } from '../../storage/container-quota.js';
 import { formatBytes } from '../../i18n/format.js';
+import { getTranslations } from '../../i18n/index.js';
 
 const TEXT_EXTS = new Set([
   'ttl', 'txt', 'html', 'css', 'csv', 'xml', 'md', 'n3',
@@ -63,7 +66,7 @@ export async function renderStoragePage(reqCtx) {
   if (authCheck) return authCheck;
 
   const { config, storage, env, url } = reqCtx;
-  const username = config.username;
+  const username = reqCtx.user;
   const path = url.pathname.replace(/^\/storage\/?/, '') || `${username}/`;
   const resourceIri = `${config.baseUrl}/${path}`;
   const isDir = path.endsWith('/');
@@ -77,12 +80,19 @@ export async function renderStoragePage(reqCtx) {
 // ── Container page ───────────────────────────────────
 
 async function renderContainerPage(reqCtx, path, resourceIri, username) {
-  const { config, storage } = reqCtx;
+  const { config, storage, lang } = reqCtx;
+  const t = getTranslations(lang);
   const items = (await loadContainerItems(resourceIri, config, storage))
-    .map(item => ({ ...item, icon: item.isDir ? '📁' : '📄', copyDefault: computeCopyDefault(item.storagePath) }));
+    .map(item => ({
+      ...item,
+      icon: item.isDir ? '📁' : '📄',
+      copyDefault: computeCopyDefault(item.storagePath),
+      deleteConfirm: (t.stor_delete_confirm || 'Delete {{name}}?').replace('{{name}}', item.name),
+    }));
   const isRoot = path === `${username}/`;
   const crumbs = buildBreadcrumbs(path);
   const breadcrumbs = renderPartial(breadcrumbsPartial, { crumbs });
+  const hasCustomAcl = !!(await storage.get(`acl:${resourceIri}`));
 
   return renderPage('Storage', containerTemplate, {
     path,
@@ -91,7 +101,8 @@ async function renderContainerPage(reqCtx, path, resourceIri, username) {
     items,
     hasItems: items.length > 0,
     isRoot,
-  }, { user: username, nav: 'storage', lang: reqCtx.lang, dir: reqCtx.dir, t: reqCtx.t, storage, baseUrl: config.baseUrl });
+    hasCustomAcl,
+  }, { user: username, config, nav: 'storage', storage, baseUrl: config.baseUrl, lang, request: reqCtx.request });
 }
 
 // ── Resource page ────────────────────────────────────
@@ -121,7 +132,7 @@ async function renderResourcePage(reqCtx, path, resourceIri, username, editMode,
   });
 
   // Editable metadata triples for the triple editor widget
-  const mergedPrefixes = await loadMergedPrefixes(reqCtx.env.APPDATA, config.username);
+  const mergedPrefixes = await loadMergedPrefixes(reqCtx.env.APPDATA, username);
   const metaTriplesEditable = metaTriples.map(t => {
     const predicateIri = unwrapIri(t.predicate);
     let objectValue = t.object;
@@ -143,6 +154,7 @@ async function renderResourcePage(reqCtx, path, resourceIri, username, editMode,
   const showEmpty = !showEditor && !showImage && !showBinaryDownload && !showContent;
 
   const copyDefault = computeCopyDefault(path);
+  const hasCustomAcl = !!(await storage.get(`acl:${resourceIri}`));
   return renderPage('Storage', resourceTemplate, {
     path,
     displayPath: '/' + path,
@@ -153,7 +165,7 @@ async function renderResourcePage(reqCtx, path, resourceIri, username, editMode,
     copyDefault,
     content,
     contentType,
-    sizeFormatted: formatBytes(size, reqCtx.lang),
+    sizeFormatted: formatBytes(size),
     showEditor,
     showImage,
     showBinaryDownload,
@@ -167,9 +179,10 @@ async function renderResourcePage(reqCtx, path, resourceIri, username, editMode,
     metaTriples: processedMeta,
     metaTriplesEditable,
     metaTurtle,
+    hasCustomAcl,
     prefixesJson: JSON.stringify(mergedPrefixes),
     namespaceCatalogJson: JSON.stringify(await loadPredicateCatalog(reqCtx.env.APPDATA, mergedPrefixes)),
-  }, { user: username, nav: 'storage', lang: reqCtx.lang, dir: reqCtx.dir, t: reqCtx.t, storage, baseUrl: config.baseUrl });
+  }, { user: username, config, nav: 'storage', storage, baseUrl: config.baseUrl, lang: reqCtx.lang });
 }
 
 // ── POST /storage/** ─────────────────────────────────
@@ -179,7 +192,8 @@ export async function handleStorageAction(reqCtx) {
   if (authCheck) return authCheck;
 
   const { request, config, storage, env, url } = reqCtx;
-  const path = url.pathname.replace(/^\/storage\/?/, '') || `${config.username}/`;
+  const username = reqCtx.user;
+  const path = url.pathname.replace(/^\/storage\/?/, '') || `${username}/`;
   const resourceIri = `${config.baseUrl}/${path}`;
   const ct = request.headers.get('Content-Type') || '';
   let action, slug, name, content, metadata, destination;
@@ -188,7 +202,7 @@ export async function handleStorageAction(reqCtx) {
     const form = await request.formData();
     action = form.get('action');
     if (action === 'upload') {
-      return handleUpload(form, resourceIri, path, config, storage, env);
+      return handleUpload(form, resourceIri, path, config, storage, env, username);
     }
     name = form.get('name');
     content = form.get('content');
@@ -224,7 +238,7 @@ export async function handleStorageAction(reqCtx) {
     const textBytes = new TextEncoder().encode(text).byteLength;
 
     // Quota check
-    const quotaResult = await checkQuota(env.APPDATA, config.username, textBytes, config.storageLimit);
+    const quotaResult = await checkQuota(env.APPDATA, username, textBytes, config.storageLimit);
     if (!quotaResult.allowed) return quotaExceededResponse(quotaResult.usedBytes, quotaResult.limitBytes);
     const cqResult = await checkContainerQuota(env.APPDATA, resourceIri, textBytes);
     if (!cqResult.allowed) return containerQuotaExceededResponse(cqResult.blockedBy, cqResult.usedBytes, cqResult.limitBytes);
@@ -244,7 +258,7 @@ export async function handleStorageAction(reqCtx) {
     await appendContainment(storage, resourceIri, newIri);
 
     // Update quota tracking
-    await addQuota(env.APPDATA, config.username, textBytes);
+    await addQuota(env.APPDATA, username, textBytes);
     await addContainerBytes(env.APPDATA, resourceIri, textBytes);
 
     return redirect(`/storage/${path}${cleanName}`);
@@ -275,23 +289,34 @@ export async function handleStorageAction(reqCtx) {
   }
 
   if (action === 'delete') {
+    console.log(`[storage] Deleting: ${resourceIri} (container=${path.endsWith('/')})`);
     if (path.endsWith('/')) {
       await deleteContainerRecursive(storage, resourceIri, env.APPDATA);
     } else {
       await deleteResource(storage, resourceIri, env.APPDATA);
     }
     const parent = computeParent(resourceIri);
-    if (parent) await removeContainment(storage, parent, resourceIri);
-    const parentPath = parent ? parent.replace(config.baseUrl + '/', '') : `${config.username}/`;
+    if (parent) {
+      await removeContainment(storage, parent, resourceIri);
+      console.log(`[storage] Removed containment from ${parent}`);
+    }
+    const parentPath = parent ? parent.replace(config.baseUrl + '/', '') : `${username}/`;
     return redirect(`/storage/${parentPath}`);
   }
 
   if (action === 'move' && destination) {
-    return handleMove(resourceIri, destination, path, config, storage, env);
+    return handleMove(resourceIri, destination, path, config, storage, env, username);
   }
 
   if (action === 'copy' && destination) {
-    return handleCopy(resourceIri, destination, path, config, storage, env);
+    return handleCopy(resourceIri, destination, path, config, storage, env, username);
+  }
+
+  if (action === 'reset_acl') {
+    const uc = getUserConfig(config, username);
+    const ntriples = defaultAclNTriples(resourceIri, uc.webId);
+    await storage.put(`acl:${resourceIri}`, ntriples);
+    return redirect(`/storage/${path}`);
   }
 
   return redirect(`/storage/${path}`);
@@ -299,7 +324,7 @@ export async function handleStorageAction(reqCtx) {
 
 // ── Upload with metadata capture ─────────────────────
 
-async function handleUpload(form, containerIri, path, config, storage, env) {
+async function handleUpload(form, containerIri, path, config, storage, env, username) {
   const file = form.get('file');
   const slug = form.get('slug') || file.name;
   const cleanSlug = slug.replace(/[^a-zA-Z0-9._-]/g, '-');
@@ -308,7 +333,7 @@ async function handleUpload(form, containerIri, path, config, storage, env) {
   const fileType = file.type || 'application/octet-stream';
 
   // Quota checks before writing
-  const quotaResult = await checkQuota(env.APPDATA, config.username, binary.byteLength, config.storageLimit);
+  const quotaResult = await checkQuota(env.APPDATA, username, binary.byteLength, config.storageLimit);
   if (!quotaResult.allowed) return quotaExceededResponse(quotaResult.usedBytes, quotaResult.limitBytes);
   const cqResult = await checkContainerQuota(env.APPDATA, containerIri, binary.byteLength);
   if (!cqResult.allowed) return containerQuotaExceededResponse(cqResult.blockedBy, cqResult.usedBytes, cqResult.limitBytes);
@@ -334,7 +359,7 @@ async function handleUpload(form, containerIri, path, config, storage, env) {
   await appendContainment(storage, containerIri, newIri);
 
   // Update quota tracking
-  await addQuota(env.APPDATA, config.username, binary.byteLength);
+  await addQuota(env.APPDATA, username, binary.byteLength);
   await addContainerBytes(env.APPDATA, containerIri, binary.byteLength);
 
   return redirect(`/storage/${path}`);
@@ -531,13 +556,13 @@ function computeCopyDefault(storagePath) {
   return storagePath + '-copy';
 }
 
-function validateDestination(destination, config, sourceIri) {
+function validateDestination(destination, config, sourceIri, username) {
   if (!destination || !destination.trim()) return { error: 'Destination path is required.' };
   let dest = destination.trim();
   // Strip leading slash
   if (dest.startsWith('/')) dest = dest.slice(1);
   // Must start with username/
-  if (!dest.startsWith(config.username + '/')) return { error: 'Destination must be within your pod.' };
+  if (!dest.startsWith(username + '/')) return { error: 'Destination must be within your pod.' };
   const destIri = `${config.baseUrl}/${dest}`;
   // Cannot move/copy to self
   if (destIri === sourceIri) return { error: 'Destination is the same as source.' };
@@ -815,8 +840,8 @@ async function copyContainerRecursive(storage, sourceIri, destIri) {
   }
 }
 
-async function handleMove(resourceIri, destination, path, config, storage, env) {
-  const v = validateDestination(destination, config, resourceIri);
+async function handleMove(resourceIri, destination, path, config, storage, env, username) {
+  const v = validateDestination(destination, config, resourceIri, username);
   if (v.error) return errorResponse(v.error, 400);
 
   const isDir = path.endsWith('/');
@@ -858,8 +883,8 @@ async function handleMove(resourceIri, destination, path, config, storage, env) 
   return redirect(`/storage/${v.destPath}`);
 }
 
-async function handleCopy(resourceIri, destination, path, config, storage, env) {
-  const v = validateDestination(destination, config, resourceIri);
+async function handleCopy(resourceIri, destination, path, config, storage, env, username) {
+  const v = validateDestination(destination, config, resourceIri, username);
   if (v.error) return errorResponse(v.error, 400);
 
   const isDir = path.endsWith('/');
@@ -874,7 +899,7 @@ async function handleCopy(resourceIri, destination, path, config, storage, env) 
     : await computeResourceSize(storage, resourceIri);
 
   // Quota checks
-  const quotaResult = await checkQuota(env.APPDATA, config.username, size, config.storageLimit);
+  const quotaResult = await checkQuota(env.APPDATA, username, size, config.storageLimit);
   if (!quotaResult.allowed) return quotaExceededResponse(quotaResult.usedBytes, quotaResult.limitBytes);
   const newParent = computeParent(v.destIri);
   if (newParent) {
@@ -896,7 +921,7 @@ async function handleCopy(resourceIri, destination, path, config, storage, env) 
   if (newParent) await appendContainment(storage, newParent, v.destIri);
 
   // Update quotas
-  await addQuota(env.APPDATA, config.username, size);
+  await addQuota(env.APPDATA, username, size);
   if (newParent) await addContainerBytes(env.APPDATA, newParent, size);
 
   return redirect(`/storage/${v.destPath}`);

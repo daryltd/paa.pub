@@ -1,0 +1,115 @@
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: paa-pub
+  title: "Kaiāulu Pa'a"
+  description: "Multi-user Solid + ActivityPub server powered by sparq"
+  annotations:
+    backstage.io/techdocs-ref: dir:.
+    github.com/project-slug: daryltd/paa.pub
+  tags:
+    - solid
+    - activitypub
+    - deno
+    - sparq
+    - rdf
+    - federation
+  links:
+    - url: https://paa-pub-rhoai-internal--supreme-mackerel.apps.stc-ai-e1-pp.imap.p1.openshiftapps.com
+      title: Live Instance
+      icon: web
+spec:
+  type: service
+  lifecycle: development
+  owner: ldary
+  system: solid
+  providesApis:
+    - solid-oidc
+    - activitypub
+    - webfinger
+---
+apiVersion: backstage.io/v1alpha1
+kind: API
+metadata:
+  name: solid-oidc
+  title: Solid-OIDC Identity Provider
+  description: OpenID Connect provider for Solid WebID authentication
+spec:
+  type: openapi
+  lifecycle: development
+  owner: ldary
+  definition: |
+    openapi: "3.0.0"
+    info:
+      title: Solid-OIDC
+      version: "1.0"
+    paths:
+      /.well-known/openid-configuration:
+        get:
+          summary: OIDC Discovery
+      /authorize:
+        get:
+          summary: Authorization endpoint
+      /token:
+        post:
+          summary: Token exchange
+      /jwks:
+        get:
+          summary: JSON Web Key Set
+---
+apiVersion: backstage.io/v1alpha1
+kind: API
+metadata:
+  name: activitypub
+  title: ActivityPub Federation
+  description: ActivityPub S2S and C2S endpoints
+spec:
+  type: openapi
+  lifecycle: development
+  owner: ldary
+  definition: |
+    openapi: "3.0.0"
+    info:
+      title: ActivityPub
+      version: "1.0"
+    paths:
+      /{user}/inbox:
+        post:
+          summary: S2S inbox (receive activities)
+      /{user}/outbox:
+        get:
+          summary: Outbox collection
+        post:
+          summary: C2S activity submission
+      /{user}/followers:
+        get:
+          summary: Followers collection
+      /{user}/following:
+        get:
+          summary: Following collection
+---
+apiVersion: backstage.io/v1alpha1
+kind: API
+metadata:
+  name: webfinger
+  title: WebFinger Discovery
+  description: WebFinger endpoint for actor discovery
+spec:
+  type: openapi
+  lifecycle: development
+  owner: ldary
+  definition: |
+    openapi: "3.0.0"
+    info:
+      title: WebFinger
+      version: "1.0"
+    paths:
+      /.well-known/webfinger:
+        get:
+          summary: WebFinger lookup
+          parameters:
+            - name: resource
+              in: query
+              required: true
+              schema:
+                type: string

@@ -25,6 +25,7 @@ The actor endpoint is content-negotiated on `/{username}/profile/card`:
   "preferredUsername": "alice",
   "name": "alice",
   "url": "https://example.com/alice/profile/card",
+  "alsoKnownAs": ["did:web:example.com:alice"],
   "publicKey": {
     "id": "https://example.com/alice/profile/card#main-key",
     "owner": "https://example.com/alice/profile/card#me",
@@ -32,6 +33,8 @@ The actor endpoint is content-negotiated on `/{username}/profile/card`:
   }
 }
 ```
+
+The `alsoKnownAs` field links the actor to its [`did:web` DID document](#did-document) at `/{username}/did.json`.
 
 Cached with `Cache-Control: max-age=300` (5 minutes).
 
@@ -47,6 +50,10 @@ Response (`application/jrd+json`):
 ```json
 {
   "subject": "acct:alice@example.com",
+  "aliases": [
+    "https://example.com/alice/profile/card#me",
+    "did:web:example.com:alice"
+  ],
   "links": [
     {
       "rel": "self",
@@ -57,6 +64,11 @@ Response (`application/jrd+json`):
       "rel": "http://webfinger.net/rel/profile-page",
       "type": "text/html",
       "href": "https://example.com/alice/profile/card"
+    },
+    {
+      "rel": "self",
+      "type": "application/did+ld+json",
+      "href": "https://example.com/alice/did.json"
     }
   ]
 }
@@ -167,7 +179,7 @@ Page size: 20 items.
 }
 ```
 
-After storing in the outbox, the activity is delivered to all followers' inboxes (unless audience is `private`).
+After storing in the outbox, the activity is delivered to all followers' inboxes (unless audience is `private`). Local followers (users on the same server) receive the post directly via KV write to their inbox, bypassing HTTP delivery entirely.
 
 ### Follow an actor
 
@@ -259,3 +271,34 @@ Index arrays track chronological order:
 ```
 
 Indexes are capped at 500 entries (oldest removed when exceeded).
+
+## Local delivery
+
+When composing a post, followers are split into local and remote:
+
+- **Local followers** (users on the same server) receive the activity directly via `storeInboxActivity()`, a KV write to their inbox. No HTTP request, HTTP Signature, or SSRF validation is needed.
+- **Remote followers** are delivered via the standard HTTP delivery path (signed POST to their inbox).
+
+Similarly, when viewing a local user's feed via `/activity/remote?actor=<uri>`, the outbox is read directly from KV instead of making an HTTP request to the server's own outbox endpoint.
+
+## DID document
+
+Each user has a [`did:web`](https://w3c-ccg.github.io/did-method-web/) DID document at `/{username}/did.json`. The DID identifier follows the format `did:web:{domain}:{username}` (e.g., `did:web:example.com:alice`).
+
+The DID document is generated dynamically from existing config and keys — no additional data is stored. It includes:
+
+- **Verification method** — the user's RSA-2048 public key in JWK format (`JsonWebKey2020`)
+- **Authentication / assertion** — references to the verification method
+- **Services** — Solid WebID, ActivityPub actor, Solid storage root, OIDC issuer
+- **`alsoKnownAs`** — links to the WebID URI and `acct:` URI
+
+The server also serves a server-level DID document at `/.well-known/did.json` using the OIDC signing key.
+
+Identity linking is bidirectional:
+
+| From | To | Mechanism |
+|---|---|---|
+| DID document | WebID | `alsoKnownAs` |
+| WebID profile | DID | `owl:sameAs` triple |
+| AP actor | DID | `alsoKnownAs` |
+| WebFinger | DID document | `application/did+ld+json` link |

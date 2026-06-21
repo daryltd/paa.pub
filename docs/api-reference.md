@@ -20,6 +20,7 @@ These implement the Solid-OIDC specification for authenticating with Solid apps.
 | Method | Path | Handler | Auth | Description |
 |---|---|---|---|---|
 | GET | `/.well-known/webfinger` | `handleWebFinger` | No | WebFinger discovery |
+| GET | `/.well-known/did.json` | `handleServerDidDocument` | No | Server-level DID document |
 | GET | `/login` | `renderLoginPage` | No | Login form |
 | POST | `/login` | `handleLogin` | No | Process login (sets session cookie) |
 | POST | `/logout` | `handleLogout` | No | Destroy session |
@@ -53,6 +54,27 @@ All these routes require an active session (redirect to `/login` if not authenti
 | POST | `/storage/**` | `handleStorageAction` | Upload, create, edit, delete resources |
 | GET | `/acp/**` | `renderAclEditor` | Access policy editor |
 | POST | `/acp/**` | `handleAclUpdate` | Save access policy |
+| GET | `/settings` | `renderSettings` | User preferences and app management |
+| POST | `/settings` | `handleSettingsUpdate` | Save language, locale, appearance, notification preferences |
+| GET | `/app-permissions` | *(redirect)* | Redirects to `/settings` |
+| POST | `/app-permissions` | `handleAppPermissionsUpdate` | Update or revoke app container access |
+| POST | `/follow-requests/accept` | `handleAcceptFollowRequest` | Accept a pending follow request |
+| POST | `/follow-requests/reject` | `handleRejectFollowRequest` | Reject a pending follow request |
+| POST | `/activity/mark-read` | `handleMarkRead` | Mark an activity as read |
+| POST | `/activity/mark-all-read` | `handleMarkAllRead` | Mark all activities as read |
+| GET | `/activity/remote` | `renderRemoteFeed` | View a remote actor's public feed |
+
+## Admin panel
+
+Available to the admin user only. Redirects to `/login` for non-admin users.
+
+| Method | Path | Handler | Description |
+|---|---|---|---|
+| GET | `/admin` | `renderAdminDashboard` | Aggregate stats and per-user overview |
+| GET | `/admin/users` | `renderAdminUsers` | User management table |
+| POST | `/admin/users` | `handleAdminUserAction` | Enable/disable users, set quotas, create accounts |
+| GET | `/admin/fedcm-idps` | `renderAdminFedCMIdps` | External FedCM IdP management |
+| POST | `/admin/fedcm-idps` | `handleAdminFedCMIdpAction` | Add, edit, or remove external IdPs |
 
 ## ActivityPub routes
 
@@ -66,6 +88,7 @@ Content-negotiated endpoints that serve both Solid RDF and ActivityPub JSON-LD.
 | GET | `/:user/outbox` | `handleOutbox` | No | Outbox OrderedCollection |
 | GET | `/:user/followers` | `handleCollections` | No | Followers OrderedCollection |
 | GET | `/:user/following` | `handleCollections` | No | Following OrderedCollection |
+| GET | `/:user/did.json` | `handleUserDidDocument` | No | Per-user DID document (`did:web`) |
 
 ## LDP catch-all (Solid protocol)
 
@@ -98,6 +121,10 @@ Response (`application/jrd+json`):
 ```json
 {
   "subject": "acct:alice@example.com",
+  "aliases": [
+    "https://example.com/alice/profile/card#me",
+    "did:web:example.com:alice"
+  ],
   "links": [
     {
       "rel": "self",
@@ -108,6 +135,11 @@ Response (`application/jrd+json`):
       "rel": "http://webfinger.net/rel/profile-page",
       "type": "text/html",
       "href": "https://example.com/alice/profile/card"
+    },
+    {
+      "rel": "self",
+      "type": "application/did+ld+json",
+      "href": "https://example.com/alice/did.json"
     }
   ]
 }

@@ -23,7 +23,9 @@ import { renderPage } from '../shell.js';
 import template from '../templates/acl-editor.html';
 import { requireAuth } from '../../auth/middleware.js';
 import { getContainerQuota, setContainerQuotaLimit } from '../../storage/container-quota.js';
+import { getUserConfig } from '../../config.js';
 import { formatBytes, formatBytesShort } from '../../i18n/format.js';
+import { getTranslations } from '../../i18n/index.js';
 
 /**
  * Handle GET /acp/**
@@ -32,8 +34,10 @@ export async function renderAclEditor(reqCtx) {
   const authCheck = requireAuth(reqCtx);
   if (authCheck) return authCheck;
 
-  const { config, env, url, lang, dir, t } = reqCtx;
-  const username = config.username;
+  const { config, env, url, lang } = reqCtx;
+  const username = reqCtx.user;
+  const uc = getUserConfig(config, username);
+  const t = getTranslations(lang);
   const path = url.pathname.replace(/^\/acp\/?/, '') || `${username}/`;
   const resourceIri = `${config.baseUrl}/${path}`;
   const isDir = path.endsWith('/');
@@ -45,28 +49,37 @@ export async function renderAclEditor(reqCtx) {
   const policy = await loadPolicy(env.APPDATA, resourceIri);
   const friends = await loadFriends(env.APPDATA, username);
 
+  // Build mode labels from translations
+  const modeLabelMap = {
+    public: t.acl_mode_public,
+    unlisted: t.acl_mode_unlisted,
+    friends: t.acl_mode_friends,
+    private: t.acl_mode_private,
+    custom: t.acl_mode_custom,
+    inherit: t.acl_mode_inherit,
+  };
+
   // Resolve the effective policy when in inherit mode (or no policy set)
   let effectiveLabel = '';
   let effectiveSource = '';
   if (!isRootContainer && (policy.mode === 'inherit' || !policy.mode)) {
     const resolved = await resolveInheritedPolicy(env.APPDATA, resourceIri);
     if (resolved) {
-      const modeLabelKey = `acl_mode_${resolved.policy.mode}`;
-      effectiveLabel = t[modeLabelKey] || MODE_LABELS[resolved.policy.mode] || resolved.policy.mode;
+      effectiveLabel = modeLabelMap[resolved.policy.mode] || resolved.policy.mode;
       effectiveSource = resolved.source;
     } else {
-      effectiveLabel = t.acl_mode_private || 'Private';
-      effectiveSource = '(default)';
+      effectiveLabel = t.acl_mode_private;
+      effectiveSource = t.acl_default_source;
     }
   }
 
   const allModes = [
-    ...(!isRootContainer ? [{ value: 'inherit', label: t.acl_mode_inherit || 'Inherit from parent', description: t.acl_mode_inherit_desc || 'Use the same access policy as the parent container.' }] : []),
-    { value: 'public', label: t.acl_mode_public || 'Public', description: t.acl_mode_public_desc || 'Anyone can discover and read this resource.' },
-    { value: 'unlisted', label: t.acl_mode_unlisted || 'Public (unlisted)', description: t.acl_mode_unlisted_desc || 'Anyone with the direct link can read, but not listed in container indexes.' },
-    { value: 'friends', label: t.acl_mode_friends || 'Friends', description: t.acl_mode_friends_desc || 'Only people in your friends list can read.' },
-    { value: 'private', label: t.acl_mode_private || 'Private', description: t.acl_mode_private_desc || 'Only you can access this resource.' },
-    { value: 'custom', label: t.acl_mode_custom || 'Custom', description: t.acl_mode_custom_desc || 'Grant read access to specific WebIDs.' },
+    ...(!isRootContainer ? [{ value: 'inherit', label: t.acl_mode_inherit, description: t.acl_mode_inherit_desc }] : []),
+    { value: 'public', label: t.acl_mode_public, description: t.acl_mode_public_desc },
+    { value: 'unlisted', label: t.acl_mode_unlisted, description: t.acl_mode_unlisted_desc },
+    { value: 'friends', label: t.acl_mode_friends, description: t.acl_mode_friends_desc },
+    { value: 'private', label: t.acl_mode_private, description: t.acl_mode_private_desc },
+    { value: 'custom', label: t.acl_mode_custom, description: t.acl_mode_custom_desc },
   ];
 
   const currentMode = policy.mode || (isRootContainer ? 'private' : 'inherit');
@@ -85,8 +98,8 @@ export async function renderAclEditor(reqCtx) {
       const hasLimit = cq.limitBytes !== undefined && cq.limitBytes !== null;
       const usedPercent = hasLimit ? Math.min(100, Math.round(((cq.usedBytes || 0) / cq.limitBytes) * 100)) : 0;
       quotaData = {
-        usedFormatted: formatBytes(cq.usedBytes || 0, lang),
-        limitFormatted: hasLimit ? formatBytes(cq.limitBytes, lang) : '',
+        usedFormatted: formatBytes(cq.usedBytes || 0),
+        limitFormatted: hasLimit ? formatBytes(cq.limitBytes) : '',
         hasLimit,
         usedPercent,
         barColorClass: usedPercent > 90 ? 'progress-danger' : usedPercent > 70 ? 'progress-warning' : 'progress-success',
@@ -111,10 +124,10 @@ export async function renderAclEditor(reqCtx) {
     effectiveSource,
     friends,
     hasFriends: friends.length > 0,
-    turtlePolicy: policyToTurtle(policy, resourceIri, config.webId, friends),
+    turtlePolicy: policyToTurtle(policy, resourceIri, uc.webId, friends),
     quotaData,
     quotaLimitValue,
-  }, { user: username, nav: 'storage', lang, dir, t, storage: reqCtx.storage, baseUrl: config.baseUrl });
+  }, { user: username, config, nav: 'storage', storage: reqCtx.storage, baseUrl: config.baseUrl, lang });
 }
 
 /**
@@ -125,7 +138,7 @@ export async function handleAclUpdate(reqCtx) {
   if (authCheck) return authCheck;
 
   const { request, config, env, url } = reqCtx;
-  const username = config.username;
+  const username = reqCtx.user;
   const path = url.pathname.replace(/^\/acp\/?/, '') || `${username}/`;
   const resourceIri = `${config.baseUrl}/${path}`;
 
@@ -202,7 +215,7 @@ const MODE_LABELS = {
  * @param {string} resourceIri
  * @returns {Promise<{mode: string, agents?: string[], inherit?: boolean}>}
  */
-async function loadPolicy(kv, resourceIri) {
+export async function loadPolicy(kv, resourceIri) {
   const data = await kv.get(`acp:${resourceIri}`);
   return data ? JSON.parse(data) : { ...DEFAULT_POLICY };
 }
@@ -233,7 +246,7 @@ async function resolveInheritedPolicy(kv, resourceIri) {
   }
 }
 
-async function loadFriends(kv, username) {
+export async function loadFriends(kv, username) {
   const data = await kv.get(`friends:${username}`);
   return data ? JSON.parse(data) : [];
 }
@@ -327,7 +340,7 @@ async function evaluatePolicy(policy, agentWebId, kv, username) {
   }
 }
 
-function policyToTurtle(policy, resourceIri, ownerWebId, friends) {
+export function policyToTurtle(policy, resourceIri, ownerWebId, friends) {
   if (policy.mode === 'inherit') {
     return '# No explicit policy — inheriting from parent container.';
   }

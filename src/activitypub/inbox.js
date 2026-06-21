@@ -6,17 +6,43 @@ import { fetchRemoteActor, getActorPublicKey } from './remote.js';
 import { processFollow, processAccept, processUndo, processCreate } from './activities.js';
 import { deliverActivity, collectInboxes } from './delivery.js';
 import { validateExternalUrl } from '../security/ssrf.js';
+import { userExists } from '../users.js';
+import { getUserConfig } from '../config.js';
 
 /**
  * Handle POST /{user}/inbox (Server-to-Server)
  */
 export async function handleInbox(reqCtx) {
   const { request, params, config, env, ctx } = reqCtx;
-  const username = params.user;
+  let username = params.user;
 
-  if (username !== config.username) {
+  // Shared inbox (/inbox): resolve target user from the activity body
+  if (!username) {
+    try {
+      const body = await request.clone().json();
+      const prefix = config.baseUrl + '/';
+      // Try object (Follow target), then to/cc recipients
+      const candidates = [
+        typeof body.object === 'string' ? body.object : body.object?.id,
+        ...[].concat(body.to || [], body.cc || []).map(r => typeof r === 'string' ? r : r?.id),
+      ];
+      for (const uri of candidates) {
+        if (uri?.startsWith(prefix)) {
+          const candidate = uri.slice(prefix.length).split('/')[0];
+          if (candidate && await userExists(env.APPDATA, candidate)) {
+            username = candidate;
+            break;
+          }
+        }
+      }
+    } catch {}
+  }
+
+  if (!username || !await userExists(env.APPDATA, username)) {
     return new Response('Not Found', { status: 404 });
   }
+
+  const uc = getUserConfig(config, username);
 
   // Parse activity
   let activity;
@@ -31,8 +57,8 @@ export async function handleInbox(reqCtx) {
     return new Response('Missing type or actor', { status: 400 });
   }
 
-  // Reject activities missing an id field
-  if (!activity.id) {
+  // Reject activities missing an id field (Accept/Reject may omit it)
+  if (!activity.id && !['Accept', 'Reject'].includes(activity.type)) {
     console.log(`[inbox] rejected: missing activity id (type=${activity.type})`);
     return new Response('Missing activity id', { status: 400 });
   }
@@ -63,27 +89,30 @@ export async function handleInbox(reqCtx) {
     return new Response('Invalid signature', { status: 401 });
   }
 
+  // Build a user-scoped config for activity processing
+  const userScopedConfig = { ...config, ...uc };
+
   // Dispatch by activity type
   const type = activity.type;
   try {
     switch (type) {
       case 'Follow': {
         // Store as pending — owner accepts/rejects via the UI
-        await processFollow(activity, config, env, ctx);
+        await processFollow(activity, userScopedConfig, env, ctx);
         break;
       }
       case 'Accept':
-        await processAccept(activity, config, env);
+        await processAccept(activity, userScopedConfig, env);
         break;
       case 'Undo':
-        await processUndo(activity, config, env);
+        await processUndo(activity, userScopedConfig, env);
         break;
       case 'Create':
-        await processCreate(activity, config, env);
+        await processCreate(activity, userScopedConfig, env);
         break;
       default:
         // Store unknown activity types in inbox anyway
-        await processCreate(activity, config, env);
+        await processCreate(activity, userScopedConfig, env);
     }
   } catch (err) {
     console.error('Inbox processing error:', err);

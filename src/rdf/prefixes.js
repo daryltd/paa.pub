@@ -16,6 +16,7 @@ export const PREFIXES = {
   schema: 'https://schema.org/',
   as: 'https://www.w3.org/ns/activitystreams#',
   sec: 'https://w3id.org/security#',
+  owl: 'http://www.w3.org/2002/07/owl#',
 };
 
 /** Shorten a full predicate IRI to a prefixed form (e.g. foaf:name). */
@@ -57,15 +58,6 @@ export async function saveCustomPrefixes(kv, username, prefixMap) {
 export async function loadMergedPrefixes(kv, username) {
   const customMap = await loadCustomPrefixes(kv, username);
   return { ...PREFIXES, ...customMap };
-}
-
-/** Build a prefix header for Turtle serialization. */
-export function turtlePrefixes(prefixNames, prefixMap) {
-  const map = prefixMap || PREFIXES;
-  return prefixNames
-    .filter(name => map[name])
-    .map(name => `@prefix ${name}: <${map[name]}> .`)
-    .join('\n');
 }
 
 // --- Namespace predicate catalog ---
@@ -141,13 +133,16 @@ export const BUILTIN_NS_PREDICATES = {
   [PREFIXES.space]: ns(PREFIXES.space, [
     'storage', 'preferencesFile', 'workspace',
   ]),
+  [PREFIXES.owl]: ns(PREFIXES.owl, [
+    'sameAs',
+  ]),
 };
 
 /**
  * Load stored predicates for a namespace from KV.
  * Falls back to BUILTIN_NS_PREDICATES if no custom data is stored.
  */
-export async function loadNsPredicates(kv, nsIri) {
+async function loadNsPredicates(kv, nsIri) {
   try {
     const raw = await kv.get(`ns_predicates:${nsIri}`);
     if (raw) return JSON.parse(raw);

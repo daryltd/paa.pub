@@ -14,12 +14,12 @@
  */
 
 const RATE_LIMITS = {
-  login:    { window: 15 * 60, max: 10 },
-  webauthn: { window: 15 * 60, max: 20 },
-  token:    { window: 60,      max: 30 },
-  register: { window: 60 * 60, max: 10 },
-  inbox:    { window: 60,      max: 60 },
-  write:    { window: 60,      max: 60 },
+  login:    { window: 15 * 60, max: 50 },
+  webauthn: { window: 15 * 60, max: 50 },
+  token:    { window: 60,      max: 100 },
+  register: { window: 60 * 60, max: 100 },
+  inbox:    { window: 60,      max: 120 },
+  write:    { window: 60,      max: 120 },
 };
 
 /**
@@ -53,7 +53,7 @@ export async function checkRateLimit(kv, category, ip) {
 
   record.count++;
   const ttl = config.window - (now - record.windowStart);
-  await kv.put(key, JSON.stringify(record), { expirationTtl: Math.max(ttl, 1) });
+  await kv.put(key, JSON.stringify(record), { expirationTtl: Math.max(ttl, 60) });
   return { allowed: true, remaining: config.max - record.count, retryAfter: 0 };
 }
 

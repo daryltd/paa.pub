@@ -1,34 +1,53 @@
+<activity-store id="store"></activity-store>
 <h1>{{t.act_title}}</h1>
+<div class="fediverse-handle" style="margin: -0.5em 0 1em; font-size: 0.9em; color: var(--text-muted, #666);">
+  <code onclick="navigator.clipboard.writeText(this.textContent)" title="Click to copy" style="cursor:pointer; padding: 0.2em 0.5em; background: var(--bg-alt, #f0f0f0); border-radius: 4px;">{{handle}}</code>
+</div>
 {{#error}}
 <div class="error">{{error}}</div>
 {{/error}}
 
-<details class="card">
+<details class="card" id="details-compose">
   <summary><h2>{{t.act_compose}}</h2></summary>
-  <form method="POST" action="/compose">
+  <div id="reply-context" class="hidden text-sm text-muted mb-05" style="padding: 0.5rem; background: var(--bg-alt, #f0f0f0); border-radius: 4px;">
+    {{t.act_replying_to}} <span id="reply-context-target" class="mono"></span>
+    <button type="button" class="btn btn-secondary btn-xs ml-05" id="cancel-reply">{{t.act_cancel_reply}}</button>
+  </div>
+  <form method="POST" action="/compose" id="compose-form">
+    <input type="hidden" name="inReplyTo" id="compose-in-reply-to" value="">
     <div class="form-group">
-      <textarea name="content" placeholder="{{t.act_placeholder}}" required></textarea>
+      <textarea name="content" id="compose-content" placeholder="{{t.act_placeholder}}" required></textarea>
     </div>
     <div class="form-group">
       <label for="audience">{{t.act_audience}}</label>
       <select name="audience" id="audience">
-        <option value="public">{{t.act_public}}</option>
-        <option value="unlisted">{{t.act_unlisted}}</option>
-        <option value="followers">{{t.act_followers_only}}</option>
-        <option value="private">{{t.act_private}}</option>
+        <option value="public">{{t.aud_public}}</option>
+        <option value="unlisted">{{t.aud_unlisted}}</option>
+        <option value="followers">{{t.aud_followers}}</option>
+        <option value="direct">{{t.aud_direct}}</option>
+        <option value="private">{{t.aud_private}}</option>
+      </select>
+    </div>
+    <div class="form-group hidden" id="recipient-group">
+      <label for="recipient">{{t.act_recipient}}</label>
+      <select name="recipient" id="recipient">
+        <option value="">{{t.act_select_recipient}}</option>
+        {{#contacts}}
+        <option value="{{uri}}">{{uri}}</option>
+        {{/contacts}}
       </select>
     </div>
     <div class="form-group">
-      <input type="text" name="summary" placeholder="{{t.act_content_warning}}">
+      <input type="text" name="summary" id="compose-summary" placeholder="{{t.act_cw}}">
     </div>
     <button type="submit" class="btn">{{t.act_post}}</button>
   </form>
 </details>
 
 {{#hasPendingRequests}}
-<details class="card">
+<details class="card" id="details-pending-requests">
   <summary><h2>{{t.act_follow_requests}} ({{pendingCount}})</h2></summary>
-  <ul class="list-plain">
+  <ul class="list-plain" id="pending-requests-list">
     {{#pendingRequests}}
     <li class="follow-request-item">
       <span class="mono flex-1 text-sm truncate">{{actor}}</span>
@@ -47,17 +66,34 @@
 </details>
 {{/hasPendingRequests}}
 
-<details class="card">
+<details class="card" id="details-follow">
   <summary><h2>{{t.act_follow_unfollow}}</h2></summary>
   <form method="POST" action="/follow" class="flex gap-05 mb-05">
-    <input type="text" name="target" placeholder="{{t.act_target_placeholder}}" class="flex-1">
+    <input type="text" name="target" placeholder="{{t.act_follow_placeholder}}" class="flex-1">
     <button type="submit" class="btn">{{t.act_follow}}</button>
   </form>
 </details>
-{{#hasFollowing}}
-<details class="card">
-  <summary><h2>{{t.act_following}} ( {{followingCount}} )</h2></summary>
+{{#hasPendingOutgoing}}
+<details class="card" open id="details-pending-outgoing">
+  <summary><h2>Pending Follows ({{pendingOutgoingCount}})</h2></summary>
   <ul class="list-plain mt-05">
+    {{#pendingOutgoing}}
+    <li class="list-row">
+      <span class="mono flex-1 text-sm truncate">{{target}}</span>
+      <span class="text-muted text-sm">{{sentAt}}</span>
+      <form method="POST" action="/unfollow" class="inline-form">
+        <input type="hidden" name="target" value="{{target}}">
+        <button type="submit" class="btn btn-secondary btn-xs">Cancel</button>
+      </form>
+    </li>
+    {{/pendingOutgoing}}
+  </ul>
+</details>
+{{/hasPendingOutgoing}}
+{{#hasFollowing}}
+<details class="card" id="details-following">
+  <summary><h2>{{t.act_following}} ( {{followingCount}} )</h2></summary>
+  <ul class="list-plain mt-05" id="following-list">
     {{#following}}
     <li class="list-row">
       <a href="{{feedUrl}}" class="mono flex-1 text-sm truncate">{{uri}}</a>
@@ -71,9 +107,9 @@
 </details>
 {{/hasFollowing}}
 {{#hasFollowers}}
-<details class="card mt-05">
+<details class="card mt-05" id="details-followers">
   <summary><h2>{{t.act_followers}} ( {{followerCount}} )</h2></summary>
-  <ul class="list-plain mt-05">
+  <ul class="list-plain mt-05" id="followers-list">
     {{#followers}}
     <li class="list-row">
       <a href="{{feedUrl}}" class="mono text-sm truncate">{{uri}}</a>
@@ -83,15 +119,22 @@
 </details>
 {{/hasFollowers}}
 
-<details>
-  <summary><h2>{{t.act_feed_title}} <span class="text-muted text-sm font-normal">({{latestLabel}})</span></h2></summary>
-  <div class="flex justify-between items-center">
-    <div class="flex gap-05">
+<details id="details-feed">
+  <summary><h2>{{t.act_feed}} <span class="text-muted text-sm font-normal">({{t.act_latest}} {{feedLimit}})</span></h2></summary>
+  <div class="flex justify-between items-center mb-05">
+    <div class="flex gap-05 flex-wrap" id="feed-filters">
+      {{#feedReceived}}<span class="btn btn-xs">Received</span>{{/feedReceived}}
+      {{^feedReceived}}<a href="/activity?feed=received{{#showAll}}&show=all{{/showAll}}" class="btn btn-secondary btn-xs" data-feed="received">Received</a>{{/feedReceived}}
+      {{#feedSent}}<span class="btn btn-xs">Sent</span>{{/feedSent}}
+      {{^feedSent}}<a href="/activity?feed=sent{{#showAll}}&show=all{{/showAll}}" class="btn btn-secondary btn-xs" data-feed="sent">Sent</a>{{/feedSent}}
+      {{#feedAll}}<span class="btn btn-xs">All</span>{{/feedAll}}
+      {{^feedAll}}<a href="/activity?feed=all{{#showAll}}&show=all{{/showAll}}" class="btn btn-secondary btn-xs" data-feed="all">All</a>{{/feedAll}}
+      <span class="text-muted text-sm">|</span>
       {{#showAll}}
-      <a href="/activity" class="btn btn-secondary btn-xs">{{t.act_hide_read}}</a>
+      <a href="/activity?feed={{#feedSent}}sent{{/feedSent}}{{#feedAll}}all{{/feedAll}}{{#feedReceived}}received{{/feedReceived}}" class="btn btn-secondary btn-xs">{{t.act_hide_read}}</a>
       {{/showAll}}
       {{^showAll}}
-      <a href="/activity?show=all" class="btn btn-secondary btn-xs">{{t.act_show_all}}</a>
+      <a href="/activity?feed={{#feedSent}}sent{{/feedSent}}{{#feedAll}}all{{/feedAll}}{{#feedReceived}}received{{/feedReceived}}&show=all" class="btn btn-secondary btn-xs">{{t.act_show_all}}</a>
       {{/showAll}}
       {{#hasActivities}}
       <form method="POST" action="/activity/mark-all-read" class="inline-form">
@@ -100,15 +143,21 @@
       {{/hasActivities}}
     </div>
   </div>
+  <div id="activity-feed-list">
   {{^hasActivities}}
   <div class="card text-muted">{{t.act_no_activities}}</div>
   {{/hasActivities}}
   {{#activities}}
-  <div class="card">
+  <div class="card" data-activity-id="{{activityId}}">
     <div class="flex justify-between mb-05">
       <span class="mono text-sm">{{actor}}</span>
       <span class="text-muted">{{published}}</span>
     </div>
+    {{#hasInReplyTo}}
+    <div class="text-sm text-muted mb-025">
+      &#8627; {{t.act_in_reply_to}} <a href="{{inReplyToUrl}}" target="_blank" rel="noopener" class="mono break-all text-xs">{{inReplyToUrl}}</a>
+    </div>
+    {{/hasInReplyTo}}
     <div class="flex gap-05 mb-05">
       <span class="badge badge-type">{{type}}</span>
       {{#isReceived}}<span class="badge badge-received">{{source}}</span>{{/isReceived}}
@@ -117,23 +166,119 @@
         <input type="hidden" name="id" value="{{activityId}}">
         <button type="submit" class="btn btn-secondary btn-xs">{{t.act_mark_read}}</button>
       </form>
+      <button type="button" class="btn btn-secondary btn-xs" data-reply-to="{{activityId}}" data-reply-actor="{{actor}}">{{t.act_reply}}</button>
     </div>
-    {{#isCreate}}
-      {{#hasSummary}}<div class="text-muted"><em>{{t.act_cw}} {{summary}}</em></div>{{/hasSummary}}
+    {{#hasActivitySummary}}<div class="text-muted text-sm mb-05"><em>{{actSummary}}</em></div>{{/hasActivitySummary}}
+
+    {{! --- Content activities: Create, Update --- }}
+    {{#isContent}}
+      {{#hasSummary}}<div class="text-muted"><em>{{t.act_cw_prefix}} {{summary}}</em></div>{{/hasSummary}}
       <div>{{{content}}}</div>
-    {{/isCreate}}
-    {{#isFollow}}
-      <div class="text-muted">{{t.act_follow_arrow}} {{target}}</div>
-    {{/isFollow}}
-    {{#isAccept}}
-      <div class="text-muted">{{t.act_accepted}}</div>
-    {{/isAccept}}
+      {{#hasObjectAttachments}}
+      <div class="mt-05">
+        {{#objectAttachments}}
+        <div class="text-sm mt-025">
+          {{#isImage}}<img src="{{attUrl}}" alt="{{attName}}" style="max-width:100%;max-height:200px;border-radius:4px;">{{/isImage}}
+          {{^isImage}}{{#hasAttUrl}}<a href="{{attUrl}}" target="_blank" rel="noopener" class="mono break-all">{{attName}}</a>{{/hasAttUrl}}{{/isImage}}
+        </div>
+        {{/objectAttachments}}
+      </div>
+      {{/hasObjectAttachments}}
+    {{/isContent}}
+
+    {{! --- Question activities --- }}
+    {{#isQuestion}}
+      {{#hasQuestionName}}<div>{{questionName}}</div>{{/hasQuestionName}}
+      {{#hasQuestionOptions}}
+      <ul class="mt-025 mb-025">
+        {{#questionOptions}}
+        <li>{{#hasOptUrl}}<a href="{{optUrl}}" target="_blank" rel="noopener">{{optName}}</a>{{/hasOptUrl}}{{^hasOptUrl}}{{optName}}{{/hasOptUrl}}</li>
+        {{/questionOptions}}
+      </ul>
+      {{/hasQuestionOptions}}
+      {{#hasObject}}<div class="text-sm text-muted mt-05">{{#hasObjectUrl}}<a href="{{objectUrl}}" target="_blank" rel="noopener" class="mono break-all">{{objectName}}</a>{{/hasObjectUrl}}</div>{{/hasObject}}
+    {{/isQuestion}}
+
+    {{! --- Response activities: Accept, Reject, TentativeAccept, TentativeReject --- }}
+    {{#isResponse}}
+      <div class="text-muted">
+        {{#hasInnerType}}<span class="badge badge-type">{{innerType}}</span> {{/hasInnerType}}
+        {{#hasInnerActor}}<span class="mono text-sm">{{innerActor}}</span>{{/hasInnerActor}}
+        {{^hasInnerType}}{{^hasInnerActor}}{{t.act_accepted}}{{/hasInnerActor}}{{/hasInnerType}}
+      </div>
+    {{/isResponse}}
+
+    {{! --- Undo activities --- }}
     {{#isUndo}}
-      <div class="text-muted">{{t.act_undid}}</div>
+      <div class="text-muted">
+        {{#hasInnerType}}<span class="badge badge-type">{{innerType}}</span> {{/hasInnerType}}
+        {{#hasInnerActor}}<span class="mono text-sm">{{innerActor}}</span>{{/hasInnerActor}}
+        {{^hasInnerType}}{{^hasInnerActor}}{{t.act_undid}}{{/hasInnerActor}}{{/hasInnerType}}
+      </div>
     {{/isUndo}}
-    {{#isOther}}
-      <div class="text-muted">{{typeActivity}}</div>
-    {{/isOther}}
+
+    {{! --- Delete activities --- }}
+    {{#isDelete}}
+      {{#hasObject}}
+      <div class="text-sm">{{#hasObjectType}}<span class="badge badge-type">{{objectType}}</span> {{/hasObjectType}}{{#hasObjectUrl}}<a href="{{objectUrl}}" target="_blank" rel="noopener" class="mono break-all">{{objectName}}</a>{{/hasObjectUrl}}{{^hasObjectUrl}}<span class="text-muted">{{objectName}}</span>{{/hasObjectUrl}}</div>
+      {{/hasObject}}
+    {{/isDelete}}
+
+    {{! --- All other activities --- }}
+    {{#isObject}}
+      {{#hasObject}}
+      <div>
+        {{#hasObjectType}}<span class="badge badge-type">{{objectType}}</span> {{/hasObjectType}}
+        {{#hasObjectUrl}}<a href="{{objectUrl}}" target="_blank" rel="noopener" class="mono break-all">{{objectName}}</a>{{/hasObjectUrl}}
+        {{^hasObjectUrl}}<span>{{objectName}}</span>{{/hasObjectUrl}}
+      </div>
+      {{#hasObjectContent}}<div class="text-sm text-muted mt-025">{{{objectContent}}}</div>{{/hasObjectContent}}
+      {{#hasObjectImage}}<img src="{{objectImageUrl}}" alt="{{objectName}}" style="max-width:100%;max-height:200px;border-radius:4px;margin-top:0.25rem;">{{/hasObjectImage}}
+      {{#objectIsVideo}}<video src="{{objectMediaUrl}}" controls style="max-width:100%;max-height:200px;border-radius:4px;margin-top:0.25rem;"></video>{{/objectIsVideo}}
+      {{#objectIsAudio}}<audio src="{{objectMediaUrl}}" controls style="width:100%;margin-top:0.25rem;"></audio>{{/objectIsAudio}}
+      {{#hasObjectAttachments}}
+      <div class="mt-05">
+        {{#objectAttachments}}
+        <div class="text-sm mt-025">
+          {{#isImage}}<img src="{{attUrl}}" alt="{{attName}}" style="max-width:100%;max-height:200px;border-radius:4px;">{{/isImage}}
+          {{^isImage}}{{#hasAttUrl}}<a href="{{attUrl}}" target="_blank" rel="noopener" class="mono break-all">{{attName}}</a>{{/hasAttUrl}}{{/isImage}}
+        </div>
+        {{/objectAttachments}}
+      </div>
+      {{/hasObjectAttachments}}
+      {{#hasObjectTags}}
+      <div class="flex gap-025 flex-wrap mt-025">
+        {{#objectTags}}
+        <span class="badge">{{#hasTagUrl}}<a href="{{tagUrl}}" target="_blank" rel="noopener">{{tagName}}</a>{{/hasTagUrl}}{{^hasTagUrl}}{{tagName}}{{/hasTagUrl}}</span>
+        {{/objectTags}}
+      </div>
+      {{/hasObjectTags}}
+      {{/hasObject}}
+      {{^hasObject}}<div class="text-muted">{{type}} {{t.act_type_activity}}</div>{{/hasObject}}
+    {{/isObject}}
+
+    {{! --- Target info --- }}
+    {{#hasTarget}}
+    <div class="text-sm text-muted mt-025">
+      &rarr; {{#hasTargetType}}<span class="badge badge-type">{{targetType}}</span> {{/hasTargetType}}{{#hasTargetUrl}}<a href="{{targetUrl}}" target="_blank" rel="noopener" class="mono break-all">{{targetName}}</a>{{/hasTargetUrl}}{{^hasTargetUrl}}{{targetName}}{{/hasTargetUrl}}
+    </div>
+    {{/hasTarget}}
+
+    {{! --- Origin info --- }}
+    {{#hasOrigin}}
+    <div class="text-sm text-muted mt-025">
+      &larr; {{#hasOriginType}}<span class="badge badge-type">{{originType}}</span> {{/hasOriginType}}{{#hasOriginUrl}}<a href="{{originUrl}}" target="_blank" rel="noopener" class="mono break-all">{{originName}}</a>{{/hasOriginUrl}}{{^hasOriginUrl}}{{originName}}{{/hasOriginUrl}}
+    </div>
+    {{/hasOrigin}}
+
+    {{! --- Location info --- }}
+    {{#hasLocation}}
+    <div class="text-sm text-muted mt-025">
+      &#x1F4CD; {{#hasLocationUrl}}<a href="{{locationUrl}}" target="_blank" rel="noopener">{{locationName}}</a>{{/hasLocationUrl}}{{^hasLocationUrl}}{{locationName}}{{/hasLocationUrl}}
+    </div>
+    {{/hasLocation}}
   </div>
   {{/activities}}
+  </div>
 </details>
+<script type="module" src="/scripts/activity.js"></script>

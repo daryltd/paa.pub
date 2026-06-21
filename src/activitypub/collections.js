@@ -1,6 +1,7 @@
 /**
  * Followers/Following OrderedCollection endpoints.
  */
+import { userExists } from '../users.js';
 
 /**
  * Handle GET /{user}/followers and /{user}/following
@@ -9,7 +10,7 @@ export async function handleCollections(reqCtx) {
   const { url, params, config, env } = reqCtx;
   const username = params.user;
 
-  if (username !== config.username) {
+  if (!await userExists(env.APPDATA, username)) {
     return new Response('Not Found', { status: 404 });
   }
 

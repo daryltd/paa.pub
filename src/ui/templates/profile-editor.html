@@ -1,4 +1,4 @@
-<h1>{{t.prof_title}}</h1>
+<h1>{{t.prof_edit_title}}</h1>
 
 {{#success}}<div class="success">{{success}}</div>{{/success}}
 {{#error}}<div class="error">{{error}}</div>{{/error}}
@@ -17,48 +17,48 @@
 
     <div class="form-group">
       <label for="name">{{t.prof_name}}</label>
-      <input type="text" id="name" name="name" value="{{name}}" placeholder="{{t.prof_placeholder_name}}">
+      <input type="text" id="name" name="name" value="{{name}}" placeholder="{{t.prof_name_ph}}">
     </div>
 
     <div class="form-group">
       <label for="nick">{{t.prof_nick}}</label>
-      <input type="text" id="nick" name="nick" value="{{nick}}" placeholder="{{t.prof_placeholder_nick}}">
+      <input type="text" id="nick" name="nick" value="{{nick}}" placeholder="{{t.prof_nick_ph}}">
     </div>
 
     <div class="form-group">
       <label for="img">{{t.prof_avatar}}</label>
-      <input type="url" id="img" name="img" value="{{img}}" placeholder="{{t.prof_placeholder_avatar}}">
+      <input type="url" id="img" name="img" value="{{img}}" placeholder="https://example.com/photo.jpg">
     </div>
 
     <div class="form-group">
       <label for="email">{{t.prof_email}}</label>
-      <input type="text" id="email" name="email" value="{{email}}" placeholder="{{t.prof_placeholder_email}}">
+      <input type="text" id="email" name="email" value="{{email}}" placeholder="you@example.com">
     </div>
 
     <div class="form-group">
       <label for="homepage">{{t.prof_homepage}}</label>
-      <input type="url" id="homepage" name="homepage" value="{{homepage}}" placeholder="{{t.prof_placeholder_homepage}}">
+      <input type="url" id="homepage" name="homepage" value="{{homepage}}" placeholder="https://yoursite.com">
     </div>
 
     <div class="form-group">
       <label for="bio">{{t.prof_bio}}</label>
-      <textarea id="bio" name="bio" placeholder="{{t.prof_placeholder_bio}}">{{bio}}</textarea>
+      <textarea id="bio" name="bio" placeholder="{{t.prof_bio_ph}}">{{bio}}</textarea>
     </div>
 
     <div class="form-group">
       <label for="role">{{t.prof_role}}</label>
-      <input type="text" id="role" name="role" value="{{role}}" placeholder="{{t.prof_placeholder_role}}">
+      <input type="text" id="role" name="role" value="{{role}}" placeholder="Developer, Artist, etc.">
     </div>
 
     <div class="form-group">
       <label for="description">{{t.prof_description}}</label>
-      <textarea id="description" name="description" placeholder="{{t.prof_placeholder_desc}}">{{description}}</textarea>
+      <textarea id="description" name="description" placeholder="{{t.prof_description_ph}}">{{description}}</textarea>
     </div>
   </details>
 
   <details class="card">
     <summary><h2>{{t.prof_custom_prefixes}}</h2></summary>
-    <p class="text-muted mb-075">{{t.prof_custom_prefixes_desc}} {{t.prof_find_ontologies}} <a href="https://lov.linkeddata.es/dataset/lov/" target="_blank">LOV</a> &middot; <a href="https://www.ebi.ac.uk/ols4/" target="_blank">OLS</a> &middot; <a href="https://prefix.cc/" target="_blank">prefix.cc</a></p>
+    <p class="text-muted mb-075">{{t.prof_prefix_desc}} {{t.prof_find_ontologies}} <a href="https://lov.linkeddata.es/dataset/lov/" target="_blank">LOV</a> &middot; <a href="https://www.ebi.ac.uk/ols4/" target="_blank">OLS</a> &middot; <a href="https://prefix.cc/" target="_blank">prefix.cc</a></p>
     <div id="prefix-manager">
       <table class="prefix-table">
         <thead><tr><th>{{t.prof_prefix}}</th><th>{{t.prof_namespace}}</th><th></th></tr></thead>
@@ -93,7 +93,7 @@
     <button type="button" class="btn btn-secondary mt-05" id="fk-add">{{t.prof_add_connection}}</button>
 
     {{#hasApFollowing}}
-    <h3 class="mt-1 mb-05">{{t.prof_following}} ({{apFollowingCount}})</h3>
+    <h3 class="mt-1 mb-05">{{t.act_following}} ({{apFollowingCount}})</h3>
     <ul class="list-plain">
       {{#apFollowing}}
       <li class="list-row"><span class="mono flex-1 text-sm truncate">{{uri}}</span></li>
@@ -102,7 +102,7 @@
     {{/hasApFollowing}}
 
     {{#hasApFollowers}}
-    <h3 class="mt-1 mb-05">{{t.prof_followers}} ({{apFollowersCount}})</h3>
+    <h3 class="mt-1 mb-05">{{t.act_followers}} ({{apFollowersCount}})</h3>
     <ul class="list-plain">
       {{#apFollowers}}
       <li class="list-row"><span class="mono flex-1 text-sm truncate">{{uri}}</span></li>
@@ -128,14 +128,14 @@
         <div class="te-pred-cell">
           <span class="te-pred-display mono cursor-pointer">{{predicateShort}}</span>
           <input type="text" class="te-pred-input hidden" name="custom_predicate[]"
-                 value="{{predicate}}" placeholder="Predicate IRI">
-          <button type="button" class="te-search-btn btn btn-secondary btn-xs hidden">Browse</button>
+                 value="{{predicate}}" placeholder="{{t.prof_predicate}}">
+          <button type="button" class="te-search-btn btn btn-secondary btn-xs hidden">{{t.stor_browse}}</button>
         </div>
         <div class="te-obj-cell">
           <input type="text" class="te-obj-input" name="custom_object[]"
-                 value="{{object}}" placeholder="Object value">
+                 value="{{object}}" placeholder="{{t.prof_object}}">
         </div>
-        <span class="te-template-key text-muted mono text-sm nowrap" title="Template key">{{templateKey}}</span>
+        <span class="te-template-key text-muted mono text-sm nowrap" title="{{t.prof_template_key}}">{{templateKey}}</span>
         <button type="button" class="btn btn-secondary btn-compact te-remove">{{t.prof_remove}}</button>
       </div>
       {{/customTriples}}

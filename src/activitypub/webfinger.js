@@ -1,12 +1,14 @@
 /**
  * WebFinger endpoint (/.well-known/webfinger).
  */
+import { userExists } from '../users.js';
+import { getUserConfig } from '../config.js';
 
 /**
  * Handle GET /.well-known/webfinger
  */
 export async function handleWebFinger(reqCtx) {
-  const { url, config } = reqCtx;
+  const { url, config, env } = reqCtx;
   const resource = url.searchParams.get('resource');
   if (!resource) {
     return new Response('Missing resource parameter', { status: 400 });
@@ -19,22 +21,38 @@ export async function handleWebFinger(reqCtx) {
   }
 
   const [, username, domain] = acctMatch;
-  if (username !== config.username || domain !== config.domain) {
+  if (domain !== config.domain) {
     return new Response('Not Found', { status: 404 });
   }
 
+  // Check if the user exists
+  if (!await userExists(env.APPDATA, username)) {
+    return new Response('Not Found', { status: 404 });
+  }
+
+  const uc = getUserConfig(config, username);
+
   const jrd = {
     subject: resource,
+    aliases: [
+      uc.actorId,
+      uc.did,
+    ],
     links: [
       {
         rel: 'self',
         type: 'application/activity+json',
-        href: config.actorId,
+        href: uc.actorId,
       },
       {
         rel: 'http://webfinger.net/rel/profile-page',
         type: 'text/html',
         href: `${config.baseUrl}/${username}/profile/card`,
+      },
+      {
+        rel: 'self',
+        type: 'application/did+ld+json',
+        href: `${config.baseUrl}/${username}/did.json`,
       },
     ],
   };

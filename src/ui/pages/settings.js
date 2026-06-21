@@ -1,21 +1,29 @@
 /**
- * Settings page — language/locale preferences and app management.
+ * Settings page: language/locale, appearance, notifications, app management.
  *
  * Routes:
- *   GET  /settings — render settings page with language selector and app management
- *   POST /settings — handle preference saves, app permission updates/revokes
- *
- * User preferences are stored in APPDATA KV at key `user_prefs:{username}`.
- * App management functionality is migrated from the standalone app-permissions page.
+ *   GET  /settings — render settings page
+ *   POST /settings — save user preferences
  */
 import { renderPage } from '../shell.js';
 import template from '../templates/settings.html';
 import { requireAuth } from '../../auth/middleware.js';
 import { SUPPORTED_LANGUAGES } from '../../i18n/index.js';
-import { formatDate } from '../../i18n/format.js';
-import { listAppPermissions, revokeAppPermission, grantAppPermission, getAppPermission } from '../../solid/app-permissions.js';
+import { listAppPermissions } from '../../solid/app-permissions.js';
 import { parseNTriples, unwrapIri } from '../../rdf/ntriples.js';
 import { PREFIXES } from '../../rdf/prefixes.js';
+import { formatDate } from '../../i18n/format.js';
+import { getTranslations } from '../../i18n/index.js';
+
+const TIMEZONES = [
+  'UTC',
+  'America/New_York', 'America/Chicago', 'America/Denver', 'America/Los_Angeles',
+  'America/Sao_Paulo', 'America/Mexico_City',
+  'Europe/London', 'Europe/Paris', 'Europe/Berlin', 'Europe/Moscow',
+  'Asia/Jerusalem', 'Asia/Tokyo', 'Asia/Shanghai', 'Asia/Kolkata',
+  'Australia/Sydney',
+  'Pacific/Auckland', 'Pacific/Honolulu',
+];
 
 /**
  * GET /settings — render the settings page.
@@ -24,107 +32,145 @@ export async function renderSettings(reqCtx) {
   const authCheck = requireAuth(reqCtx);
   if (authCheck) return authCheck;
 
-  const { config, env, storage, url, lang, dir, t, userPrefs } = reqCtx;
-  const username = config.username;
+  const { config, env, storage, lang } = reqCtx;
+  const username = reqCtx.user;
+  const t = getTranslations(lang);
 
-  // Flash messages from redirect
-  const saved = url.searchParams.get('saved');
-  const success = saved === '1' ? (t.set_prefs_saved || 'Preferences saved.') : '';
+  // Load user preferences
+  const prefsRaw = await env.APPDATA.get(`user_prefs:${username}`);
+  const prefs = prefsRaw ? JSON.parse(prefsRaw) : {};
 
-  // Language selector data
-  const currentLang = userPrefs?.language || lang;
+  const message = reqCtx.url.searchParams.get('message') || '';
+
+  // Build language options
   const languages = SUPPORTED_LANGUAGES.map(l => ({
     ...l,
-    selected: l.code === currentLang,
+    selected: (prefs.language || 'en-US') === l.code,
   }));
 
-  // Date format selector
-  const currentDateFormat = userPrefs?.dateFormat || 'medium';
-  const dateFormats = [
-    { value: 'short', label: t.set_date_short || 'Short', selected: currentDateFormat === 'short' },
-    { value: 'medium', label: t.set_date_medium || 'Medium', selected: currentDateFormat === 'medium' },
-    { value: 'long', label: t.set_date_long || 'Long', selected: currentDateFormat === 'long' },
-  ];
+  // Build timezone options
+  const currentTz = prefs.timezone || 'UTC';
+  const timezones = TIMEZONES.map(tz => ({
+    value: tz,
+    label: tz.replace(/_/g, ' '),
+    selected: tz === currentTz,
+  }));
 
-  // Load app permissions (migrated from app-permissions.js)
+  // Date format selection
+  const dateFormat = prefs.dateFormat || 'medium';
+
+  // Notification prefs
+  const showFollows = prefs.notifications?.showFollows !== false;
+  const showMentions = prefs.notifications?.showMentions !== false;
+
+  // App permissions data (same as app-permissions.js)
   const apps = await listAppPermissions(env.APPDATA, username);
-  const containers = await loadTopLevelContainers(storage, config);
-  const allContainers = containers.map(c => ({ iri: c.iri, path: c.path }));
+  const containers = await loadTopLevelContainers(storage, config, username);
 
-  const appsData = apps.map(app => ({
-    clientId: app.clientId,
-    clientName: app.clientName || app.clientId,
-    grantedAt: app.grantedAt ? formatDate(app.grantedAt, lang) : 'Unknown',
-    containers: (app.allowedContainers || []).map(c => {
-      const path = c.replace(config.baseUrl, '');
-      return { iri: c, path };
-    }),
-    hasContainers: (app.allowedContainers || []).length > 0,
-    allContainers,
-    t,
-  }));
+  const appsData = apps.map(app => {
+    // allowedContainers is now [{iri, modes}] (normalized by getAppPermission)
+    const allowed = app.allowedContainers || [];
+    const allowedIriSet = new Set(allowed.map(e => e.iri));
+    const allContainers = containers.map(c => ({
+      iri: c.iri,
+      path: c.path,
+      checked: allowedIriSet.has(c.iri),
+    }));
+
+    let displayName = app.clientName || null;
+    const clientUri = app.clientUri || '';
+    if (!displayName && clientUri) {
+      try { displayName = new URL(clientUri).hostname; } catch {}
+    }
+    if (!displayName) {
+      try { displayName = new URL(app.clientId).hostname; } catch {}
+    }
+    if (!displayName) displayName = app.clientId;
+
+    let displayOrigin = null;
+    if (clientUri) {
+      try { displayOrigin = new URL(clientUri).origin; } catch {}
+    }
+    if (!displayOrigin) {
+      try { displayOrigin = new URL(app.clientId).origin; } catch {}
+    }
+
+    const isInternalClient = app.clientId.startsWith(config.baseUrl + '/clients/');
+
+    return {
+      clientId: app.clientId,
+      clientName: app.clientName || '',
+      clientUri,
+      displayName,
+      displayOrigin,
+      isInternalClient,
+      grantedAt: app.grantedAt ? formatDate(app.grantedAt, lang) : '',
+      containers: allowed.map(entry => ({
+        iri: entry.iri,
+        path: entry.iri.replace(config.baseUrl, ''),
+        modesDisplay: (entry.modes || []).join(', '),
+      })),
+      hasContainers: allowed.length > 0,
+      allContainers,
+      username,
+    };
+  });
 
   return renderPage('Settings', template, {
+    message,
+    languages,
+    timezones,
+    dateShort: dateFormat === 'short',
+    dateMedium: dateFormat === 'medium',
+    dateLong: dateFormat === 'long',
+    themePath: prefs.theme || '',
+    showFollows,
+    showMentions,
+    username,
     apps: appsData,
     hasApps: appsData.length > 0,
-    languages,
-    dateFormats,
-    success,
-  }, { user: username, nav: 'settings', lang, dir, t, storage, baseUrl: config.baseUrl });
+  }, { user: username, config, nav: 'settings', storage, baseUrl: config.baseUrl, lang, request: reqCtx.request });
 }
 
 /**
- * POST /settings — handle preference saves and app permission updates.
+ * POST /settings — save user preferences.
  */
 export async function handleSettingsUpdate(reqCtx) {
   const authCheck = requireAuth(reqCtx);
   if (authCheck) return authCheck;
 
-  const { request, config, env } = reqCtx;
-  const username = config.username;
+  const { request, env, lang } = reqCtx;
+  const t = getTranslations(lang);
+  const username = reqCtx.user;
   const form = await request.formData();
-  const action = form.get('action');
 
-  if (action === 'save_prefs') {
-    const language = form.get('language') || 'en-US';
-    const dateFormat = form.get('dateFormat') || 'medium';
+  // Load existing prefs to merge
+  const prefsRaw = await env.APPDATA.get(`user_prefs:${username}`);
+  const prefs = prefsRaw ? JSON.parse(prefsRaw) : {};
 
-    // Load existing prefs and merge
-    const prefsRaw = await env.APPDATA.get(`user_prefs:${username}`);
-    const prefs = prefsRaw ? JSON.parse(prefsRaw) : {};
-    prefs.language = language;
-    prefs.dateFormat = dateFormat;
+  prefs.language = form.get('language') || 'en-US';
+  prefs.dateFormat = form.get('dateFormat') || 'medium';
+  prefs.timezone = form.get('timezone') || 'UTC';
+  prefs.theme = form.get('themePath') || '';
+  prefs.notifications = {
+    showFollows: form.get('showFollows') === '1',
+    showMentions: form.get('showMentions') === '1',
+  };
 
-    await env.APPDATA.put(`user_prefs:${username}`, JSON.stringify(prefs));
+  await env.APPDATA.put(`user_prefs:${username}`, JSON.stringify(prefs));
 
-    return new Response(null, { status: 302, headers: { 'Location': '/settings?saved=1' } });
-  }
-
-  if (action === 'revoke') {
-    const clientId = form.get('client_id');
-    if (clientId) {
-      await revokeAppPermission(env.APPDATA, username, clientId);
-    }
-  }
-
-  if (action === 'update') {
-    const clientId = form.get('client_id');
-    if (clientId) {
-      const existing = await getAppPermission(env.APPDATA, username, clientId);
-      const clientName = existing?.clientName || '';
-      const containers = form.getAll('containers');
-      await grantAppPermission(env.APPDATA, username, clientId, clientName, containers);
-    }
-  }
-
-  return new Response(null, { status: 302, headers: { 'Location': '/settings' } });
+  const msg = t.settings_saved || 'Settings saved.';
+  return new Response(null, {
+    status: 302,
+    headers: { 'Location': `/settings?message=${encodeURIComponent(msg)}` },
+  });
 }
 
 /**
  * Load top-level containers from the user's root container.
  */
-async function loadTopLevelContainers(storage, config) {
-  const rootIri = `${config.baseUrl}/${config.username}/`;
+async function loadTopLevelContainers(storage, config, username) {
+  const rootIri = `${config.baseUrl}/${username}/`;
   const ntData = await storage.get(`doc:${rootIri}:${rootIri}`);
   if (!ntData) return [];
 

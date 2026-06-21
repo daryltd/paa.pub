@@ -1,0 +1,445 @@
+specification {
+  element system
+  element layer
+  element component
+  element storage
+  element external
+
+  relationship calls
+  relationship stores
+  relationship uses
+}
+
+model {
+  external browser 'Browser' {
+    description 'User agent / Solid app / ActivityPub client'
+  }
+
+  external fediverse 'Fediverse' {
+    description 'Remote ActivityPub servers'
+  }
+
+  system paa 'paa.pub' {
+    description 'Solid + ActivityPub server on Cloudflare Workers'
+
+    layer entrypoint 'Entry Point' {
+      component worker 'Cloudflare Worker' {
+        description 'Single fetch handler (src/index.js)'
+      }
+      component router 'Router' {
+        description 'URL pattern matching, first-match dispatch (src/router.js)'
+      }
+      component bootstrap 'Bootstrap' {
+        description 'First-run init: user, keys, containers, policies (src/bootstrap.js)'
+      }
+      component config 'Config' {
+        description 'Environment config reader (src/config.js)'
+      }
+    }
+
+    layer middleware 'Middleware' {
+      component cors 'CORS' {
+        description 'Cross-origin headers for Solid apps (src/solid/cors.js)'
+      }
+      component rateLimit 'Rate Limiter' {
+        description 'Per-IP rate limiting by category (src/security/rate-limit.js)'
+      }
+      component sizeLimit 'Size Limiter' {
+        description 'Request body size checks (src/security/size-limit.js)'
+      }
+      component ssrf 'SSRF Guard' {
+        description 'Private IP validation (src/security/ssrf.js)'
+      }
+    }
+
+    layer auth 'Authentication' {
+      component session 'Sessions' {
+        description 'Cookie-based sessions with KV TTL (src/auth/session.js)'
+      }
+      component oidc 'Solid-OIDC Provider' {
+        description 'Authorization, token, DPoP, PKCE (src/oidc.js)'
+      }
+      component fedcm 'FedCM' {
+        description 'Federated Credential Management API (src/fedcm.js)'
+      }
+      component webauthn 'WebAuthn / Passkeys' {
+        description 'FIDO2 registration and login (src/auth/webauthn.js)'
+      }
+      component password 'Password Auth' {
+        description 'PBKDF2 password hashing (src/auth/password.js)'
+      }
+      component registration 'Registration' {
+        description 'User signup flow (src/auth/registration.js)'
+      }
+    }
+
+    layer accessControl 'Access Control' {
+      component wac 'WAC Engine' {
+        description 'Web Access Control evaluation: ACL hierarchy walk, agent matching, mode grants (src/solid/wac.js)'
+      }
+      component acp 'ACP Policies' {
+        description 'Application-level access control: public/unlisted/friends/private/custom modes with inheritance (src/ui/pages/acl-editor.js)'
+      }
+      component acl 'ACL Resources' {
+        description 'CRUD for .acl and .acr resources (src/solid/acl.js)'
+      }
+      component appPerms 'App Permissions' {
+        description 'Per-app access grants for OIDC clients (src/solid/app-permissions.js)'
+      }
+    }
+
+    layer solidProtocol 'Solid Protocol' {
+      component ldp 'LDP Handler' {
+        description 'GET/PUT/POST/PATCH/DELETE for Solid resources, SPARQL Update (src/solid/ldp.js)'
+      }
+      component conneg 'Content Negotiation' {
+        description 'Turtle / JSON-LD / N-Triples serialization (src/solid/conneg.js)'
+      }
+      component containers 'Containers' {
+        description 'Container membership, containment triples (src/solid/containers.js)'
+      }
+      component headers 'Solid Headers' {
+        description 'Link, WAC-Allow, Accept-* headers (src/solid/headers.js)'
+      }
+    }
+
+    layer activitypub 'ActivityPub' {
+      component actor 'Actor' {
+        description 'Actor document with content negotiation (src/activitypub/actor.js)'
+      }
+      component inbox 'Inbox' {
+        description 'S2S inbox with HTTP Signature verification (src/activitypub/inbox.js)'
+      }
+      component outbox 'Outbox' {
+        description 'Compose, follow/unfollow, local delivery (src/activitypub/outbox.js)'
+      }
+      component delivery 'Delivery' {
+        description 'Activity fan-out via waitUntil (src/activitypub/delivery.js)'
+      }
+      component httpsig 'HTTP Signatures' {
+        description 'Request signing and verification (src/activitypub/httpsig.js)'
+      }
+      component webfinger 'WebFinger' {
+        description 'Discovery endpoint (src/activitypub/webfinger.js)'
+      }
+      component activities 'Activities' {
+        description 'Follow, Create, Accept, Undo processors (src/activitypub/activities.js)'
+      }
+      component remote 'Remote Actors' {
+        description 'Fetch and cache remote actor data (src/activitypub/remote.js)'
+      }
+      component collections 'Collections' {
+        description 'Followers/following OrderedCollections (src/activitypub/collections.js)'
+      }
+    }
+
+    layer identity 'Identity' {
+      component did 'DID:web' {
+        description 'DID document generation (src/did/document.js)'
+      }
+    }
+
+    layer rdf 'RDF Processing' {
+      component turtleParser 'Turtle Parser' {
+        description 'Turtle subset parser (src/rdf/turtle-parser.js)'
+      }
+      component turtleSerializer 'Turtle Serializer' {
+        description 'Turtle output with prefix shorthand (src/rdf/turtle-serializer.js)'
+      }
+      component ntriples 'N-Triples' {
+        description 'N-Triples/N-Quads parse and serialize (src/rdf/ntriples.js)'
+      }
+      component prefixes 'Prefixes' {
+        description 'Common RDF namespace prefixes (src/rdf/prefixes.js)'
+      }
+    }
+
+    layer crypto 'Cryptography' {
+      component rsa 'RSA' {
+        description 'RSA-2048 keygen, sign, verify (src/crypto/rsa.js)'
+      }
+      component digest 'Digest' {
+        description 'SHA-256 utilities (src/crypto/digest.js)'
+      }
+      component cbor 'CBOR' {
+        description 'Minimal CBOR decoder for WebAuthn (src/crypto/cbor.js)'
+      }
+      component jwks 'JWKS' {
+        description 'JWT verification with JWKS (src/crypto/jwks.js)'
+      }
+      component keys 'Keys' {
+        description 'PEM-to-JWK conversion (src/crypto/keys.js)'
+      }
+    }
+
+    layer ui 'Server-Rendered UI' {
+      component shell 'Shell / Templates' {
+        description 'Mustache template renderer with i18n (src/ui/shell.js)'
+      }
+      component dashboard 'Dashboard' {
+        description 'Home page after login'
+      }
+      component storageBrowser 'Storage Browser' {
+        description 'File/container browser and actions'
+      }
+      component acpEditor 'ACP Editor' {
+        description 'Access control policy editor'
+      }
+      component profileEditor 'Profile Editor' {
+        description 'WebID profile and layout editor'
+      }
+      component settingsPage 'Settings' {
+        description 'User preferences, export, passkey management'
+      }
+      component activityPage 'Activity' {
+        description 'Inbox/outbox feed viewer'
+      }
+      component adminPanel 'Admin Panel' {
+        description 'User management, FedCM IdP config (src/admin/)'
+      }
+    }
+
+    layer i18n 'Internationalization' {
+      component translations 'Translations' {
+        description 'RDF-based i18n: Turtle with language-tagged literals, 5 languages (src/i18n/)'
+      }
+    }
+
+    layer s20e 'S20E Kernel' {
+      component kernel 'Oxigraph WASM Kernel' {
+        description 'SPARQL queries, SHACL validation, WAC checks'
+      }
+      component orchestrator 'Orchestrator' {
+        description 'Drives kernel via request/response protocol'
+      }
+      component adapter 'CloudflareAdapter' {
+        description 'Bridges kernel I/O to KV and R2'
+      }
+    }
+
+    layer storageLayer 'Storage' {
+      storage triplestore 'TRIPLESTORE KV' {
+        description 'RDF graphs (doc:), indexes (idx:), WAC ACLs (acl:)'
+      }
+      storage appdata 'APPDATA KV' {
+        description 'Sessions, credentials, OIDC state, AP collections, ACP policies, quotas'
+      }
+      storage blobs 'BLOBS R2' {
+        description 'Binary files: images, documents, videos (blob:)'
+      }
+    }
+  }
+
+  // --- External connections ---
+  browser -> worker 'HTTP requests'
+  fediverse -> inbox 'S2S activities'
+  delivery -> fediverse 'Deliver activities'
+
+  // --- Entry point flow ---
+  worker -> config 'Load config'
+  worker -> bootstrap 'First-run init'
+  worker -> router 'Dispatch request'
+  worker -> cors 'Wrap response'
+
+  // --- Middleware ---
+  router -> rateLimit 'Check limits'
+  router -> sizeLimit 'Check body size'
+
+  // --- Auth flow ---
+  worker -> session 'Extract session cookie'
+  worker -> oidc 'Verify DPoP/Bearer token'
+  session -> password 'Verify credentials'
+  session -> webauthn 'Passkey login'
+  oidc -> fedcm 'FedCM assertion'
+
+  // --- Access control ---
+  ldp -> wac 'Check WAC access'
+  ldp -> acp 'Check ACP access'
+  ldp -> appPerms 'Check app permissions'
+  acpEditor -> acp 'Manage policies'
+  acl -> wac 'Read/write ACL resources'
+
+  // --- Solid protocol ---
+  router -> ldp 'LDP catch-all'
+  ldp -> conneg 'Negotiate content type'
+  ldp -> containers 'Container membership'
+  ldp -> headers 'Build response headers'
+  conneg -> turtleSerializer 'Serialize Turtle'
+  conneg -> ntriples 'Serialize N-Triples'
+
+  // --- ActivityPub ---
+  router -> actor 'Actor document'
+  router -> inbox 'Receive activities'
+  router -> outbox 'Send activities'
+  inbox -> httpsig 'Verify signature'
+  inbox -> activities 'Process activity'
+  outbox -> activities 'Build activity'
+  outbox -> delivery 'Fan out'
+  delivery -> httpsig 'Sign request'
+  actor -> conneg 'Content negotiation'
+  remote -> ssrf 'Validate URLs'
+
+  // --- Identity ---
+  router -> did 'DID document'
+  router -> webfinger 'WebFinger lookup'
+
+  // --- S20E kernel ---
+  ldp -> orchestrator 'SPARQL operations'
+  orchestrator -> kernel 'Execute query'
+  orchestrator -> adapter 'Fetch/store data'
+
+  // --- Storage ---
+  adapter -> triplestore 'RDF data'
+  adapter -> blobs 'Binary data'
+  session -> appdata 'Sessions'
+  oidc -> appdata 'Tokens, codes'
+  acp -> appdata 'ACP policies'
+  activities -> appdata 'AP collections'
+  wac -> triplestore 'ACL triples'
+  bootstrap -> triplestore 'Init containers'
+  bootstrap -> appdata 'Init policies'
+
+  // --- UI ---
+  router -> dashboard 'Dashboard page'
+  router -> storageBrowser 'Storage browser'
+  router -> acpEditor 'ACP editor'
+  router -> profileEditor 'Profile editor'
+  router -> settingsPage 'Settings page'
+  router -> activityPage 'Activity feed'
+  router -> adminPanel 'Admin panel'
+  shell -> translations 'Resolve strings'
+
+  // --- RDF ---
+  turtleParser -> prefixes 'Resolve prefixes'
+  turtleSerializer -> prefixes 'Shorten IRIs'
+  wac -> ntriples 'Parse ACL triples'
+
+  // --- Crypto ---
+  oidc -> rsa 'Sign JWTs'
+  oidc -> keys 'Export JWK'
+  httpsig -> rsa 'Sign/verify'
+  httpsig -> digest 'SHA-256 digest'
+  webauthn -> cbor 'Decode attestation'
+  oidc -> jwks 'Verify external JWTs'
+}
+
+views {
+  view index {
+    title 'paa.pub — Solid + ActivityPub Server Architecture'
+    include *
+  }
+
+  view requestLifecycle {
+    title 'Request Lifecycle'
+    include
+      browser,
+      worker,
+      router,
+      cors,
+      rateLimit,
+      sizeLimit,
+      session,
+      oidc,
+      ldp,
+      wac,
+      acp,
+      conneg,
+      triplestore,
+      appdata,
+      blobs
+  }
+
+  view authLayer {
+    title 'Authentication & Access Control'
+    include
+      browser,
+      session,
+      password,
+      webauthn,
+      oidc,
+      fedcm,
+      registration,
+      wac,
+      acp,
+      acl,
+      appPerms,
+      appdata,
+      triplestore
+  }
+
+  view federation {
+    title 'ActivityPub Federation'
+    include
+      browser,
+      fediverse,
+      actor,
+      inbox,
+      outbox,
+      delivery,
+      httpsig,
+      activities,
+      remote,
+      webfinger,
+      collections,
+      did,
+      appdata,
+      rsa,
+      digest,
+      ssrf
+  }
+
+  view solidStack {
+    title 'Solid Protocol Stack'
+    include
+      browser,
+      ldp,
+      conneg,
+      containers,
+      headers,
+      wac,
+      acp,
+      acl,
+      orchestrator,
+      kernel,
+      adapter,
+      turtleParser,
+      turtleSerializer,
+      ntriples,
+      prefixes,
+      triplestore,
+      blobs
+  }
+
+  view storageArchitecture {
+    title 'Storage Architecture'
+    include
+      triplestore,
+      appdata,
+      blobs,
+      adapter,
+      orchestrator,
+      kernel,
+      ldp,
+      session,
+      oidc,
+      acp,
+      wac,
+      activities,
+      bootstrap
+  }
+
+  view userInterface {
+    title 'Server-Rendered UI'
+    include
+      browser,
+      shell,
+      translations,
+      dashboard,
+      storageBrowser,
+      acpEditor,
+      profileEditor,
+      settingsPage,
+      activityPage,
+      adminPanel
+  }
+}

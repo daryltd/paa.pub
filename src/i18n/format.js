@@ -1,18 +1,19 @@
 /**
  * Locale-aware formatting utilities.
  *
- * Uses the V8 Intl API (available in Cloudflare Workers) for
- * locale-sensitive date, number, and byte formatting.
+ * Uses built-in Intl APIs (available in Cloudflare Workers V8 runtime)
+ * to format dates, numbers, and byte sizes according to locale conventions.
  *
- * Replaces the duplicated formatBytes() implementations in
- * dashboard.js, storage.js, and acl-editor.js.
+ * Replaces the multiple ad-hoc formatBytes() implementations scattered
+ * across dashboard.js, acl-editor.js, storage.js, admin/dashboard.js,
+ * and admin/users.js.
  */
 
 /**
- * Format an ISO date string as a locale-aware date (no time).
+ * Format a date string (date only, no time).
  * @param {string} isoString - ISO 8601 date string
- * @param {string} locale - BCP 47 locale tag
- * @param {string} [style='medium'] - 'short' | 'medium' | 'long'
+ * @param {string} locale - BCP 47 locale tag (e.g. 'en-US', 'fr')
+ * @param {string} [style='medium'] - 'short', 'medium', or 'long'
  * @returns {string}
  */
 export function formatDate(isoString, locale, style = 'medium') {
@@ -20,28 +21,27 @@ export function formatDate(isoString, locale, style = 'medium') {
   try {
     return new Intl.DateTimeFormat(locale, { dateStyle: style }).format(new Date(isoString));
   } catch {
-    return new Date(isoString).toLocaleDateString();
+    return isoString.split('T')[0];
   }
 }
 
 /**
- * Format an ISO date string as a locale-aware date + time.
- * @param {string} isoString - ISO 8601 date string
- * @param {string} locale - BCP 47 locale tag
- * @param {string} [dateStyle='medium'] - 'short' | 'medium' | 'long'
+ * Format a date string with both date and time.
+ * @param {string} isoString
+ * @param {string} locale
  * @returns {string}
  */
-export function formatDateTime(isoString, locale, dateStyle = 'medium') {
+export function formatDateTime(isoString, locale) {
   if (!isoString) return '';
   try {
-    return new Intl.DateTimeFormat(locale, { dateStyle, timeStyle: 'short' }).format(new Date(isoString));
+    return new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(isoString));
   } catch {
-    return new Date(isoString).toLocaleString();
+    return isoString;
   }
 }
 
 /**
- * Format a number with locale-aware grouping separators.
+ * Format a number according to locale conventions.
  * @param {number} num
  * @param {string} locale
  * @returns {string}
@@ -56,6 +56,7 @@ export function formatNumber(num, locale) {
 
 /**
  * Format a byte count as a human-readable string (e.g. "1.5 GB").
+ * Uses locale-aware number formatting for the numeric part.
  * @param {number} bytes
  * @param {string} [locale='en-US']
  * @returns {string}
@@ -63,28 +64,24 @@ export function formatNumber(num, locale) {
 export function formatBytes(bytes, locale = 'en-US') {
   if (!bytes || bytes === 0) return '0 B';
   const k = 1024;
-  const sizes = ['B', 'KB', 'MB', 'GB'];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-  const value = bytes / Math.pow(k, i);
-  try {
-    return `${new Intl.NumberFormat(locale, { maximumFractionDigits: 1 }).format(value)} ${sizes[i]}`;
-  } catch {
-    return `${value.toFixed(1)} ${sizes[i]}`;
-  }
+  const units = ['B', 'KB', 'MB', 'GB'];
+  const i = Math.min(Math.floor(Math.log(bytes) / Math.log(k)), units.length - 1);
+  const val = bytes / Math.pow(k, i);
+  const formatted = val < 10 ? val.toFixed(1) : String(Math.round(val));
+  return `${formatted} ${units[i]}`;
 }
 
 /**
- * Format a byte count in compact form (e.g. "1GB", "500MB").
- * Used for form input values where brevity matters.
+ * Format bytes in short form without space (e.g. "500MB", "1GB").
+ * Used for quota input default values.
  * @param {number} bytes
- * @param {string} [locale='en-US']
  * @returns {string}
  */
-export function formatBytesShort(bytes, locale = 'en-US') {
+export function formatBytesShort(bytes) {
   if (!bytes || bytes === 0) return '';
   const k = 1024;
-  if (bytes >= k * k * k) return `${Math.round(bytes / (k * k * k))}GB`;
-  if (bytes >= k * k) return `${Math.round(bytes / (k * k))}MB`;
-  if (bytes >= k) return `${Math.round(bytes / k)}KB`;
+  if (bytes >= k * k * k) return `${(bytes / (k * k * k)).toFixed(0)}GB`;
+  if (bytes >= k * k) return `${(bytes / (k * k)).toFixed(0)}MB`;
+  if (bytes >= k) return `${(bytes / k).toFixed(0)}KB`;
   return `${bytes}B`;
 }

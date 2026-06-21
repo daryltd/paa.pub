@@ -19,13 +19,35 @@ import { serializeNTriples } from '../rdf/ntriples.js';
  */
 export function negotiateType(accept) {
   if (!accept) return 'text/turtle';
-  const lower = accept.toLowerCase();
-  if (lower.includes('text/turtle')) return 'text/turtle';
-  if (lower.includes('application/ld+json')) return 'application/ld+json';
-  if (lower.includes('application/n-triples')) return 'application/n-triples';
-  if (lower.includes('application/activity+json')) return 'application/activity+json';
-  if (lower.includes('text/html')) return 'text/html';
-  return 'text/turtle';
+
+  // Parse Accept header entries with quality values
+  const types = [
+    { type: 'text/turtle', q: 0 },
+    { type: 'application/ld+json', q: 0 },
+    { type: 'application/n-triples', q: 0 },
+    { type: 'application/activity+json', q: 0 },
+    { type: 'text/html', q: 0 },
+  ];
+
+  const entries = accept.split(',').map(e => e.trim());
+  for (const entry of entries) {
+    const [mediaType, ...params] = entry.split(';').map(s => s.trim());
+    let q = 1;
+    for (const p of params) {
+      const match = p.match(/^q\s*=\s*([\d.]+)/i);
+      if (match) q = parseFloat(match[1]);
+    }
+    const lower = mediaType.toLowerCase();
+    for (const t of types) {
+      if (lower === t.type || (lower === '*/*' && t.type === 'text/turtle')) {
+        t.q = Math.max(t.q, q);
+      }
+    }
+  }
+
+  // Pick the type with the highest quality value
+  const best = types.reduce((a, b) => b.q > a.q ? b : a, types[0]);
+  return best.q > 0 ? best.type : 'text/turtle';
 }
 
 /**

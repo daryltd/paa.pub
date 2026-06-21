@@ -6,14 +6,18 @@ import template from '../templates/dashboard.html';
 import { requireAuth } from '../../auth/middleware.js';
 import { parseNTriples, unwrapIri, unwrapLiteral } from '../../rdf/ntriples.js';
 import { PREFIXES } from '../../rdf/prefixes.js';
+import { getUserConfig } from '../../config.js';
 import { formatBytes } from '../../i18n/format.js';
+import { getTranslations } from '../../i18n/index.js';
 
 export async function renderDashboard(reqCtx) {
   const authCheck = requireAuth(reqCtx);
   if (authCheck) return authCheck;
 
-  const { config, env, lang, dir, t } = reqCtx;
-  const username = config.username;
+  const { config, env, lang } = reqCtx;
+  const username = reqCtx.user;
+  const uc = getUserConfig(config, username);
+  const t = getTranslations(lang);
 
   // Load stats
   const [followersData, followingData, outboxData, quotaData, pendingData] = await Promise.all([
@@ -38,39 +42,34 @@ export async function renderDashboard(reqCtx) {
   const passkeys = credResults.filter(Boolean).map(c => ({ id: c.id, name: c.name, createdAt: c.createdAt }));
 
   // Compute storage breakdown by resource type
-  const breakdown = await computeStorageBreakdown(reqCtx.storage, config, quota.usedBytes, lang, t);
+  const breakdown = await computeStorageBreakdown(reqCtx.storage, config, username, quota.usedBytes, t);
 
-  // Build translated labels with interpolation
-  const pendingCount = pendingFollows.length;
-  const pendingFollowLabel = (pendingCount === 1 ? t.dash_pending_follow_one : t.dash_pending_follow_other || '')
-    .replace('{{count}}', pendingCount);
-  const storageLabel = (t.dash_storage_used || 'Storage - {{used}} used')
-    .replace('{{used}}', formatBytes(quota.usedBytes, lang));
-  const totalCount = breakdown.totalCount;
-  const resourcesLabel = (totalCount === 1 ? t.dash_resources_one : t.dash_resources_other || '')
-    .replace('{{count}}', totalCount);
+  // Plural labels
+  const pendingFollowLabel = (pendingFollows.length === 1 ? t.dash_pending_follow_one : t.dash_pending_follow_other).replace('{{count}}', pendingFollows.length);
+  const totalResourcesLabel = (breakdown.totalCount === 1 ? t.dash_resources_one : t.dash_resources_other).replace('{{count}}', breakdown.totalCount);
 
   return renderPage('Dashboard', template, {
     username,
-    webId: config.webId,
-    actorId: config.actorId,
+    webId: uc.webId,
+    actorId: uc.actorId,
     domain: config.domain,
     baseUrl: config.baseUrl,
     followerCount: followers.length,
     followingCount: following.length,
     postCount: outbox.length,
-    pendingFollowCount: pendingCount,
-    hasPendingFollows: pendingCount > 0,
+    pendingFollowCount: pendingFollows.length,
     pendingFollowLabel,
-    storageLabel,
-    resourcesLabel,
+    hasPendingFollows: pendingFollows.length > 0,
+    storageUsed: formatBytes(quota.usedBytes, lang),
+    totalResourcesLabel,
     webfingerParam: encodeURIComponent(username) + '@' + encodeURIComponent(config.domain),
     passkeys,
     hasPasskeys: passkeys.length > 0,
     storageBreakdown: breakdown.categories,
     hasBreakdown: breakdown.categories.length > 0,
-    totalResources: totalCount,
-  }, { user: username, nav: 'dashboard', lang, dir, t, storage: reqCtx.storage, baseUrl: config.baseUrl });
+    totalResources: breakdown.totalCount,
+    fedcmConfigURL: config.baseUrl + '/fedcm/config.json',
+  }, { user: username, config, nav: 'dashboard', storage: reqCtx.storage, baseUrl: config.baseUrl, lang });
 }
 
 /**
@@ -142,8 +141,8 @@ async function collectResources(storage, containerIri, results) {
 /**
  * Compute storage breakdown grouped by resource category.
  */
-async function computeStorageBreakdown(storage, config, totalUsedBytes, lang = 'en-US', t = {}) {
-  const rootIri = `${config.baseUrl}/${config.username}/`;
+async function computeStorageBreakdown(storage, config, username, totalUsedBytes, t) {
+  const rootIri = `${config.baseUrl}/${username}/`;
   const resources = [];
 
   try {
@@ -168,10 +167,9 @@ async function computeStorageBreakdown(storage, config, totalUsedBytes, lang = '
     .sort((a, b) => b.bytes - a.bytes)
     .map(c => ({
       name: c.name,
-      size: formatBytes(c.bytes, lang),
+      size: formatBytes(c.bytes),
       count: c.count,
-      label: (c.count === 1 ? t.dash_n_files_one : t.dash_n_files_other || `${c.count} files`)
-        .replace('{{count}}', c.count),
+      label: (c.count === 1 ? t.dash_n_files_one : t.dash_n_files_other).replace('{{count}}', c.count),
     }));
 
   // Add "Everything Else" for unaccounted bytes (metadata, indexes, etc.)
@@ -180,7 +178,7 @@ async function computeStorageBreakdown(storage, config, totalUsedBytes, lang = '
   if (remainder > 0) {
     categories.push({
       name: t.dash_everything_else || 'Everything Else',
-      size: formatBytes(remainder, lang),
+      size: formatBytes(remainder),
       count: 0,
       label: t.dash_system_data || 'system data',
     });
