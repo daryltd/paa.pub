@@ -6,6 +6,7 @@
  *   - `user_meta:{username}` — { storageLimit, disabled, createdAt, isAdmin }
  *   - `user:{username}` — password hash (existing key format)
  */
+import { RESERVED_NAMES } from './config.js';
 
 /**
  * List all registered users.
@@ -37,6 +38,41 @@ export async function getUser(kv, username) {
 export async function userExists(kv, username) {
   const data = await kv.get(`user:${username}`);
   return data !== null;
+}
+
+/**
+ * Derive a candidate username from an email address or display name.
+ * @param {string} input - email address or display name
+ * @returns {string} lowercase, sanitized candidate (may be empty)
+ */
+export function deriveUsername(input) {
+  // Try email local part first
+  const atIdx = input.indexOf('@');
+  const base = atIdx > 0 ? input.slice(0, atIdx) : input;
+  return base.toLowerCase().replace(/[^a-z0-9_-]/g, '').slice(0, 30) || '';
+}
+
+/**
+ * Resolve a candidate username to one that's actually free, for flows
+ * (like external FedCM sign-in) that need to auto-provision an account
+ * without asking the user to pick a name.
+ * @param {KVNamespace} kv
+ * @param {string} base - candidate from deriveUsername() or similar
+ * @returns {Promise<string>}
+ */
+export async function generateUniqueUsername(kv, base) {
+  const clean = (base || '').toLowerCase().replace(/[^a-z0-9_-]/g, '').slice(0, 30);
+  const root = clean || 'user';
+
+  if (!RESERVED_NAMES.has(root) && !(await userExists(kv, root))) return root;
+
+  for (let i = 2; i <= 100; i++) {
+    const candidate = `${root}-${i}`;
+    if (!RESERVED_NAMES.has(candidate) && !(await userExists(kv, candidate))) return candidate;
+  }
+
+  // Extremely unlikely fallback: random suffix, guaranteed free
+  return `${root}-${crypto.randomUUID().slice(0, 8)}`;
 }
 
 /**

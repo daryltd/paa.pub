@@ -53,7 +53,7 @@ import { handleAppPermissionsUpdate } from './ui/pages/app-permissions.js';
 import { renderSettings, handleSettingsUpdate } from './ui/pages/settings.js';
 import { handleExport, handleCleanup } from './ui/pages/export.js';
 import { handleDiscovery, handleJwks, handleRegister, handleAuthorize, handleToken, handleUserInfo, verifyAccessToken } from './oidc.js';
-import { renderSignupPage, handleSignup, renderFedCMSignupPage, handleFedCMSignup } from './auth/registration.js';
+import { renderSignupPage, handleSignup } from './auth/registration.js';
 import { handleWebIdentity, handleFedCMConfig, handleFedCMAccounts, handleFedCMAssertion, handleFedCMClientMetadata, handleFedCMDisconnect, handleFedCMVerify, handleFedCMExternalVerify } from './fedcm.js';
 import { renderPage } from './ui/shell.js';
 import { resolveLanguage } from './i18n/index.js';
@@ -110,8 +110,6 @@ function buildRouter() {
   // Registration
   router.get('/signup', renderSignupPage);
   router.post('/signup', handleSignup);
-  router.get('/signup/fedcm', renderFedCMSignupPage);
-  router.post('/signup/fedcm', handleFedCMSignup);
 
   // WebAuthn
   router.post('/webauthn/register/begin', handleWebAuthnRegisterBegin);
@@ -209,7 +207,6 @@ function getRateLimitCategory(method, pathname, handler) {
   if (method === 'POST' && pathname === '/fedcm/external-verify') return 'login';
   if (method === 'POST' && pathname === '/register') return 'register';
   if (method === 'POST' && pathname === '/signup') return 'register';
-  if (method === 'POST' && pathname === '/signup/fedcm') return 'register';
   if (method === 'POST' && (pathname === '/inbox' || pathname.match(/^\/[^/]+\/inbox$/))) return 'inbox';
   // LDP write operations
   if (handler === handleLDP && ['PUT', 'POST', 'PATCH', 'DELETE'].includes(method)) return 'write';

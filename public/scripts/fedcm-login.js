@@ -59,8 +59,6 @@ async function fedcmExternalLogin(configURL, clientId, idpId) {
     var data = await res.json();
     if (data.success) {
       window.location.href = '/dashboard';
-    } else if (data.needsRegistration) {
-      window.location.href = '/signup/fedcm?token=' + encodeURIComponent(data.registrationToken);
     } else {
       alert('Login failed: ' + (data.error || 'Unknown error'));
     }

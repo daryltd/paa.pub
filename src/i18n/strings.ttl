@@ -124,28 +124,6 @@ paa:signup_sign_in rdfs:label "Sign in"@en-US ;
     rdfs:label "התחברות"@he ;
     rdfs:label "登录"@zh .
 
-# ── FedCM signup ──────────────────────────────────────
-paa:fedcm_complete_reg rdfs:label "Complete Registration"@en-US ;
-    rdfs:label "Finaliser l'inscription"@fr ;
-    rdfs:label "Completar registro"@es ;
-    rdfs:label "השלמת הרשמה"@he ;
-    rdfs:label "完成注册"@zh .
-paa:fedcm_signing_in_via rdfs:label "Signing in via"@en-US ;
-    rdfs:label "Connexion via"@fr ;
-    rdfs:label "Iniciando sesión vía"@es ;
-    rdfs:label "התחברות דרך"@he ;
-    rdfs:label "通过以下方式登录"@zh .
-paa:fedcm_as rdfs:label "as"@en-US ;
-    rdfs:label "en tant que"@fr ;
-    rdfs:label "como"@es ;
-    rdfs:label "בתור"@he ;
-    rdfs:label "身份"@zh .
-paa:fedcm_choose_username rdfs:label "Choose a username"@en-US ;
-    rdfs:label "Choisissez un nom d'utilisateur"@fr ;
-    rdfs:label "Elija un nombre de usuario"@es ;
-    rdfs:label "בחירת שם משתמש"@he ;
-    rdfs:label "选择用户名"@zh .
-
 # ── Dashboard ─────────────────────────────────────────
 paa:dash_title rdfs:label "Dashboard"@en-US ;
     rdfs:label "Tableau de bord"@fr ;
@@ -1629,16 +1607,6 @@ paa:err_registration_closed rdfs:label "Registration is closed"@en-US ;
     rdfs:label "El registro está cerrado"@es ;
     rdfs:label "ההרשמה סגורה"@he ;
     rdfs:label "注册已关闭"@zh .
-paa:err_missing_token rdfs:label "Missing registration token"@en-US ;
-    rdfs:label "Jeton d'inscription manquant"@fr ;
-    rdfs:label "Falta el token de registro"@es ;
-    rdfs:label "חסר אסימון הרשמה"@he ;
-    rdfs:label "缺少注册令牌"@zh .
-paa:err_token_expired rdfs:label "Registration token expired or invalid"@en-US ;
-    rdfs:label "Jeton d'inscription expiré ou invalide"@fr ;
-    rdfs:label "Token de registro expirado o inválido"@es ;
-    rdfs:label "אסימון הרשמה פג תוקף או לא חוקי"@he ;
-    rdfs:label "注册令牌已过期或无效"@zh .
 paa:err_cannot_disable_admin rdfs:label "Cannot disable admin"@en-US ;
     rdfs:label "Impossible de désactiver l'administrateur"@fr ;
     rdfs:label "No se puede deshabilitar al administrador"@es ;

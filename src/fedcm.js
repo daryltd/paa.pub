@@ -21,7 +21,8 @@ import { createSession } from './auth/session.js';
 import { parseNTriples, unwrapIri, unwrapLiteral } from './rdf/ntriples.js';
 import { PREFIXES } from './rdf/prefixes.js';
 import { getUserConfig } from './config.js';
-import { userExists, getUser } from './users.js';
+import { userExists, getUser, createUser, deriveUsername, generateUniqueUsername } from './users.js';
+import { bootstrapUser } from './bootstrap.js';
 import { validateExternalUrl } from './security/ssrf.js';
 import { verifyJwtWithJwks } from './crypto/jwks.js';
 
@@ -407,7 +408,6 @@ export async function handleFedCMExternalVerify(reqCtx) {
   }
   const email = payload.email || '';
   const name = payload.name || '';
-  const picture = payload.picture || '';
 
   // Check for existing linked identity
   const linkedUsername = await env.APPDATA.get(`fedcm_link:${idpId}:${sub}`);
@@ -441,23 +441,36 @@ export async function handleFedCMExternalVerify(reqCtx) {
     return jsonResponse({ error: 'Registration is closed' }, 403);
   }
 
-  // Create a pending registration token
-  const regToken = generatePendingToken();
-  await env.APPDATA.put(`fedcm_pending:${regToken}`, JSON.stringify({
-    idpId,
-    sub,
-    email,
-    name,
-    picture,
-  }), { expirationTtl: 600 }); // 10 minutes
+  // New identity — auto-provision an account immediately (no manual
+  // username step): derive a candidate from the IdP's email/name and
+  // resolve it to whatever's actually free.
+  const username = await generateUniqueUsername(env.APPDATA, deriveUsername(email || name || idpId));
 
-  return jsonResponse({ needsRegistration: true, registrationToken: regToken });
-}
+  await createUser(env.APPDATA, username, 'fedcm_only');
+  await bootstrapUser(env, config, username, reqCtx.storage);
+  await env.APPDATA.put(`fedcm_link:${idpId}:${sub}`, username);
 
-/**
- * Generate a cryptographically random token for pending registrations.
- */
-function generatePendingToken() {
-  const bytes = crypto.getRandomValues(new Uint8Array(32));
-  return Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('');
+  const newMeta = await getUser(env.APPDATA, username);
+  if (newMeta) {
+    newMeta.fedcmIdentities = [{
+      idpId,
+      sub,
+      name,
+      email,
+      linkedAt: new Date().toISOString(),
+    }];
+    await env.APPDATA.put(`user_meta:${username}`, JSON.stringify(newMeta));
+  }
+
+  const sessionToken = await createSession(env.APPDATA, username);
+
+  return new Response(JSON.stringify({ success: true, username }), {
+    status: 200,
+    headers: {
+      'Content-Type': 'application/json',
+      'Cache-Control': 'no-store',
+      'Set-Cookie': `session=${sessionToken}; Path=/; HttpOnly; SameSite=Lax; Max-Age=86400${config.protocol === 'https' ? '; Secure' : ''}`,
+      'Set-Login': 'logged-in',
+    },
+  });
 }
