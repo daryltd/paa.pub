@@ -269,6 +269,10 @@ details > summary > h2 { display: inline; }
   .activity-feed-col { flex: 1; min-width: 0; }
 }
 
+.site-footer { display: flex; justify-content: center; gap: 1.5rem; padding: 1.5rem 1rem; margin-top: 2rem; font-size: 0.85rem; }
+.site-footer a { color: #666; text-decoration: none; }
+.site-footer a:hover { text-decoration: underline; }
+
 @media (max-width: 480px) {
     .paa-nav {
         grid-template-areas:

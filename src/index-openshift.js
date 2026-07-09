@@ -37,6 +37,7 @@ import { handleActivityStream } from './ui/pages/activity-stream.js';
 import { handleStorageDescription, handleSubscribe, handleNotificationChannel } from './solid/notification-handlers.js';
 import { handleDiscovery, handleJwks, handleRegister, handleAuthorize, handleToken, handleUserInfo, verifyAccessToken } from './oidc.js';
 import { renderSignupPage, handleSignup } from './auth/registration.js';
+import { renderPrivacyPage, renderTermsPage } from './ui/pages/legal.js';
 import { handleWebIdentity, handleFedCMConfig, handleFedCMAccounts, handleFedCMAssertion, handleFedCMClientMetadata, handleFedCMDisconnect, handleFedCMVerify, handleFedCMExternalVerify } from './fedcm.js';
 import { renderPage } from './ui/shell.js';
 import { resolveLanguage } from './i18n/index.js';
@@ -78,6 +79,9 @@ function buildRouter() {
 
   router.get('/signup', renderSignupPage);
   router.post('/signup', handleSignup);
+
+  router.get('/privacy', renderPrivacyPage);
+  router.get('/terms', renderTermsPage);
 
   router.post('/webauthn/register/begin', handleWebAuthnRegisterBegin);
   router.post('/webauthn/register/complete', handleWebAuthnRegisterComplete);

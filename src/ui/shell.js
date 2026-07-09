@@ -82,7 +82,7 @@ export async function renderPage(title, bodyTemplate, data, opts = {}) {
 
   const nav = opts.user ? renderNav(opts.user, opts.nav, { ...opts, t }) : '';
   const customThemeHref = await resolveCustomTheme(opts);
-  const html = Mustache.render(layoutTemplate, { title, nav, body, customThemeHref, lang, dir });
+  const html = Mustache.render(layoutTemplate, { title, nav, body, customThemeHref, lang, dir, t });
   return htmlResponse(html);
 }
 
@@ -110,7 +110,7 @@ export async function htmlPage(title, body, opts = {}) {
   const t = getTranslations(lang);
   const nav = opts.user ? renderNav(opts.user, opts.nav, { ...opts, t }) : '';
   const customThemeHref = await resolveCustomTheme(opts);
-  return Mustache.render(layoutTemplate, { title, nav, body, customThemeHref, lang, dir });
+  return Mustache.render(layoutTemplate, { title, nav, body, customThemeHref, lang, dir, t });
 }
 
 /**

@@ -1827,3 +1827,15 @@ paa:cleanup_done rdfs:label "Cleaned up {count} orphaned entries."@en-US ;
     rdfs:label "Se limpiaron {count} entradas huérfanas."@es ;
     rdfs:label "נוקו {count} רשומות יתומות."@he ;
     rdfs:label "已清理 {count} 条孤立条目。"@zh .
+
+# ── Footer ────────────────────────────────────────────
+paa:footer_privacy rdfs:label "Privacy Policy"@en-US ;
+    rdfs:label "Politique de confidentialité"@fr ;
+    rdfs:label "Política de privacidad"@es ;
+    rdfs:label "מדיניות פרטיות"@he ;
+    rdfs:label "隐私政策"@zh .
+paa:footer_terms rdfs:label "Terms of Service"@en-US ;
+    rdfs:label "Conditions d'utilisation"@fr ;
+    rdfs:label "Términos de servicio"@es ;
+    rdfs:label "תנאי שירות"@he ;
+    rdfs:label "服务条款"@zh .
