@@ -3,7 +3,8 @@
  */
 import { requireAdmin } from './middleware.js';
 import { renderPage } from '../ui/shell.js';
-import template from '../ui/templates/admin-fedcm-idps.html';
+import { loadHtml } from '../html-loader.js';
+const template = await loadHtml(import.meta.url, '../ui/templates/admin-fedcm-idps.html', () => import('../ui/templates/admin-fedcm-idps.html'));
 
 /**
  * Read the external IdP list from KV.
@@ -42,7 +43,7 @@ export async function renderAdminFedCMIdps(reqCtx) {
     hasIdps: idps.length > 0,
     message,
     error,
-  }, { user: reqCtx.user, nav: 'admin', config: reqCtx.config, lang: reqCtx.lang });
+  }, { user: reqCtx.user, nav: 'admin', config: reqCtx.config, lang: reqCtx.lang, request: reqCtx.request });
 }
 
 /**

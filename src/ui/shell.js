@@ -25,8 +25,9 @@
  *   - `{{#array}}...{{/array}}` — iteration
  */
 import Mustache from 'mustache';
-import layoutTemplate from './templates/layout.html';
-import navPartial from './templates/partials/nav.html';
+import { loadHtml } from '../html-loader.js';
+const layoutTemplate = await loadHtml(import.meta.url, './templates/layout.html', () => import('./templates/layout.html'));
+const navPartial = await loadHtml(import.meta.url, './templates/partials/nav.html', () => import('./templates/partials/nav.html'));
 import { getTranslations, RTL_LANGUAGES } from '../i18n/index.js';
 
 function renderNav(user, active, opts = {}) {
@@ -71,7 +72,7 @@ export async function renderPage(title, bodyTemplate, data, opts = {}) {
 
   const body = Mustache.render(bodyTemplate, { ...data, t });
 
-  // Fragment mode for SPA navigation
+  // Fragment mode for SPA navigation — return just the body content
   if (opts.request && opts.request.headers.get('X-Paa-Nav') === 'fragment') {
     return new Response(JSON.stringify({ title, body }), {
       status: 200,

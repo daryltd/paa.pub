@@ -22,9 +22,10 @@
  *   - `quota:{username}` — storage usage counter
  */
 import { renderPage, renderPartial } from '../shell.js';
-import containerTemplate from '../templates/storage-container.html';
-import resourceTemplate from '../templates/storage-resource.html';
-import breadcrumbsPartial from '../templates/partials/breadcrumbs.html';
+import { loadHtml } from '../../html-loader.js';
+const containerTemplate = await loadHtml(import.meta.url, '../templates/storage-container.html', () => import('../templates/storage-container.html'));
+const resourceTemplate = await loadHtml(import.meta.url, '../templates/storage-resource.html', () => import('../templates/storage-resource.html'));
+const breadcrumbsPartial = await loadHtml(import.meta.url, '../templates/partials/breadcrumbs.html', () => import('../templates/partials/breadcrumbs.html'));
 import { requireAuth } from '../../auth/middleware.js';
 import { parseNTriples, unwrapIri, serializeNTriples, iri, literal, typedLiteral } from '../../rdf/ntriples.js';
 import { defaultAclNTriples } from '../../solid/acl.js';
@@ -182,7 +183,7 @@ async function renderResourcePage(reqCtx, path, resourceIri, username, editMode,
     hasCustomAcl,
     prefixesJson: JSON.stringify(mergedPrefixes),
     namespaceCatalogJson: JSON.stringify(await loadPredicateCatalog(reqCtx.env.APPDATA, mergedPrefixes)),
-  }, { user: username, config, nav: 'storage', storage, baseUrl: config.baseUrl, lang: reqCtx.lang });
+  }, { user: username, config, nav: 'storage', storage, baseUrl: config.baseUrl, lang: reqCtx.lang, request: reqCtx.request });
 }
 
 // ── POST /storage/** ─────────────────────────────────

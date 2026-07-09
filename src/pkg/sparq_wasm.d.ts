@@ -76,7 +76,6 @@ export class SolutionCursor {
  * An immutable, dictionary-encoded RDF store queryable with SPARQL.
  */
 export class Store {
-    private constructor();
     free(): void;
     [Symbol.dispose](): void;
     /**
@@ -181,6 +180,44 @@ export class Store {
      */
     static loadDataset(text: string, format: string): Store;
     /**
+     * [OPUS-4.8] sq-f66jz (#1115): like [`load`](Self::load) but resolves the document's
+     * RELATIVE IRIs against `base`.
+     *
+     * A document fetched from a URL (or a SHACL shapes graph / W3C test manifest addressed
+     * by its location) often carries relative IRIs and no `@base` of its own; `base` is the
+     * base IRI those resolve against — e.g. `loadWithBase("<a> <p> <o> .", "turtle",
+     * "http://example.org/dir/")` interns `<http://example.org/dir/a>` etc. A document-level
+     * `@base` directive still overrides the supplied `base` (standard Turtle/TriG scoping).
+     * The line-based formats (`"ntriples"` / `"nquads"`) allow only absolute IRIs, so `base`
+     * has no effect on them. An invalid `base` (not a syntactically valid IRI) is rejected
+     * with a `JsError`. Calls straight through to `sparq_core::Graph::load_str_with_base`,
+     * so the resolution is byte-identical to the native loader. Named graphs are folded into
+     * the default graph (as [`load`](Self::load)); there is no dataset-preserving base
+     * variant at this layer yet.
+     */
+    static loadWithBase(text: string, format: string, base: string): Store;
+    /**
+     * [OPUS-4.8] sq-ty78o (#1114): a public **empty, mutable** store — the ergonomic
+     * `new Store()` constructor.
+     *
+     * Until now the only way to obtain a `Store` was a static [`load`](Self::load) /
+     * [`loadDataset`](Self::load_dataset) / [`loadCompressed`](Self::load_compressed)
+     * factory, so a JS caller who wanted to start from nothing and build the graph up with
+     * [`updateInPlace`](Self::update_in_place) / [`applyDelta`](Self::apply_delta) had to
+     * reach for `Store.load("", "turtle")`. This exposes the natural `new Store()` spelling,
+     * returning an empty graph that is immediately mutable through the engine's delta overlay.
+     *
+     * **Named graphs work out of the box.** The overlay creates a named graph on the first
+     * insert that targets it, so `new Store()` then
+     * `updateInPlace("INSERT DATA { GRAPH <g> { … } }")` followed by a `GRAPH ?g { … }`
+     * query returns the inserted rows — no dataset-mode flag is required for an *empty*
+     * store. (Dataset mode matters only when *loading* an existing document whose named
+     * graphs would otherwise be folded into the default graph — use
+     * [`loadDataset`](Self::load_dataset) for that.) Equivalent to `Store.load("", "turtle")`,
+     * surfaced as a `constructor`.
+     */
+    constructor();
+    /**
      * Runs a SELECT query and returns the results as a SPARQL 1.1 JSON string
      * (`application/sparql-results+json`). Benefits from the engine's streaming
      * optimisations: LIMIT stops the scan early, numeric FILTERs are pushed into
@@ -280,6 +317,8 @@ export interface InitOutput {
     readonly store_load: (a: number, b: number, c: number, d: number) => [number, number, number];
     readonly store_loadCompressed: (a: number, b: number, c: number, d: number) => [number, number, number];
     readonly store_loadDataset: (a: number, b: number, c: number, d: number) => [number, number, number];
+    readonly store_loadWithBase: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number];
+    readonly store_new: () => [number, number, number];
     readonly store_query: (a: number, b: number, c: number) => [number, number, number, number];
     readonly store_queryChunks: (a: number, b: number, c: number) => [number, number, number];
     readonly store_queryCursor: (a: number, b: number, c: number, d: number) => [number, number, number];

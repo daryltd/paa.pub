@@ -28,10 +28,11 @@
  *   - Root container → dynamically rendered from layout JSON with WebID profile data
  */
 import { negotiateType, serializeRdf, wantsActivityPub } from './conneg.js';
-import { solidHeaders, buildWacAllow } from './headers.js';
+import { solidHeaders, buildWacAllow, buildLinkHeaders } from './headers.js';
 import { parseTurtle } from '../rdf/turtle-parser.js';
 import { parseNTriples, serializeNQuads, iri, unwrapIri, unwrapLiteral } from '../rdf/ntriples.js';
 import { isContainer, slugToName, addContainment, containerTypeQuads, parentContainer } from './containers.js';
+import { emitNotification } from './notifications.js';
 import { handleAclGet, handleAclPut, handleAclPatch, handleAclDelete, handleAclReset, handleAcrGet, defaultAclNTriples } from './acl.js';
 import { checkAcpAccess } from '../ui/pages/acl-editor.js';
 import { checkWacAccess, wacModesToAccess } from './wac.js';
@@ -47,7 +48,7 @@ import { getUserStorageLimit } from '../users.js';
  * Extract the resource owner's username from a resource IRI.
  * The IRI pattern is: {baseUrl}/{username}/...
  */
-function extractOwner(resourceIri, baseUrl) {
+export function extractOwner(resourceIri, baseUrl) {
   const path = resourceIri.slice(baseUrl.length + 1); // strip "https://domain.com/"
   const slash = path.indexOf('/');
   return slash > 0 ? path.slice(0, slash) : path;
@@ -63,7 +64,7 @@ function isStorageRoot(resourceIri, baseUrl) {
  * Combined access check: evaluates both WAC and ACP, grants access if either allows.
  * Returns { readable, listed, wacModes } where wacModes is the raw WAC mode set.
  */
-async function checkAccess(storage, appdata, resourceIri, agentWebId, ownerWebId, owner) {
+export async function checkAccess(storage, appdata, resourceIri, agentWebId, ownerWebId, owner) {
   // Owner always has full access
   if (agentWebId === ownerWebId) {
     return { readable: true, listed: true, wacModes: new Set([PREFIXES.acl + 'Read', PREFIXES.acl + 'Write', PREFIXES.acl + 'Control']) };
@@ -84,12 +85,18 @@ async function checkAccess(storage, appdata, resourceIri, agentWebId, ownerWebId
   return { readable, listed, wacModes: wacResult.modes };
 }
 
-/** Build a 401 response with WWW-Authenticate header. */
-function unauthorizedResponse(baseUrl) {
-  return new Response('Unauthorized', {
-    status: 401,
-    headers: { 'WWW-Authenticate': `Bearer realm="${baseUrl}", scope="openid webid"` },
-  });
+/**
+ * Build a 401 response with WWW-Authenticate header.
+ * Includes the Link: rel="acl" header (and other Solid Link headers) so
+ * clients can discover the resource's ACL even when access is denied —
+ * required by the Solid protocol for ACL discovery on protected resources.
+ */
+function unauthorizedResponse(baseUrl, resourceIri) {
+  const headers = new Headers({ 'WWW-Authenticate': `Bearer realm="${baseUrl}", scope="openid webid"` });
+  if (resourceIri) {
+    headers.set('Link', buildLinkHeaders(resourceIri, isContainer(resourceIri), isStorageRoot(resourceIri, baseUrl)));
+  }
+  return new Response('Unauthorized', { status: 401, headers });
 }
 
 /**
@@ -111,18 +118,19 @@ const RDF_TYPES = new Set([
   'application/sparql-update',
 ]);
 
-const BINARY_INDICATOR_TYPES = [
-  'image/', 'video/', 'audio/', 'application/pdf', 'application/zip',
-  'application/octet-stream', 'application/gzip', 'text/html',
-  'text/plain', 'text/markdown', 'text/css', 'text/csv', 'text/xml',
-  'application/javascript', 'application/json', 'application/xml',
-  'application/wasm', 'font/',
-];
-
-/** Check if a Content-Type should be treated as a binary upload (not RDF). */
+/**
+ * Check if a Content-Type should be treated as a binary upload (not RDF).
+ * Anything the server doesn't itself need to parse as RDF is stored as an
+ * opaque binary resource with the client-declared type, per the Solid/LDP
+ * spec — servers must accept arbitrary content types, not just a known
+ * allow-list. Previously this used an allow-list of "known binary" types,
+ * so any unrecognized Content-Type (e.g. a client sending a nonstandard
+ * or generic type) fell through to a blind Turtle-parse attempt and threw
+ * an uncaught error on invalid syntax.
+ */
 function isBinaryType(contentType) {
   if (!contentType) return false;
-  return BINARY_INDICATOR_TYPES.some(t => contentType.startsWith(t));
+  return !RDF_TYPES.has(contentType);
 }
 
 /**
@@ -203,7 +211,7 @@ export async function handleLDP(reqCtx) {
       const agent = reqCtx.userConfig ? reqCtx.userConfig.webId : null;
       const access = await checkAccess(reqCtx.storage, reqCtx.env.APPDATA, indexIri, agent, containerOwnerUc.webId, containerOwner);
       if (!access.readable) {
-        return denyAccess(agent, config.baseUrl);
+        return denyAccess(agent, config.baseUrl, indexIri);
       }
       const htmlContent = new Uint8Array(indexBlob);
       const htmlHeaders = new Headers();
@@ -260,7 +268,7 @@ async function handleGet(reqCtx, resourceIri) {
     // Serve orphan blob — check WAC + ACP access
     const access = await checkAccess(storage, env.APPDATA, resourceIri, agent, ownerUc.webId, owner);
     if (!access.readable) {
-      return denyAccess(agent, config.baseUrl);
+      return denyAccess(agent, config.baseUrl, resourceIri);
     }
     const headers = solidHeaders(resourceIri, false);
     headers.set('Content-Type', 'application/octet-stream');
@@ -272,7 +280,7 @@ async function handleGet(reqCtx, resourceIri) {
   // Check WAC + ACP access
   const access = await checkAccess(storage, env.APPDATA, resourceIri, agent, ownerUc.webId, owner);
   if (!access.readable) {
-    return denyAccess(agent, config.baseUrl);
+    return denyAccess(agent, config.baseUrl, resourceIri);
   }
 
   // Build WAC-Allow header from combined access results
@@ -340,6 +348,31 @@ async function handleGet(reqCtx, resourceIri) {
     }
   }
 
+  // Rebuild containment from idx: scan to handle stale/missing ldp:contains
+  if (isContainer(resourceIri)) {
+    const existingContains = new Set(
+      allTriples.filter(t => t.predicate === `<${PREFIXES.ldp}contains>`).map(t => t.object)
+    );
+    const listResult = await storage.list({ prefix: `idx:${resourceIri}` });
+    for (const k of (listResult?.keys || [])) {
+      const key = k.name || k;
+      const childIri = key.slice(4);
+      if (childIri === resourceIri || !childIri.startsWith(resourceIri)) continue;
+      // Only direct children: the remainder after the container's IRI must
+      // not contain another "/" (except possibly a single trailing one for
+      // a child container). Otherwise this is a deeper descendant, whose
+      // containment belongs to its own immediate parent, not this ancestor.
+      const rest = childIri.slice(resourceIri.length);
+      const slashIdx = rest.indexOf('/');
+      const isDirectChild = slashIdx === -1 || slashIdx === rest.length - 1;
+      if (!isDirectChild) continue;
+      const obj = `<${childIri}>`;
+      if (!existingContains.has(obj)) {
+        allTriples.push({ subject: `<${resourceIri}>`, predicate: `<${PREFIXES.ldp}contains>`, object: obj });
+      }
+    }
+  }
+
   // For OIDC apps reading an ancestor container, filter ldp:contains to only
   // show resources the app is authorized to access (must have Read mode)
   if (reqCtx.authMethod === 'oidc' && reqCtx.clientId && isContainer(resourceIri)) {
@@ -398,7 +431,7 @@ async function handlePut(reqCtx, resourceIri) {
     const wacResult = await checkWacAccess(storage, resourceIri, null);
     if (!wacResult.modes.has(PREFIXES.acl + 'Write')) {
       console.log(`[ldp] PUT ${resourceIri} rejected: no authenticated agent and no public Write access`);
-      return unauthorizedResponse(config.baseUrl);
+      return unauthorizedResponse(config.baseUrl, resourceIri);
     }
     console.log(`[ldp] PUT ${resourceIri} by anonymous (public Write access granted by WAC)`);
   }
@@ -461,6 +494,7 @@ async function handlePut(reqCtx, resourceIri) {
     const status = existingBinaryIdx ? 204 : 201;
     const headers = solidHeaders(resourceIri, false);
     if (status === 201) headers.set('Location', resourceIri);
+    emitNotification(resourceIri, existingBinaryIdx ? 'Update' : 'Create');
     return new Response(null, { status, headers });
   }
 
@@ -497,11 +531,27 @@ async function handlePut(reqCtx, resourceIri) {
   ).join('\n');
 
   // Check if resource already exists — if so, delete old KV entries
+  // For containers, preserve ldp:contains triples (server-managed)
   const existingIdx = await storage.get(`idx:${resourceIri}`);
+  let preservedContainment = [];
   if (existingIdx) {
     try {
       const parsed = JSON.parse(existingIdx);
       const subjects = parsed.subjects || [];
+      // Before deleting, extract containment triples to preserve
+      if (isContainer(resourceIri)) {
+        for (const subj of subjects) {
+          const doc = await storage.get(`doc:${resourceIri}:${subj}`);
+          if (doc) {
+            const lines = doc.split('\n');
+            for (const line of lines) {
+              if (line.includes(PREFIXES.ldp + 'contains')) {
+                preservedContainment.push(line);
+              }
+            }
+          }
+        }
+      }
       await Promise.all(subjects.map(s => storage.delete(`doc:${resourceIri}:${s}`)));
     } catch (e) {
       console.error('Error deleting existing triples:', e);
@@ -518,6 +568,28 @@ async function handlePut(reqCtx, resourceIri) {
   for (const [subjectIri, st] of bySubject) {
     await storage.put(`doc:${resourceIri}:${subjectIri}`, st.map(t => `${t.subject} ${t.predicate} ${t.object} .`).join('\n'));
   }
+  // For containers, rebuild containment by scanning for child resources in KV
+  if (isContainer(resourceIri)) {
+    const listResult = await storage.list({ prefix: `idx:${resourceIri}` });
+    const childKeys = (listResult?.keys || [])
+      .map(k => k.name || k)
+      .filter(k => {
+        const childIri = k.slice(4); // remove "idx:" prefix
+        return childIri !== resourceIri && childIri.startsWith(resourceIri);
+      });
+    if (childKeys.length > 0) {
+      const containmentLines = childKeys.map(k => {
+        const childIri = k.slice(4);
+        return `<${resourceIri}> <${PREFIXES.ldp}contains> <${childIri}> .`;
+      });
+      const docKey = `doc:${resourceIri}:${resourceIri}`;
+      const existing = await storage.get(docKey) || '';
+      const filtered = existing.split('\n').filter(l => !l.includes(PREFIXES.ldp + 'contains')).join('\n');
+      await storage.put(docKey, (filtered + '\n' + containmentLines.join('\n')).trim());
+      if (!bySubject.has(resourceIri)) bySubject.set(resourceIri, []);
+    }
+  }
+
   await storage.put(`idx:${resourceIri}`, JSON.stringify({ subjects: [...bySubject.keys()] }));
 
   // Update metadata (content type + extent)
@@ -527,14 +599,13 @@ async function handlePut(reqCtx, resourceIri) {
   ].join('\n');
   await storage.put(`doc:${resourceIri}.meta:${resourceIri}`, metaDoc);
 
-  // For new resources, ensure parent containers exist and add containment
-  if (!existingIdx) {
-    await ensureParentContainers(storage, resourceIri);
-  }
+  // Ensure parent containers exist and containment triples are present
+  await ensureParentContainers(storage, resourceIri);
 
   const status = existingIdx ? 204 : 201;
   const headers = solidHeaders(resourceIri, isContainer(resourceIri));
   if (status === 201) headers.set('Location', resourceIri);
+  emitNotification(resourceIri, existingIdx ? 'Update' : 'Create');
   return new Response(null, { status, headers });
 }
 
@@ -563,7 +634,7 @@ async function handlePost(reqCtx, resourceIri) {
     const appendable = wacResult.modes.has(PREFIXES.acl + 'Append') || wacResult.modes.has(PREFIXES.acl + 'Write');
     if (!appendable) {
       console.log(`[ldp] POST ${resourceIri} rejected: no authenticated agent and no public Append access`);
-      return unauthorizedResponse(config.baseUrl);
+      return unauthorizedResponse(config.baseUrl, originalIri);
     }
     console.log(`[ldp] POST ${resourceIri} by anonymous (public Append access granted by WAC)`);
   }
@@ -625,6 +696,7 @@ async function handlePost(reqCtx, resourceIri) {
 
     const postHeaders = solidHeaders(newResourceIri, true);
     postHeaders.set('Location', newResourceIri);
+    emitNotification(newResourceIri, 'Create', { parentIri: resourceIri });
     return new Response(null, { status: 201, headers: postHeaders });
   }
 
@@ -654,6 +726,7 @@ async function handlePost(reqCtx, resourceIri) {
     await appendContainment(storage, resourceIri, newResourceIri);
     const binaryPostHeaders = solidHeaders(newResourceIri, false);
     binaryPostHeaders.set('Location', newResourceIri);
+    emitNotification(newResourceIri, 'Create', { parentIri: resourceIri });
     return new Response(null, { status: 201, headers: binaryPostHeaders });
   }
 
@@ -678,6 +751,7 @@ async function handlePost(reqCtx, resourceIri) {
 
   const rdfPostHeaders = solidHeaders(newResourceIri, false);
   rdfPostHeaders.set('Location', newResourceIri);
+  emitNotification(newResourceIri, 'Create', { parentIri: resourceIri });
   return new Response(null, { status: 201, headers: rdfPostHeaders });
 }
 
@@ -696,7 +770,7 @@ async function handlePatch(reqCtx, resourceIri) {
     console.log(`[ldp] PATCH ${resourceIri} anonymous WAC check: found=${wacResult.found} modes=[${[...wacResult.modes].join(', ')}]`);
     const appendable = wacResult.modes.has(PREFIXES.acl + 'Append') || wacResult.modes.has(PREFIXES.acl + 'Write');
     if (!appendable) {
-      return unauthorizedResponse(config.baseUrl);
+      return unauthorizedResponse(config.baseUrl, resourceIri);
     }
     console.log(`[ldp] PATCH ${resourceIri} by anonymous (public access granted by WAC)`);
   }
@@ -780,6 +854,7 @@ async function handlePatch(reqCtx, resourceIri) {
     await ensureParentContainers(storage, resourceIri);
   }
 
+  emitNotification(resourceIri, idx ? 'Update' : 'Create');
   return new Response(null, { status: idx ? 204 : 201 });
 }
 
@@ -799,7 +874,7 @@ async function handleDelete(reqCtx, resourceIri) {
     return new Response('Method Not Allowed — cannot delete storage root', { status: 405 });
   }
 
-  if (!reqCtx.user) return unauthorizedResponse(config.baseUrl);
+  if (!reqCtx.user) return unauthorizedResponse(config.baseUrl, resourceIri);
   if (reqCtx.user !== deleteOwner) return new Response('Forbidden', { status: 403 });
 
   // App permission check (OIDC apps only) — skip for system paths
@@ -812,14 +887,15 @@ async function handleDelete(reqCtx, resourceIri) {
   }
 
   // Spec: DELETE on non-empty container MUST return 409
+  // Use idx: scan instead of trusting ldp:contains (which may be stale)
   if (isContainer(resourceIri)) {
-    const containerDoc = await storage.get(`doc:${resourceIri}:${resourceIri}`);
-    if (containerDoc) {
-      const containerTriples = parseNTriples(containerDoc);
-      const hasChildren = containerTriples.some(t => t.predicate.includes('contains'));
-      if (hasChildren) {
-        return new Response('Conflict — container is not empty', { status: 409 });
-      }
+    const listResult = await storage.list({ prefix: `idx:${resourceIri}` });
+    const hasChildren = (listResult?.keys || []).some(k => {
+      const childIri = (k.name || k).slice(4);
+      return childIri !== resourceIri && childIri.startsWith(resourceIri);
+    });
+    if (hasChildren) {
+      return new Response('Conflict — container is not empty', { status: 409 });
     }
   }
 
@@ -870,6 +946,7 @@ async function handleDelete(reqCtx, resourceIri) {
     if (parent) await subtractContainerBytes(env.APPDATA, parent, deletedBytes);
   }
 
+  emitNotification(resourceIri, 'Delete');
   return new Response(null, { status: 204 });
 }
 
@@ -913,16 +990,27 @@ function parseBody(body, contentType, baseIri) {
     }
     return jsonLdToTriples(doc);
   }
-  return parseTurtle(body, baseIri);
+  // Anything else reaching here is an RDF_TYPES entry with no dedicated
+  // branch (e.g. application/sparql-update, which is only valid for PATCH)
+  // — reject explicitly rather than guessing it's Turtle.
+  const err = new Error(`Unsupported Content-Type for PUT/POST: ${contentType}`);
+  err.status = 400;
+  throw err;
 }
 
 /**
- * Build a 401/403 deny response for ACP access failures.
+ * Build a 401/403 deny response for ACP/WAC access failures.
+ * Includes the Link: rel="acl" header (and other Solid Link headers) so
+ * clients can discover the resource's ACL even when access is denied —
+ * required by the Solid protocol for ACL discovery on protected resources.
  */
-function denyAccess(agent, baseUrl) {
+function denyAccess(agent, baseUrl, resourceIri) {
   const status = agent ? 403 : 401;
   const headers = new Headers({ 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
   if (!agent) headers.set('WWW-Authenticate', `Bearer realm="${baseUrl}", scope="openid webid"`);
+  if (resourceIri) {
+    headers.set('Link', buildLinkHeaders(resourceIri, isContainer(resourceIri), isStorageRoot(resourceIri, baseUrl)));
+  }
   return new Response(JSON.stringify({
     error: agent ? 'forbidden' : 'unauthorized',
     message: agent ? 'You do not have access to this resource.' : 'Authentication required.',

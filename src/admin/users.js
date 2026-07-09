@@ -8,7 +8,8 @@ import { hashPassword } from '../auth/password.js';
 import { bootstrapUser } from '../bootstrap.js';
 import { RESERVED_NAMES } from '../config.js';
 import { renderPage } from '../ui/shell.js';
-import template from '../ui/templates/admin-users.html';
+import { loadHtml } from '../html-loader.js';
+const template = await loadHtml(import.meta.url, '../ui/templates/admin-users.html', () => import('../ui/templates/admin-users.html'));
 import { formatBytes } from '../i18n/format.js';
 import { getTranslations } from '../i18n/index.js';
 
@@ -28,7 +29,7 @@ export async function renderAdminUsers(reqCtx) {
   data.error = error;
   data.registrationClosed = config.registrationMode === 'closed';
 
-  return renderPage('User Management', template, data, { user: reqCtx.user, nav: 'admin', config, lang: reqCtx.lang });
+  return renderPage('User Management', template, data, { user: reqCtx.user, nav: 'admin', config, lang: reqCtx.lang, request: reqCtx.request });
 }
 
 /**

@@ -8,8 +8,9 @@ import { createUser, userExists, getUser } from '../users.js';
 import { bootstrapUser } from '../bootstrap.js';
 import { RESERVED_NAMES } from '../config.js';
 import { getTranslations } from '../i18n/index.js';
-import template from '../ui/templates/signup.html';
-import fedcmTemplate from '../ui/templates/signup-fedcm.html';
+import { loadHtml } from '../html-loader.js';
+const template = await loadHtml(import.meta.url, '../ui/templates/signup.html', () => import('../ui/templates/signup.html'));
+const fedcmTemplate = await loadHtml(import.meta.url, '../ui/templates/signup-fedcm.html', () => import('../ui/templates/signup-fedcm.html'));
 
 /**
  * GET /signup — render the registration form.

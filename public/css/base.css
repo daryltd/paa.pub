@@ -258,6 +258,17 @@ details > summary > h2 { display: inline; }
     }
 }
 
+/* Activity page two-column layout */
+.activity-layout { display: flex; flex-direction: column; gap: 1rem; }
+.activity-sidebar { flex: 1; }
+.activity-feed-col { flex: 1; }
+@media (min-width: 1000px) {
+  main:has(.activity-layout) { max-width: 1200px; }
+  .activity-layout { flex-direction: row; align-items: flex-start; }
+  .activity-sidebar { flex: 0 0 360px; position: sticky; top: 1rem; max-height: calc(100vh - 2rem); overflow-y: auto; }
+  .activity-feed-col { flex: 1; min-width: 0; }
+}
+
 @media (max-width: 480px) {
     .paa-nav {
         grid-template-areas:

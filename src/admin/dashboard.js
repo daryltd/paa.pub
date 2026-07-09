@@ -4,7 +4,8 @@
 import { requireAdmin } from './middleware.js';
 import { listUsers } from '../users.js';
 import { renderPage } from '../ui/shell.js';
-import template from '../ui/templates/admin-dashboard.html';
+import { loadHtml } from '../html-loader.js';
+const template = await loadHtml(import.meta.url, '../ui/templates/admin-dashboard.html', () => import('../ui/templates/admin-dashboard.html'));
 import { formatBytes } from '../i18n/format.js';
 
 /**
@@ -52,5 +53,5 @@ export async function renderAdminDashboard(reqCtx) {
     users,
     idps,
     hasIdps: idps.length > 0,
-  }, { user: reqCtx.user, nav: 'admin', config, lang: reqCtx.lang });
+  }, { user: reqCtx.user, nav: 'admin', config, lang: reqCtx.lang, request: reqCtx.request });
 }

@@ -7,6 +7,9 @@
 <div class="error">{{error}}</div>
 {{/error}}
 
+<div class="activity-layout">
+<div class="activity-sidebar">
+
 <details class="card" id="details-compose">
   <summary><h2>{{t.act_compose}}</h2></summary>
   <div id="reply-context" class="hidden text-sm text-muted mb-05" style="padding: 0.5rem; background: var(--bg-alt, #f0f0f0); border-radius: 4px;">
@@ -88,6 +91,9 @@
     </li>
     {{/pendingOutgoing}}
   </ul>
+  <form method="POST" action="/activity/clear-pending" class="mt-05">
+    <button type="submit" class="btn btn-secondary btn-xs">Clear All Pending</button>
+  </form>
 </details>
 {{/hasPendingOutgoing}}
 {{#hasFollowing}}
@@ -119,16 +125,19 @@
 </details>
 {{/hasFollowers}}
 
+</div>
+<div class="activity-feed-col">
+
 <details id="details-feed">
   <summary><h2>{{t.act_feed}} <span class="text-muted text-sm font-normal">({{t.act_latest}} {{feedLimit}})</span></h2></summary>
   <div class="flex justify-between items-center mb-05">
     <div class="flex gap-05 flex-wrap" id="feed-filters">
       {{#feedReceived}}<span class="btn btn-xs">Received</span>{{/feedReceived}}
-      {{^feedReceived}}<a href="/activity?feed=received{{#showAll}}&show=all{{/showAll}}" class="btn btn-secondary btn-xs" data-feed="received">Received</a>{{/feedReceived}}
+      {{^feedReceived}}<a href="/activity?feed=received{{#showAll}}&show=all{{/showAll}}" class="btn btn-secondary btn-xs">Received</a>{{/feedReceived}}
       {{#feedSent}}<span class="btn btn-xs">Sent</span>{{/feedSent}}
-      {{^feedSent}}<a href="/activity?feed=sent{{#showAll}}&show=all{{/showAll}}" class="btn btn-secondary btn-xs" data-feed="sent">Sent</a>{{/feedSent}}
+      {{^feedSent}}<a href="/activity?feed=sent{{#showAll}}&show=all{{/showAll}}" class="btn btn-secondary btn-xs">Sent</a>{{/feedSent}}
       {{#feedAll}}<span class="btn btn-xs">All</span>{{/feedAll}}
-      {{^feedAll}}<a href="/activity?feed=all{{#showAll}}&show=all{{/showAll}}" class="btn btn-secondary btn-xs" data-feed="all">All</a>{{/feedAll}}
+      {{^feedAll}}<a href="/activity?feed=all{{#showAll}}&show=all{{/showAll}}" class="btn btn-secondary btn-xs">All</a>{{/feedAll}}
       <span class="text-muted text-sm">|</span>
       {{#showAll}}
       <a href="/activity?feed={{#feedSent}}sent{{/feedSent}}{{#feedAll}}all{{/feedAll}}{{#feedReceived}}received{{/feedReceived}}" class="btn btn-secondary btn-xs">{{t.act_hide_read}}</a>
@@ -166,7 +175,7 @@
         <input type="hidden" name="id" value="{{activityId}}">
         <button type="submit" class="btn btn-secondary btn-xs">{{t.act_mark_read}}</button>
       </form>
-      <button type="button" class="btn btn-secondary btn-xs" data-reply-to="{{activityId}}" data-reply-actor="{{actor}}">{{t.act_reply}}</button>
+      {{#replyTarget}}<button type="button" class="btn btn-secondary btn-xs" data-reply-to="{{replyTarget}}" data-reply-actor="{{actor}}" data-reply-audience="{{replyAudience}}">{{t.act_reply}}</button>{{/replyTarget}}
     </div>
     {{#hasActivitySummary}}<div class="text-muted text-sm mb-05"><em>{{actSummary}}</em></div>{{/hasActivitySummary}}
 
@@ -281,4 +290,7 @@
   {{/activities}}
   </div>
 </details>
+
+</div>
+</div>
 <script type="module" src="/scripts/activity.js"></script>

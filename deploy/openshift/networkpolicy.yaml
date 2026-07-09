@@ -1,0 +1,14 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-paa-pub-ingress
+spec:
+  podSelector:
+    matchLabels:
+      app: paa-pub
+  ingress:
+    - ports:
+        - protocol: TCP
+          port: 3000
+  policyTypes:
+    - Ingress

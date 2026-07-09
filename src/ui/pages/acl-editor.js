@@ -20,7 +20,8 @@
  *   and cannot use inherit mode.
  */
 import { renderPage } from '../shell.js';
-import template from '../templates/acl-editor.html';
+import { loadHtml } from '../../html-loader.js';
+const template = await loadHtml(import.meta.url, '../templates/acl-editor.html', () => import('../templates/acl-editor.html'));
 import { requireAuth } from '../../auth/middleware.js';
 import { getContainerQuota, setContainerQuotaLimit } from '../../storage/container-quota.js';
 import { getUserConfig } from '../../config.js';
@@ -127,7 +128,7 @@ export async function renderAclEditor(reqCtx) {
     turtlePolicy: policyToTurtle(policy, resourceIri, uc.webId, friends),
     quotaData,
     quotaLimitValue,
-  }, { user: username, config, nav: 'storage', storage: reqCtx.storage, baseUrl: config.baseUrl, lang });
+  }, { user: username, config, nav: 'storage', storage: reqCtx.storage, baseUrl: config.baseUrl, lang, request: reqCtx.request });
 }
 
 /**

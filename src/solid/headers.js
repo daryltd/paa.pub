@@ -11,6 +11,11 @@ import { PREFIXES } from '../rdf/prefixes.js';
  * @returns {string}
  */
 export function buildLinkHeaders(resourceIri, isContainer, isStorageRoot) {
+  // Extract owner username from IRI for notification endpoint
+  const url = new URL(resourceIri);
+  const owner = url.pathname.split('/').filter(Boolean)[0] || '';
+  const notificationsUrl = owner ? `${url.origin}/${owner}/.notifications` : '';
+
   const links = [
     `<${PREFIXES.ldp}Resource>; rel="type"`,
     `<${resourceIri}.acl>; rel="acl"`,
@@ -23,7 +28,10 @@ export function buildLinkHeaders(resourceIri, isContainer, isStorageRoot) {
   }
   if (isStorageRoot) {
     links.push(`<http://www.w3.org/ns/pim/space#Storage>; rel="type"`);
-    links.push(`<${resourceIri}>; rel="http://www.w3.org/ns/solid/terms#storageDescription"`);
+  }
+  // Solid Notifications: storage description link
+  if (notificationsUrl) {
+    links.push(`<${notificationsUrl}>; rel="http://www.w3.org/ns/solid/terms#storageDescription"`);
   }
   return links.join(', ');
 }
