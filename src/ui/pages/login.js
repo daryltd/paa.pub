@@ -2,7 +2,8 @@
  * Login page.
  */
 import { renderPage } from '../shell.js';
-import template from '../templates/login.html';
+import { loadHtml } from '../../html-loader.js';
+const template = await loadHtml(import.meta.url, '../templates/login.html', () => import('../templates/login.html'));
 
 export async function renderLoginPage(reqCtx) {
   const error = reqCtx.error || '';

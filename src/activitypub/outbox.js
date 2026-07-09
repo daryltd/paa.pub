@@ -136,8 +136,10 @@ export async function handleCompose(reqCtx) {
       console.log(`[compose] Remote actor fetched: ${!!remoteActor}`);
       if (remoteActor) {
         const inboxUrl = getActorInbox(remoteActor);
+        console.log(`[compose] DM inbox: ${inboxUrl}`);
         if (inboxUrl) {
           const privatePem = await env.APPDATA.get(`ap_private_key:${username}`);
+          console.log(`[compose] Delivering DM to ${inboxUrl}`);
           deliverActivity({
             activityJson: JSON.stringify(activity),
             inboxUrls: [inboxUrl],
@@ -145,6 +147,8 @@ export async function handleCompose(reqCtx) {
             privatePem,
             ctx,
           });
+        } else {
+          console.log(`[compose] Remote actor has no inbox`);
         }
       }
     }
@@ -320,16 +324,18 @@ export async function handleUnfollow(reqCtx) {
   if (outboxData) {
     const outboxIndex = JSON.parse(outboxData);
     const cleaned = [];
-    for (const id of outboxIndex) {
-      const item = await env.APPDATA.get(`ap_outbox_item:${id}`);
+    for (const entry of outboxIndex) {
+      const itemId = typeof entry === 'string' ? entry : entry.id;
+      const hash = simpleHash(itemId);
+      const item = await env.APPDATA.get(`ap_outbox_item:${hash}`);
       if (item) {
         const parsed = JSON.parse(item);
         if (parsed.type === 'Follow' && (parsed.object === target || parsed.object?.id === target)) {
-          await env.APPDATA.delete(`ap_outbox_item:${id}`);
+          await env.APPDATA.delete(`ap_outbox_item:${hash}`);
           continue;
         }
       }
-      cleaned.push(id);
+      cleaned.push(entry);
     }
     await env.APPDATA.put(`ap_outbox_index:${username}`, JSON.stringify(cleaned));
   }
@@ -353,6 +359,47 @@ export async function handleUnfollow(reqCtx) {
     }
   }
 
+  if (wantsJson(request)) return jsonResp({ ok: true, action: 'unfollow' });
+  return new Response(null, { status: 302, headers: { 'Location': '/activity' } });
+}
+
+/**
+ * Handle POST /activity/clear-pending — remove all pending outgoing follows from outbox
+ */
+export async function handleClearPendingFollows(reqCtx) {
+  const authCheck = requireAuth(reqCtx);
+  if (authCheck) return authCheck;
+
+  const { request, env } = reqCtx;
+  const username = reqCtx.user;
+
+  const followingData = await env.APPDATA.get(`ap_following:${username}`);
+  const following = new Set(JSON.parse(followingData || '[]'));
+
+  const outboxData = await env.APPDATA.get(`ap_outbox_index:${username}`);
+  if (outboxData) {
+    const outboxIndex = JSON.parse(outboxData);
+    const cleaned = [];
+    for (const entry of outboxIndex) {
+      const itemId = typeof entry === 'string' ? entry : entry.id;
+      const hash = simpleHash(itemId);
+      const item = await env.APPDATA.get(`ap_outbox_item:${hash}`);
+      if (item) {
+        const parsed = JSON.parse(item);
+        if (parsed.type === 'Follow') {
+          const target = typeof parsed.object === 'string' ? parsed.object : parsed.object?.id;
+          if (!following.has(target)) {
+            await env.APPDATA.delete(`ap_outbox_item:${hash}`);
+            continue;
+          }
+        }
+      }
+      cleaned.push(entry);
+    }
+    await env.APPDATA.put(`ap_outbox_index:${username}`, JSON.stringify(cleaned));
+  }
+
+  if (wantsJson(request)) return jsonResp({ ok: true, action: 'clear-pending' });
   return new Response(null, { status: 302, headers: { 'Location': '/activity' } });
 }
 

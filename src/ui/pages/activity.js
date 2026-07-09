@@ -6,7 +6,8 @@
  *   GET /activity/remote  — view a remote actor's recent public posts
  */
 import { renderPage } from '../shell.js';
-import template from '../templates/activity.html';
+import { loadHtml } from '../../html-loader.js';
+const template = await loadHtml(import.meta.url, '../templates/activity.html', () => import('../templates/activity.html'));
 import { requireAuth } from '../../auth/middleware.js';
 import { simpleHash, wantsJson } from '../../utils.js';
 import { publish } from '../../events.js';
@@ -185,8 +186,20 @@ export async function renderActivityPage(reqCtx) {
     const inReplyToUrl = typeof inReplyToRaw === 'string' ? inReplyToRaw : (inReplyToRaw?.id || '');
     const hasInReplyTo = !!inReplyToUrl;
 
+    // Reply target: for Create activities, reply to the Note (object) ID; otherwise the activity ID
+    const replyTarget = (isContent && a.object?.id) ? a.object.id : (a.id || '');
+    // Reply audience: derive from the original activity's addressing
+    const AS_PUBLIC = 'https://www.w3.org/ns/activitystreams#Public';
+    const origTo = a.to || a.object?.to || [];
+    const origCc = a.cc || a.object?.cc || [];
+    const allAddrs = [...(Array.isArray(origTo) ? origTo : [origTo]), ...(Array.isArray(origCc) ? origCc : [origCc])];
+    let replyAudience = 'direct';
+    if (allAddrs.includes(AS_PUBLIC)) replyAudience = 'public';
+    else if (allAddrs.some(u => u?.endsWith('/followers'))) replyAudience = 'followers';
+
     return {
       activityId: a.id, source, type, actor, published, isReceived,
+      replyTarget, replyAudience,
       isContent, isQuestion, isResponse, isUndo, isDelete, isObject,
       hasInReplyTo, inReplyToUrl,
       content, summary, hasSummary,

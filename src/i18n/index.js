@@ -13,7 +13,8 @@
  */
 
 import { parseTurtle } from '../rdf/turtle-parser.js';
-import STRINGS_TURTLE from './strings.ttl';
+import { loadHtml } from '../html-loader.js';
+const STRINGS_TURTLE = await loadHtml(import.meta.url, './strings.ttl', () => import('./strings.ttl'));
 
 const RDFS_LABEL = 'http://www.w3.org/2000/01/rdf-schema#label';
 const PAA_NS = 'http://paa.pub/i18n#';
@@ -35,28 +36,45 @@ export const RTL_LANGUAGES = new Set(['he']);
 /**
  * Map<key, Map<lang, text>> built from parsed Turtle triples.
  * Key is the local part after the paa: namespace (e.g. "nav_dashboard").
+ *
+ * Parsed lazily (on first call to getTranslations), not at module load.
+ * sparq's WASM engine self-initializes synchronously as part of its own
+ * module evaluation on Deno, but on Cloudflare it's initialized explicitly
+ * by the entry point (index.js) — which, per ES module evaluation order,
+ * only runs after every module index.js imports (including this one,
+ * transitively) has already finished its own top-level code. Parsing here
+ * eagerly would run before that initialization on Cloudflare.
  */
 const strings = new Map();
+let stringsLoaded = false;
 
-// Parse the Turtle translation store once at module load.
-const triples = parseTurtle(STRINGS_TURTLE);
-for (const { subject, predicate, object } of triples) {
-  // Only process rdfs:label triples on paa: subjects
-  const pred = subject.startsWith('<') ? subject.slice(1, -1) : subject;
-  if (!pred.startsWith(PAA_NS)) continue;
-  const p = predicate.startsWith('<') ? predicate.slice(1, -1) : predicate;
-  if (p !== RDFS_LABEL) continue;
+function ensureStringsLoaded() {
+  if (stringsLoaded) return;
+  stringsLoaded = true;
 
-  const key = pred.slice(PAA_NS.length);
+  const triples = parseTurtle(STRINGS_TURTLE);
+  for (const { subject, predicate, object } of triples) {
+    // Only process rdfs:label triples on paa: subjects
+    const pred = subject.startsWith('<') ? subject.slice(1, -1) : subject;
+    if (!pred.startsWith(PAA_NS)) continue;
+    const p = predicate.startsWith('<') ? predicate.slice(1, -1) : predicate;
+    if (p !== RDFS_LABEL) continue;
 
-  // Extract text and language tag from literal: "text"@lang
-  const match = object.match(/^"((?:[^"\\]|\\.)*)"\s*@\s*(.+)$/);
-  if (!match) continue;
-  const text = match[1].replace(/\\"/g, '"').replace(/\\n/g, '\n').replace(/\\t/g, '\t').replace(/\\\\/g, '\\');
-  const lang = match[2];
+    const key = pred.slice(PAA_NS.length);
 
-  if (!strings.has(key)) strings.set(key, new Map());
-  strings.get(key).set(lang, text);
+    // Extract text and language tag from literal: "text"@lang
+    const match = object.match(/^"((?:[^"\\]|\\.)*)"\s*@\s*(.+)$/);
+    if (!match) continue;
+    const text = match[1].replace(/\\"/g, '"').replace(/\\n/g, '\n').replace(/\\t/g, '\t').replace(/\\\\/g, '\\');
+    // Normalize language tag — sparq lowercases (en-us), BCP 47 uses en-US
+    const rawLang = match[2];
+    const lang = rawLang.includes('-')
+      ? rawLang.split('-').map((p, i) => i === 0 ? p.toLowerCase() : p.toUpperCase()).join('-')
+      : rawLang.toLowerCase();
+
+    if (!strings.has(key)) strings.set(key, new Map());
+    strings.get(key).set(lang, text);
+  }
 }
 
 /** Cache of flat { key: text } objects per language. */
@@ -69,6 +87,7 @@ const cache = new Map();
  * @returns {object}
  */
 export function getTranslations(lang) {
+  ensureStringsLoaded();
   if (cache.has(lang)) return cache.get(lang);
 
   const result = {};

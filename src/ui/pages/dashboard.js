@@ -2,7 +2,8 @@
  * Dashboard page.
  */
 import { renderPage } from '../shell.js';
-import template from '../templates/dashboard.html';
+import { loadHtml } from '../../html-loader.js';
+const template = await loadHtml(import.meta.url, '../templates/dashboard.html', () => import('../templates/dashboard.html'));
 import { requireAuth } from '../../auth/middleware.js';
 import { parseNTriples, unwrapIri, unwrapLiteral } from '../../rdf/ntriples.js';
 import { PREFIXES } from '../../rdf/prefixes.js';
@@ -69,7 +70,7 @@ export async function renderDashboard(reqCtx) {
     hasBreakdown: breakdown.categories.length > 0,
     totalResources: breakdown.totalCount,
     fedcmConfigURL: config.baseUrl + '/fedcm/config.json',
-  }, { user: username, config, nav: 'dashboard', storage: reqCtx.storage, baseUrl: config.baseUrl, lang });
+  }, { user: username, config, nav: 'dashboard', storage: reqCtx.storage, baseUrl: config.baseUrl, lang, request: reqCtx.request });
 }
 
 /**

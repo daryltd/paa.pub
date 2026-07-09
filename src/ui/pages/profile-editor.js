@@ -20,7 +20,8 @@
  * Triples with other subjects (e.g., document-level triples) are preserved.
  */
 import { renderPage } from '../shell.js';
-import template from '../templates/profile-editor.html';
+import { loadHtml } from '../../html-loader.js';
+const template = await loadHtml(import.meta.url, '../templates/profile-editor.html', () => import('../templates/profile-editor.html'));
 import { DEFAULT_LAYOUT } from '../layout-renderer.js';
 import { requireAuth } from '../../auth/middleware.js';
 import { readProfileTriples, writeTriplesToKV } from '../../solid/ldp.js';

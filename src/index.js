@@ -24,6 +24,8 @@
  *   - params     — URL pattern parameters (e.g. { user: 'alice' })
  *   - storage    — CloudflareAdapter for direct KV/R2 access
  */
+import { initSparq } from './rdf/sparq.js';
+import wasmModule from './pkg/sparq_wasm_bg.wasm';
 import { CloudflareAdapter } from './storage/cloudflare-adapter.js';
 import { Router } from './router.js';
 import { getConfig, getUserConfig } from './config.js';
@@ -39,6 +41,7 @@ import { handleInbox } from './activitypub/inbox.js';
 import { handleOutbox, handleOutboxPost, handleCompose, handleFollow, handleUnfollow, handleAcceptFollowRequest, handleRejectFollowRequest } from './activitypub/outbox.js';
 import { handleCollections } from './activitypub/collections.js';
 import { handleLDP } from './solid/ldp.js';
+import { handleStorageDescription, handleSubscribe, handleNotificationChannel } from './solid/notification-handlers.js';
 import { applyCors } from './solid/cors.js';
 import { renderLoginPage } from './ui/pages/login.js';
 import { renderDashboard } from './ui/pages/dashboard.js';
@@ -61,6 +64,11 @@ import { renderAdminFedCMIdps, handleAdminFedCMIdpAction } from './admin/fedcm-i
 import { checkRateLimit, rateLimitResponse } from './security/rate-limit.js';
 import { checkContentLength, getSizeLimit } from './security/size-limit.js';
 
+// Initialize sparq WASM once on cold start. Synchronous — Wrangler resolves
+// the .wasm import to an already-compiled WebAssembly.Module, so no
+// top-level await is needed (and none would be safe: Workers requires
+// top-level await to settle synchronously during startup).
+initSparq(wasmModule);
 
 /**
  * Build the application route table.
@@ -173,6 +181,11 @@ function buildRouter() {
   router.get('/:user/followers', handleCollections);
   router.get('/:user/following', handleCollections);
   router.get('/:user/did.json', handleUserDidDocument);
+
+  // Solid Notifications Protocol
+  router.get('/:user/.notifications', handleStorageDescription);
+  router.post('/:user/.notifications/subscribe', handleSubscribe);
+  router.get('/:user/.notifications/channel/:id', handleNotificationChannel);
 
   // LDP catch-all
   router.add('*', '/:user/**', handleLDP);

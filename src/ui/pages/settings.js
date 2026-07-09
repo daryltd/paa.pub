@@ -6,7 +6,8 @@
  *   POST /settings — save user preferences
  */
 import { renderPage } from '../shell.js';
-import template from '../templates/settings.html';
+import { loadHtml } from '../../html-loader.js';
+const template = await loadHtml(import.meta.url, '../templates/settings.html', () => import('../templates/settings.html'));
 import { requireAuth } from '../../auth/middleware.js';
 import { SUPPORTED_LANGUAGES } from '../../i18n/index.js';
 import { listAppPermissions } from '../../solid/app-permissions.js';

@@ -9,7 +9,8 @@
     if (p.startsWith('/css/') || p.startsWith('/scripts/') || p.startsWith('/media/') ||
         p.startsWith('/.well-known/') || p.endsWith('.json') || p.endsWith('.ttl') ||
         p.endsWith('.wasm') || p.startsWith('/jwks') || p.startsWith('/token') ||
-        p.startsWith('/register') || p.startsWith('/authorize')) return false;
+        p.startsWith('/register') || p.startsWith('/authorize') ||
+        p.startsWith('/login') || p.startsWith('/logout') || p.startsWith('/signup')) return false;
     return true;
   }
 
@@ -61,9 +62,9 @@
         credentials: 'same-origin',
       });
 
-      if (response.redirected) { location.href = response.url; return; }
-      if (!response.ok || response.headers.get('X-Paa-Nav') !== 'fragment') {
-        location.href = url.href;
+      if (response.redirected || !response.ok || response.headers.get('X-Paa-Nav') !== 'fragment') {
+        // Full page load — don't SPA-navigate to redirects or error pages
+        window.location.replace(response.redirected ? response.url : url.href);
         return;
       }
 

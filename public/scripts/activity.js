@@ -5,10 +5,13 @@ import { SSETransport } from './sse-transport.js';
 
 let store = null;
 let sseTransport = null;
+let listenersRegistered = false;
 
 function init() {
   // --- Activity Store ---
   if (!document.getElementById('store')) return;
+  if (listenersRegistered) return;
+  listenersRegistered = true;
 
   if (!store) {
     sseTransport = new SSETransport('/activity/stream');
@@ -110,10 +113,12 @@ function init() {
 
       var activityId = btn.getAttribute('data-reply-to');
       var actor = btn.getAttribute('data-reply-actor');
+      var audience = btn.getAttribute('data-reply-audience') || 'direct';
 
       store.batch(function() {
         store.state.draft.inReplyTo = activityId;
         store.state.draft.replyActor = actor;
+        store.state.draft.audience = audience;
         store.state.details.compose = true;
       });
 
@@ -121,6 +126,16 @@ function init() {
       if (replyTarget) replyTarget.textContent = actor;
       if (replyContext) replyContext.classList.remove('hidden');
       if (composeDetails) composeDetails.open = true;
+
+      // Set audience to match original scope
+      var audienceSelect = document.getElementById('audience');
+      if (audienceSelect) audienceSelect.value = audience;
+      var recipientGroup = document.getElementById('recipient-group');
+      if (recipientGroup) recipientGroup.classList.toggle('hidden', audience !== 'direct');
+      if (audience === 'direct') {
+        var recipientSelect = document.getElementById('recipient');
+        if (recipientSelect) recipientSelect.value = actor;
+      }
 
       var textarea = document.getElementById('compose-content');
       if (textarea) {
@@ -201,25 +216,11 @@ function init() {
     var action = form.getAttribute('action');
     var handlers = {
       '/compose': function(json, frm) {
-        frm.reset();
-        store.batch(function() {
-          store.state.draft.content = '';
-          store.state.draft.audience = 'public';
-          store.state.draft.summary = '';
-          store.state.draft.inReplyTo = '';
-          store.state.draft.replyActor = '';
-        });
-        var rc = document.getElementById('reply-context');
-        if (rc) rc.classList.add('hidden');
-        var irt = document.getElementById('compose-in-reply-to');
-        if (irt) irt.value = '';
-        var fl = document.getElementById('activity-feed-list');
-        if (fl && json.activity) {
-          var card = document.createElement('div');
-          card.className = 'card';
-          card.innerHTML = '<div class="flex justify-between mb-05"><span class="mono text-sm">You</span><span class="text-muted">just now</span></div><div>' + escapeHtml(json.activity.content || '') + '</div>';
-          fl.prepend(card);
-        }
+        // Clear only the content — keep audience, recipient, and reply context
+        // so the user can send another message in the same conversation
+        var contentEl = frm.querySelector('textarea[name="content"]');
+        if (contentEl) contentEl.value = '';
+        store.state.draft.content = '';
       },
       '/activity/mark-read': function(json, frm) {
         var card = frm.closest('.card');
@@ -229,10 +230,20 @@ function init() {
         var fl = document.getElementById('activity-feed-list');
         if (fl) fl.innerHTML = '<div class="card text-muted">No activities.</div>';
       },
-      '/follow': function() { location.reload(); },
+      '/follow': function(json, frm) { frm.reset(); },
       '/unfollow': function(json, frm) {
         var li = frm.closest('li');
         if (li) li.remove();
+        // If pending outgoing list is now empty, hide the section
+        var list = document.querySelector('#details-pending-outgoing .list-plain');
+        if (list && list.children.length === 0) {
+          var section = document.getElementById('details-pending-outgoing');
+          if (section) section.remove();
+        }
+      },
+      '/activity/clear-pending': function() {
+        var section = document.getElementById('details-pending-outgoing');
+        if (section) section.remove();
       },
       '/follow-requests/accept': function(json, frm) {
         var li = frm.closest('li');

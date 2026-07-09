@@ -12,28 +12,27 @@ export async function handleActivityStream(reqCtx) {
   const username = reqCtx.user;
   const encoder = new TextEncoder();
 
+  let unsubscribe = null;
+  let keepaliveTimer = null;
+
   const stream = new ReadableStream({
     start(controller) {
       controller.enqueue(encoder.encode(':ok\n\n'));
 
-      const unsubscribe = subscribe(username, (event) => {
+      unsubscribe = subscribe(username, (event) => {
         try {
           controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`));
         } catch (_) {}
       });
 
-      const keepalive = setInterval(() => {
+      // Keepalive every 15s to prevent proxy timeouts
+      keepaliveTimer = setInterval(() => {
         try { controller.enqueue(encoder.encode(':keepalive\n\n')); } catch (_) {}
-      }, 30000);
-
-      // Store cleanup refs on the controller for cancel
-      controller._cleanup = () => {
-        unsubscribe();
-        clearInterval(keepalive);
-      };
+      }, 15000);
     },
-    cancel(controller) {
-      if (controller?._cleanup) controller._cleanup();
+    cancel() {
+      if (unsubscribe) unsubscribe();
+      if (keepaliveTimer) clearInterval(keepaliveTimer);
     },
   });
 
